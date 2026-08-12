@@ -59,10 +59,9 @@ Si aucun document n'est trouvé et que la commune n'est pas RNU confirmé : on l
 | `code_siren_epci` | |
 | `nom_document` | |
 | `nature_document` | PLU, PLUi, PLUm, POS, CC, RNU, PSMV |
-| `id_gpu` | identifiant du document au sens du GPU |
+| `id_gpu` | identifiant du document au sens du GPU — c'est ce qui permet à l'étape 2 de récupérer, via `document-details`, l'ensemble des pièces écrites (règlement, OAP, PADD, annexes...), pas seulement le règlement |
 | `date_approbation` | date d'approbation/mise à jour du document |
 | `niveau_couverture` | EPCI ou commune |
-| `lien_reglement` | lien direct vers le PDF du règlement écrit (pas l'archive CNIG complète — c'est ce dont l'étape 2 du plan global aura besoin) |
 | `date_traitement` | date d'exécution du run |
 | `statut` | document trouvé / RNU confirmé / PSMV additionnel / trou de couverture |
  
@@ -73,3 +72,4 @@ Le traitement n'est jamais bloqué par un échec isolé (timeout, 404...). Chaqu
 ## Prochaine étape
  
 Conception technique de la mise en œuvre (choix des outils, structure du code, format exact des fichiers de sortie et d'erreurs).
+ 

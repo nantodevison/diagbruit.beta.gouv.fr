@@ -47,7 +47,9 @@ poc-urbanisme-plu/
 - Chaque étape reste relançable seule à partir de son fichier d'entrée.
 - Le point de contact entre deux étapes est un fichier CSV lisible et vérifiable manuellement (tableur), ce qui matérialise l'étape de vérification humaine prévue au plan global avant intégration.
 - Une erreur dans une étape n'affecte jamais le code des étapes précédentes : aucune dépendance de code entre les dossiers, seulement une dépendance de données.
-**Conséquence pour la conception des CSV** : chaque fichier de sortie doit être pensé comme un **contrat de données stable** pour l'étape suivante, pas seulement comme un rapport de contrôle (ex. la colonne `lien_reglement` de l'étape 1 est le point d'entrée de l'étape 2).
+**Conséquence pour la conception des CSV** : chaque fichier de sortie doit être pensé comme un **contrat de données stable** pour l'étape suivante, pas seulement comme un rapport de contrôle.
+ 
+*Précision (issue des échanges du 12/08/2026) : le point d'entrée réel de l'étape 2 est la colonne `id_gpu` de l'étape 1, pas un lien direct vers un fichier. L'étape 2 doit donc démarrer par un appel à `document-details` de l'API du GPU pour résoudre cet `id_gpu` en une liste de pièces (règlement écrit, OAP, PADD, PSMV le cas échéant) et leurs URLs — cette résolution est une sous-étape à part entière de l'étape 2, pas un acquis de l'étape 1.*
  
 ## Décision 3 — Sortie fichiers (CSV), pas base de données
  

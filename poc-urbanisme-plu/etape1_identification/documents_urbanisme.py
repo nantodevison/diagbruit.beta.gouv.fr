@@ -67,7 +67,6 @@ class DocumentTrouve:
     date_approbation: str | None
     niveau_couverture: str  # NIVEAU_EPCI ou NIVEAU_COMMUNE
     code_insee_utilise: str  # code (actuel ou ancien) sous lequel le document a été trouvé
-    lien_reglement: str | None
     statut: str  # STATUT_DOCUMENT_TROUVE ou STATUT_PSMV_ADDITIONNEL
 
 
@@ -192,16 +191,6 @@ def _details_document(document_id: str) -> dict:
         raise _ErreurAppelGPU(f"détails du document {document_id} : {exc}") from exc
 
 
-def _lien_reglement(writing_materials: dict) -> str | None:
-    """Le PDF du règlement écrit, à l'exclusion des planches graphiques et des
-    autres pièces du dossier (rapport, PADD, OAP...).
-    """
-    for nom_fichier, url in writing_materials.items():
-        if "_reglement_" in nom_fichier and "_reglement_graphique_" not in nom_fichier:
-            return url
-    return None
-
-
 def _construire_document_trouve(
     document_brut: dict, niveau_couverture: str, code_insee_utilise: str, statut: str
 ) -> DocumentTrouve:
@@ -213,7 +202,6 @@ def _construire_document_trouve(
         date_approbation=details.get("publicationDate"),
         niveau_couverture=niveau_couverture,
         code_insee_utilise=code_insee_utilise,
-        lien_reglement=_lien_reglement(details.get("writingMaterials") or {}),
         statut=statut,
     )
 

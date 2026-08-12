@@ -3,9 +3,8 @@
 Ce module ne fait aucun appel réseau : il met en forme les résultats produits
 par `documents_urbanisme.py` (phase 2) selon le format défini dans
 `etape-1-identification-documents-urbanisme-diagbruit.md`. Le CSV produit est
-le contrat de données stable consommé par l'étape 2 du plan global (colonne
-`lien_reglement` en particulier) — voir `etape-1-conception-technique.md`,
-décision 2. Il est aussi la matérialisation de l'étape de vérification
+le contrat de données stable consommé par l'étape 2 du plan global — voir
+`etape-1-conception-technique.md`, décision 2. Il est aussi la matérialisation de l'étape de vérification
 humaine prévue par le plan avant intégration : ouvert dans un tableur, chaque
 ligne doit se comprendre sans avoir à relire le code.
 
@@ -37,7 +36,6 @@ COLONNES_SYNTHESE = [
     "id_gpu",
     "date_approbation",
     "niveau_couverture",
-    "lien_reglement",
     "date_traitement",
     "statut",
 ]
@@ -77,7 +75,6 @@ def _lignes_synthese(resultats: list[ResultatCommune], date_traitement: str) -> 
                     "id_gpu": "",
                     "date_approbation": "",
                     "niveau_couverture": "",
-                    "lien_reglement": "",
                     "date_traitement": date_traitement,
                     "statut": statut,
                 }
@@ -97,7 +94,6 @@ def _lignes_synthese(resultats: list[ResultatCommune], date_traitement: str) -> 
                     "id_gpu": document.id_gpu,
                     "date_approbation": document.date_approbation or "",
                     "niveau_couverture": document.niveau_couverture,
-                    "lien_reglement": document.lien_reglement or "",
                     "date_traitement": date_traitement,
                     "statut": document.statut,
                 }
