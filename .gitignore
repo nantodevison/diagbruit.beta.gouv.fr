@@ -43,6 +43,7 @@ fastapi/colorizer
 !.vscode/settings.json
 !.vscode/extensions.json
 .idea/
+*.code-workspace
 
 # dotenv
 **/.env
