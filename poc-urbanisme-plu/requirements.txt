@@ -1,2 +1,10 @@
 requests==2.31.0
 tenacity==8.2.3
+
+# étape 2 (analyse des documents d'urbanisme) — non versionnés précisément :
+# à figer avec `pip freeze` après une première installation réussie.
+anthropic
+python-dotenv
+pdfplumber
+pytesseract
+pdf2image
