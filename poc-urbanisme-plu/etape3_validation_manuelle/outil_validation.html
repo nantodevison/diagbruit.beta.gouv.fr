@@ -1,0 +1,760 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>diagBruit — Validation manuelle des occurrences bruit (étape 3)</title>
+<style>
+  :root {
+    --couleur-fond: #f5f6f8;
+    --couleur-carte: #ffffff;
+    --couleur-bordure: #d8dce1;
+    --couleur-texte: #1f2430;
+    --couleur-texte-attenue: #5a6270;
+    --couleur-accent: #2a4d8f;
+    --couleur-valide: #2e7d46;
+    --couleur-corrige: #b4740e;
+    --couleur-rejete: #b3382c;
+    --couleur-non-traite: #8a90a0;
+    font-family: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--couleur-fond);
+    color: var(--couleur-texte);
+    line-height: 1.4;
+  }
+  header {
+    background: var(--couleur-accent);
+    color: white;
+    padding: 16px 20px;
+  }
+  header h1 { margin: 0 0 4px 0; font-size: 1.25rem; }
+  header p { margin: 0; font-size: 0.85rem; opacity: 0.9; }
+
+  #aide {
+    background: #eef2fa;
+    border-bottom: 1px solid var(--couleur-bordure);
+    padding: 10px 20px;
+    font-size: 0.85rem;
+  }
+  #aide summary { cursor: pointer; font-weight: 600; color: var(--couleur-accent); }
+  #aide ol { margin: 8px 0 0 20px; padding: 0; }
+  #aide li { margin-bottom: 4px; }
+
+  #barre-outils {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    background: var(--couleur-carte);
+    border-bottom: 1px solid var(--couleur-bordure);
+    padding: 10px 20px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    align-items: center;
+  }
+  #barre-outils label { font-size: 0.8rem; color: var(--couleur-texte-attenue); margin-right: 4px; }
+  #barre-outils select, #barre-outils input[type=text] {
+    padding: 5px 8px;
+    border: 1px solid var(--couleur-bordure);
+    border-radius: 4px;
+    font-size: 0.85rem;
+  }
+  .bouton {
+    padding: 6px 12px;
+    border-radius: 4px;
+    border: 1px solid var(--couleur-bordure);
+    background: var(--couleur-carte);
+    cursor: pointer;
+    font-size: 0.85rem;
+  }
+  .bouton-principal { background: var(--couleur-accent); color: white; border-color: var(--couleur-accent); }
+  .bouton-principal:hover { opacity: 0.9; }
+  #progression { margin-left: auto; font-size: 0.85rem; color: var(--couleur-texte-attenue); white-space: nowrap; }
+  #progression strong { color: var(--couleur-texte); }
+
+  main { padding: 16px 20px 60px; max-width: 980px; margin: 0 auto; }
+
+  #zone-import {
+    background: var(--couleur-carte);
+    border: 2px dashed var(--couleur-bordure);
+    border-radius: 8px;
+    padding: 40px 20px;
+    text-align: center;
+    color: var(--couleur-texte-attenue);
+  }
+  #zone-import.survol { border-color: var(--couleur-accent); background: #eef2fa; }
+  #zone-import input[type=file] { margin-top: 12px; }
+
+  details.groupe-document {
+    background: var(--couleur-carte);
+    border: 1px solid var(--couleur-bordure);
+    border-radius: 8px;
+    margin-bottom: 12px;
+    overflow: hidden;
+  }
+  details.groupe-document > summary {
+    padding: 12px 16px;
+    cursor: pointer;
+    list-style: none;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    background: #fafbfc;
+  }
+  details.groupe-document > summary::-webkit-details-marker { display: none; }
+  .titre-document { font-weight: 600; }
+  .sous-titre-document { font-size: 0.8rem; color: var(--couleur-texte-attenue); font-weight: 400; }
+  .compteur-document { font-size: 0.8rem; color: var(--couleur-texte-attenue); white-space: nowrap; }
+
+  .occurrence {
+    border-top: 1px solid var(--couleur-bordure);
+    padding: 14px 16px;
+    border-left: 5px solid var(--couleur-non-traite);
+  }
+  .occurrence.statut-valide { border-left-color: var(--couleur-valide); }
+  .occurrence.statut-corrige { border-left-color: var(--couleur-corrige); }
+  .occurrence.statut-rejete { border-left-color: var(--couleur-rejete); background: #fdf6f5; }
+
+  .ligne-badges { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-bottom: 10px; }
+  .badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 0.72rem;
+    font-weight: 600;
+    background: #e4e7ec;
+    color: var(--couleur-texte-attenue);
+  }
+  .badge-faible { background: #fbe4e1; color: var(--couleur-rejete); }
+  .badge-moyenne { background: #fbeecd; color: var(--couleur-corrige); }
+  .badge-forte, .badge-totale, .badge-elevee { background: #e1f0e6; color: var(--couleur-valide); }
+  .lien-source { margin-left: auto; font-size: 0.8rem; }
+  .lien-source a { color: var(--couleur-accent); }
+
+  .champ { margin-bottom: 8px; }
+  .champ label {
+    display: block;
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    color: var(--couleur-texte-attenue);
+    margin-bottom: 2px;
+  }
+  .champ input[type=text], .champ select, .champ textarea {
+    width: 100%;
+    padding: 6px 8px;
+    border: 1px solid var(--couleur-bordure);
+    border-radius: 4px;
+    font-size: 0.87rem;
+    font-family: inherit;
+    resize: vertical;
+    background: white;
+  }
+  .champ textarea { min-height: 3.2em; }
+  /* justification est le champ le plus long à relire (retour utilisateur du
+     14/08/2026) : hauteur doublée par rapport au défaut. extrait_significatif
+     et contexte_documentaire ne sont plus des zones de saisie (décision du
+     14/08/2026, voir .apercu-contexte plus bas) : ce sont des informations
+     issues telles quelles du document source, sans vocation à être
+     modifiées — seules les valeurs de classification (statut, nature...) et
+     le commentaire libre le sont. */
+  textarea[data-champ="justification"] { min-height: 6.4em; }
+
+  /* Bloc "Citation significative et contexte" : affichage en lecture seule
+     de contexte_documentaire, avec extrait_significatif repéré en
+     surbrillance (échanges du 14/08/2026). Le découpage en paragraphes de
+     l'étape 2 est purement mécanique (ligne vide, ou blocs de ~400
+     caractères sans repère de puce/liste) : contexte_avant/contexte_apres
+     peuvent donc appartenir à un tout autre sujet que la citation. Ce
+     surlignage ne corrige pas la cause, seulement rend le "saut de sens"
+     immédiatement visible. */
+  .apercu-contexte {
+    width: 100%;
+    min-height: 7.2em;
+    padding: 6px 8px;
+    border: 1px solid var(--couleur-bordure);
+    border-radius: 4px;
+    font-size: 0.87rem;
+    background: #fafbfc;
+    color: var(--couleur-texte-attenue);
+    white-space: pre-wrap;
+    overflow-y: auto;
+    max-height: 13em;
+  }
+  .apercu-contexte mark {
+    background: #fde68a;
+    color: var(--couleur-texte);
+    padding: 0 2px;
+    border-radius: 2px;
+    font-weight: 600;
+  }
+  .apercu-citation-manquante {
+    margin: 0 0 6px 0;
+    font-size: 0.8rem;
+    font-style: italic;
+    color: var(--couleur-texte-attenue);
+  }
+  .apercu-citation-manquante em {
+    font-style: normal;
+    font-weight: 600;
+    color: var(--couleur-texte);
+  }
+  .grille-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 12px; }
+  .grille-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px 12px; }
+
+  .zone-validation {
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px dashed var(--couleur-bordure);
+    display: flex;
+    gap: 10px;
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+  .boutons-statut { display: flex; gap: 6px; }
+  .bouton-statut {
+    padding: 6px 12px;
+    border-radius: 4px;
+    border: 1px solid var(--couleur-bordure);
+    background: white;
+    cursor: pointer;
+    font-size: 0.82rem;
+    font-weight: 600;
+  }
+  .bouton-valider { color: var(--couleur-valide); border-color: var(--couleur-valide); }
+  .bouton-valider.actif { background: var(--couleur-valide); color: white; }
+  .bouton-rejeter { color: var(--couleur-rejete); border-color: var(--couleur-rejete); }
+  .bouton-rejeter.actif { background: var(--couleur-rejete); color: white; }
+  .etat-actuel { font-size: 0.78rem; color: var(--couleur-texte-attenue); align-self: center; }
+  .zone-validation .champ { flex: 1; min-width: 220px; margin-bottom: 0; }
+
+  #toast {
+    position: fixed;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%) translateY(20px);
+    background: var(--couleur-texte);
+    color: white;
+    padding: 10px 18px;
+    border-radius: 6px;
+    font-size: 0.85rem;
+    opacity: 0;
+    transition: opacity 0.2s, transform 0.2s;
+    pointer-events: none;
+    z-index: 100;
+  }
+  #toast.visible { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+  .masque { display: none !important; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>diagBruit — Validation manuelle des occurrences bruit</h1>
+  <p>Étape 3 du plan d'automatisation des règles PLU — relecture des occurrences produites par l'étape 2</p>
+</header>
+
+<details id="aide">
+  <summary>Mode d'emploi</summary>
+  <ol>
+    <li>Chargez le fichier <code>etape3_{dept}_a_valider.csv</code> produit par <code>preparer_revue.py</code> (ou un export précédent de cet outil, pour reprendre une session).</li>
+    <li>Pour chaque occurrence : relisez la citation et son contexte, corrigez directement les champs si besoin (tous les champs sont modifiables, sauf les identifiants), puis cliquez « ✓ Valider » (sans modification = <em>validé</em>, avec modification = <em>corrigé</em> automatiquement) ou « ✕ Rejeter » si ce n'est pas une vraie règle de bruit. Un commentaire est possible mais facultatif.</li>
+    <li>Exportez régulièrement votre progression (bouton « Exporter » en haut à droite) — un export automatique se déclenche aussi tous les 10 traitements, en plus du bouton. Sans sauvegarde navigateur possible dans cet outil, un export non téléchargé = un travail non conservé si l'onglet se ferme.</li>
+    <li>Une fois toutes les occurrences traitées, lancez <code>synthese_finale.py</code> : il retrouve seul votre dernier export (le plus récent des fichiers <code>etape3_export_outil_*.csv</code> téléchargés) dans le dossier <code>output/</code>, pas besoin de le renommer.</li>
+  </ol>
+</details>
+
+<div id="barre-outils" class="masque">
+  <label for="recherche">Recherche</label>
+  <input type="text" id="recherche" placeholder="document, citation, zone…">
+
+  <label for="filtre-statut">Afficher</label>
+  <select id="filtre-statut">
+    <option value="tous">Toutes les occurrences</option>
+    <option value="a-traiter">À traiter uniquement</option>
+    <option value="valide">Validées</option>
+    <option value="corrige">Corrigées</option>
+    <option value="rejete">Rejetées</option>
+  </select>
+
+  <label for="tri-documents">Trier les documents par</label>
+  <select id="tri-documents">
+    <option value="priorite">Priorité (défaut)</option>
+    <option value="nom">Nom du document</option>
+    <option value="volume">Nombre d'occurrences</option>
+  </select>
+
+  <span id="progression">Chargement…</span>
+  <button class="bouton bouton-principal" id="bouton-exporter">⬇ Exporter (CSV)</button>
+</div>
+
+<main>
+  <div id="zone-import">
+    <p><strong>Aucun fichier chargé.</strong></p>
+    <p>Sélectionnez <code>etape3_{dept}_a_valider.csv</code> (ou un export précédent) pour démarrer.</p>
+    <input type="file" id="entree-fichier" accept=".csv,text/csv">
+  </div>
+  <div id="liste-groupes"></div>
+</main>
+
+<div id="toast"></div>
+
+<script>
+"use strict";
+
+/* ---------------------------------------------------------------------- *
+ * 1. Lecture / écriture CSV (RFC 4180 minimal : champs entre guillemets,
+ *    guillemets échappés en "", champs multi-lignes). Aucune dépendance
+ *    externe : POC, on évite tout ce qui demanderait une installation ou
+ *    un accès réseau (CDN) pour rester utilisable hors ligne.
+ * ---------------------------------------------------------------------- */
+
+function analyserCSV(texte) {
+  // Retire un éventuel BOM UTF-8 en tête de fichier.
+  if (texte.charCodeAt(0) === 0xFEFF) texte = texte.slice(1);
+
+  const lignes = [];
+  let champActuel = "";
+  let ligneActuelle = [];
+  let dansGuillemets = false;
+
+  for (let i = 0; i < texte.length; i++) {
+    const car = texte[i];
+    const suivant = texte[i + 1];
+
+    if (dansGuillemets) {
+      if (car === '"' && suivant === '"') { champActuel += '"'; i++; }
+      else if (car === '"') { dansGuillemets = false; }
+      else { champActuel += car; }
+    } else {
+      if (car === '"') { dansGuillemets = true; }
+      else if (car === ',') { ligneActuelle.push(champActuel); champActuel = ""; }
+      else if (car === '\r') { /* ignoré, traité via \n */ }
+      else if (car === '\n') {
+        ligneActuelle.push(champActuel);
+        champActuel = "";
+        lignes.push(ligneActuelle);
+        ligneActuelle = [];
+      } else { champActuel += car; }
+    }
+  }
+  // Dernière ligne (pas forcément terminée par un retour à la ligne).
+  if (champActuel.length > 0 || ligneActuelle.length > 0) {
+    ligneActuelle.push(champActuel);
+    lignes.push(ligneActuelle);
+  }
+
+  const lignesUtiles = lignes.filter(l => !(l.length === 1 && l[0] === ""));
+  if (lignesUtiles.length === 0) return [];
+
+  const entetes = lignesUtiles[0];
+  return lignesUtiles.slice(1).map(valeurs => {
+    const objet = {};
+    entetes.forEach((entete, index) => { objet[entete] = valeurs[index] ?? ""; });
+    return objet;
+  });
+}
+
+function echapperChampCSV(valeur) {
+  valeur = valeur === undefined || valeur === null ? "" : String(valeur);
+  if (/[",\n\r]/.test(valeur)) {
+    return '"' + valeur.replace(/"/g, '""') + '"';
+  }
+  return valeur;
+}
+
+function construireCSV(lignes, colonnes) {
+  const entete = colonnes.map(echapperChampCSV).join(",");
+  const corps = lignes.map(ligne => colonnes.map(c => echapperChampCSV(ligne[c])).join(","));
+  return [entete, ...corps].join("\r\n");
+}
+
+/* ---------------------------------------------------------------------- *
+ * 2. État applicatif (en mémoire uniquement — pas de stockage navigateur,
+ *    voir etape-3-conception-technique.md, "Contrainte de sauvegarde").
+ * ---------------------------------------------------------------------- */
+
+const COLONNES_ATTENDUES = [
+  "id_gpu", "id_occurrence", "nom_document", "communes", "type_piece_source",
+  "lien_web_document", "reference_type", "reference_precise",
+  "zone_reglementaire_mentionnee", "extrait_significatif", "contexte_documentaire",
+  "confiance_extrait", "justification", "nature_occurrence", "nature_juridique_piece",
+  "nature_sonore_zone", "statut_verification", "ocr_utilise", "ocr_confiance", "priorite",
+  "validation_manuelle_statut", "validation_manuelle_commentaire",
+];
+
+// extrait_significatif et contexte_documentaire sont volontairement absents :
+// ce sont des informations issues telles quelles du document source (voir
+// etape-3-validation-manuelle.md, "Édition en une seule passe" — révisé le
+// 14/08/2026), affichées en lecture seule via .apercu-contexte, jamais
+// modifiées par l'opérateur.
+const CHAMPS_MODIFIABLES = [
+  "zone_reglementaire_mentionnee",
+  "confiance_extrait", "justification", "nature_occurrence", "nature_juridique_piece",
+  "nature_sonore_zone", "statut_verification", "type_piece_source", "reference_type",
+  "reference_precise", "ocr_utilise", "ocr_confiance",
+];
+
+const SEUIL_EXPORT_AUTO = 10;
+
+let occurrences = [];       // état courant, une entrée par occurrence
+let valeursOriginales = []; // copie au chargement, pour détecter "corrigé"
+let colonnesFichier = [];   // ordre des colonnes tel que chargé (préservé à l'export)
+let nomFichierColonnes = null;
+let compteurDepuisExport = 0;
+
+function idUnique(occ) { return occ.id_gpu + "␟" + occ.id_occurrence; }
+
+function chargerLignes(lignes, colonnesSource) {
+  occurrences = lignes.map(ligne => {
+    const occ = { ...ligne };
+    if (occ.validation_manuelle_statut === undefined) occ.validation_manuelle_statut = "";
+    if (occ.validation_manuelle_commentaire === undefined) occ.validation_manuelle_commentaire = "";
+    return occ;
+  });
+  valeursOriginales = occurrences.map(occ => ({ ...occ }));
+  colonnesFichier = colonnesSource;
+  // Garantit la présence des deux colonnes de sortie même sur un premier chargement.
+  COLONNES_ATTENDUES.forEach(c => { if (!colonnesFichier.includes(c)) colonnesFichier.push(c); });
+  compteurDepuisExport = 0;
+}
+
+/* ---------------------------------------------------------------------- *
+ * 3. Rendu
+ * ---------------------------------------------------------------------- */
+
+const elListeGroupes = document.getElementById("liste-groupes");
+const elZoneImport = document.getElementById("zone-import");
+const elBarreOutils = document.getElementById("barre-outils");
+const elProgression = document.getElementById("progression");
+const elRecherche = document.getElementById("recherche");
+const elFiltreStatut = document.getElementById("filtre-statut");
+const elTriDocuments = document.getElementById("tri-documents");
+
+const OPTIONS_NATURE_OCCURRENCE = ["", "prescription", "recommandation"];
+const OPTIONS_NATURE_SONORE = ["", "lutte_bruit_existant", "preservation_zone_calme", "autre"];
+const OPTIONS_CONFIANCE = ["", "faible", "moyenne", "forte", "totale"];
+const OPTIONS_NATURE_JURIDIQUE = ["", "opposable en conformité", "opposable en compatibilité", "non opposable"];
+
+function echapperHTML(valeur) {
+  return String(valeur ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+function classeBadgeConfiance(valeur) {
+  const v = (valeur || "").toLowerCase();
+  if (v === "faible") return "badge-faible";
+  if (v === "moyenne") return "badge-moyenne";
+  if (v === "forte" || v === "totale") return "badge-forte";
+  if (v === "élevée") return "badge-elevee";
+  return "";
+}
+
+function estModifiee(occ, original) {
+  return CHAMPS_MODIFIABLES.some(champ => (occ[champ] || "") !== (original[champ] || ""));
+}
+
+function champTexte(occ, nomChamp, libelle, multiligne) {
+  const valeurEchappee = echapperHTML(occ[nomChamp] || "");
+  if (multiligne) {
+    return `<div class="champ">
+      <label>${libelle}</label>
+      <textarea data-champ="${nomChamp}">${valeurEchappee}</textarea>
+    </div>`;
+  }
+  return `<div class="champ">
+    <label>${libelle}</label>
+    <input type="text" data-champ="${nomChamp}" value="${valeurEchappee}">
+  </div>`;
+}
+
+// Repérage visuel de l'extrait_significatif (la citation retenue par
+// l'étape 2) au sein de contexte_documentaire — voir le CSS .apercu-contexte
+// ci-dessus. Le découpage mécanique en paragraphes de l'étape 2
+// (filtrage_lexical.py, _decouper_en_paragraphes) ne garantit aucune
+// continuité de sens entre contexte_avant/contexte_apres et la citation :
+// ce repère permet à l'opérateur de voir immédiatement où se situe la
+// citation et de juger si le contexte qui l'entoure lui est vraiment utile.
+//
+// Depuis le 14/08/2026, ce bloc "Citation significative et contexte" est le
+// SEUL endroit où extrait_significatif est visible (ces deux champs sont
+// passés en lecture seule, voir CHAMPS_MODIFIABLES) : si la citation ne se
+// retrouve pas telle quelle dans le contexte (troncature OCR, texte
+// retravaillé en étape 2...), on l'affiche quand même en tête plutôt que de
+// la laisser invisible.
+function apercuAvecCitationSurlignee(contexteDocumentaire, extraitSignificatif) {
+  const contexte = contexteDocumentaire || "";
+  const extrait = (extraitSignificatif || "").trim();
+  if (!extrait) return echapperHTML(contexte);
+  const indexTrouve = contexte.indexOf(extrait);
+  if (indexTrouve === -1) {
+    return `<p class="apercu-citation-manquante">Citation retenue (non repérée telle quelle dans le contexte ci-dessous) : <em>${echapperHTML(extrait)}</em></p>${echapperHTML(contexte)}`;
+  }
+  const avant = contexte.slice(0, indexTrouve);
+  const apres = contexte.slice(indexTrouve + extrait.length);
+  return `${echapperHTML(avant)}<mark>${echapperHTML(extrait)}</mark>${echapperHTML(apres)}`;
+}
+
+function champSelect(occ, nomChamp, libelle, options) {
+  const optionsHtml = options.map(o =>
+    `<option value="${o}" ${o === (occ[nomChamp] || "") ? "selected" : ""}>${o === "" ? "(non précisé)" : o}</option>`
+  ).join("");
+  return `<div class="champ"><label>${libelle}</label><select data-champ="${nomChamp}">${optionsHtml}</select></div>`;
+}
+
+function rendreOccurrence(occ) {
+  const id = idUnique(occ);
+  const statut = occ.validation_manuelle_statut;
+  const classeStatut = statut === "validé" ? "statut-valide" : statut === "corrigé" ? "statut-corrige" : statut === "rejeté" ? "statut-rejete" : "";
+  const libelleEtat = statut ? `Statut actuel : ${statut}` : "Pas encore traité";
+
+  return `
+  <div class="occurrence ${classeStatut}" data-id="${id}">
+    <div class="ligne-badges">
+      <span class="badge">${echapperHTML(occ.type_piece_source || "pièce inconnue")}</span>
+      <span class="badge">${echapperHTML(occ.reference_precise || occ.reference_type || "référence inconnue")}</span>
+      <span class="badge ${classeBadgeConfiance(occ.confiance_extrait)}">confiance : ${echapperHTML(occ.confiance_extrait || "non précisée")}</span>
+      ${occ.ocr_utilise === "True" || occ.ocr_utilise === "true" ? `<span class="badge ${classeBadgeConfiance(occ.ocr_confiance)}">OCR : ${echapperHTML(occ.ocr_confiance || "?")}</span>` : ""}
+      ${occ.lien_web_document ? `<span class="lien-source"><a href="${echapperHTML(occ.lien_web_document)}" target="_blank" rel="noopener">Ouvrir le PDF source ↗</a></span>` : ""}
+    </div>
+
+    <div class="grille-3">
+      ${champTexte(occ, "zone_reglementaire_mentionnee", "Zone réglementaire mentionnée", false)}
+      ${champSelect(occ, "nature_occurrence", "Nature de l'occurrence", OPTIONS_NATURE_OCCURRENCE)}
+      ${champSelect(occ, "nature_juridique_piece", "Nature juridique de la pièce", OPTIONS_NATURE_JURIDIQUE)}
+    </div>
+    <div class="grille-2">
+      ${champSelect(occ, "nature_sonore_zone", "Nature sonore", OPTIONS_NATURE_SONORE)}
+      ${champSelect(occ, "statut_verification", "Statut de vérification (étape 2)", ["validé", "à vérifier (renvoi CSV-PEB potentiel)"])}
+    </div>
+
+    <div class="champ">
+      <label>Citation significative et contexte</label>
+      <div class="apercu-contexte" data-role="apercu-contexte">${apercuAvecCitationSurlignee(occ.contexte_documentaire, occ.extrait_significatif)}</div>
+    </div>
+    ${champTexte(occ, "justification", "Justification (modèle)", true)}
+
+    <div class="zone-validation">
+      <div class="boutons-statut">
+        <button type="button" class="bouton-statut bouton-valider ${statut === "validé" || statut === "corrigé" ? "actif" : ""}" data-action="valider">✓ Valider</button>
+        <button type="button" class="bouton-statut bouton-rejeter ${statut === "rejeté" ? "actif" : ""}" data-action="rejeter">✕ Rejeter</button>
+      </div>
+      <div class="champ">
+        <label>Commentaire (facultatif)</label>
+        <input type="text" data-champ="validation_manuelle_commentaire" value="${echapperHTML(occ.validation_manuelle_commentaire || "")}" placeholder="précision utile pour la suite…">
+      </div>
+      <span class="etat-actuel" data-role="etat">${libelleEtat}</span>
+    </div>
+  </div>`;
+}
+
+function correspondRecherche(occ, terme) {
+  if (!terme) return true;
+  const t = terme.toLowerCase();
+  return [occ.nom_document, occ.extrait_significatif, occ.justification, occ.zone_reglementaire_mentionnee, occ.communes]
+    .some(v => (v || "").toLowerCase().includes(t));
+}
+
+function correspondFiltreStatut(occ, filtre) {
+  if (filtre === "tous") return true;
+  if (filtre === "a-traiter") return !occ.validation_manuelle_statut;
+  if (filtre === "valide") return occ.validation_manuelle_statut === "validé";
+  if (filtre === "corrige") return occ.validation_manuelle_statut === "corrigé";
+  if (filtre === "rejete") return occ.validation_manuelle_statut === "rejeté";
+  return true;
+}
+
+function rendre() {
+  const terme = elRecherche.value.trim();
+  const filtre = elFiltreStatut.value;
+  const tri = elTriDocuments.value;
+
+  const visibles = occurrences.filter(o => correspondRecherche(o, terme) && correspondFiltreStatut(o, filtre));
+
+  const groupes = new Map();
+  visibles.forEach(occ => {
+    const cle = occ.id_gpu || "(sans document)";
+    if (!groupes.has(cle)) groupes.set(cle, []);
+    groupes.get(cle).push(occ);
+  });
+
+  let entreesGroupes = Array.from(groupes.entries());
+  if (tri === "nom") {
+    entreesGroupes.sort((a, b) => (a[1][0].nom_document || "").localeCompare(b[1][0].nom_document || ""));
+  } else if (tri === "volume") {
+    entreesGroupes.sort((a, b) => b[1].length - a[1].length);
+  } else {
+    // Number(o.priorite) || 99 serait piégé par le cas priorite === 0 (le
+    // plus prioritaire, mais falsy en JS) : Number.isFinite est nécessaire.
+    const priniteMinimale = (occs) => Math.min(...occs.map(o => {
+      const n = Number(o.priorite);
+      return Number.isFinite(n) ? n : 99;
+    }));
+    entreesGroupes.sort((a, b) => priniteMinimale(a[1]) - priniteMinimale(b[1]));
+  }
+
+  elListeGroupes.innerHTML = entreesGroupes.map(([idGpu, occsDuGroupe]) => {
+    const premiere = occsDuGroupe[0];
+    const traitees = occsDuGroupe.filter(o => o.validation_manuelle_statut).length;
+    return `<details class="groupe-document" open data-id-gpu="${idGpu}">
+      <summary>
+        <span>
+          <span class="titre-document">${echapperHTML(premiere.nom_document || "(document non identifié)")}</span><br>
+          <span class="sous-titre-document">${echapperHTML(premiere.communes || "")}</span>
+        </span>
+        <span class="compteur-document">${traitees} / ${occsDuGroupe.length} traitée(s)</span>
+      </summary>
+      ${occsDuGroupe.map(rendreOccurrence).join("")}
+    </details>`;
+  }).join("") || "<p>Aucune occurrence ne correspond aux filtres actuels.</p>";
+
+  mettreAJourProgression();
+}
+
+function mettreAJourProgression() {
+  const total = occurrences.length;
+  const traitees = occurrences.filter(o => o.validation_manuelle_statut).length;
+  elProgression.innerHTML = `<strong>${traitees} / ${total}</strong> occurrence(s) traitée(s)`;
+}
+
+/* ---------------------------------------------------------------------- *
+ * 4. Interactions
+ * ---------------------------------------------------------------------- */
+
+function trouverOccurrence(id) {
+  return occurrences.find(o => idUnique(o) === id);
+}
+function trouverOriginale(id) {
+  return valeursOriginales.find(o => idUnique(o) === id);
+}
+
+elListeGroupes.addEventListener("input", (evenement) => {
+  const carte = evenement.target.closest(".occurrence");
+  if (!carte) return;
+  const champ = evenement.target.dataset.champ;
+  if (!champ) return;
+  const occ = trouverOccurrence(carte.dataset.id);
+  if (!occ) return;
+  occ[champ] = evenement.target.value;
+});
+
+elListeGroupes.addEventListener("click", (evenement) => {
+  const bouton = evenement.target.closest("[data-action]");
+  if (!bouton) return;
+  const carte = bouton.closest(".occurrence");
+  const occ = trouverOccurrence(carte.dataset.id);
+  const original = trouverOriginale(carte.dataset.id);
+  if (!occ) return;
+
+  if (bouton.dataset.action === "valider") {
+    occ.validation_manuelle_statut = estModifiee(occ, original) ? "corrigé" : "validé";
+  } else if (bouton.dataset.action === "rejeter") {
+    occ.validation_manuelle_statut = "rejeté";
+  }
+
+  compteurDepuisExport++;
+  rendre();
+  if (compteurDepuisExport >= SEUIL_EXPORT_AUTO) {
+    exporterCSV(true);
+    compteurDepuisExport = 0;
+  }
+});
+
+let delaiRecherche = null;
+elRecherche.addEventListener("input", () => {
+  clearTimeout(delaiRecherche);
+  delaiRecherche = setTimeout(rendre, 150);
+});
+elFiltreStatut.addEventListener("change", rendre);
+elTriDocuments.addEventListener("change", rendre);
+
+/* ---------------------------------------------------------------------- *
+ * 5. Import / export de fichier
+ * ---------------------------------------------------------------------- */
+
+function afficherToast(message) {
+  const toast = document.getElementById("toast");
+  toast.textContent = message;
+  toast.classList.add("visible");
+  setTimeout(() => toast.classList.remove("visible"), 2500);
+}
+
+function traiterFichier(fichier) {
+  const lecteur = new FileReader();
+  lecteur.onload = (evenement) => {
+    const texte = evenement.target.result;
+    const premiereLigne = texte.split(/\r?\n/, 1)[0] || "";
+    const colonnesSource = premiereLigne.split(",").map(c => c.replace(/^"|"$/g, ""));
+    const lignes = analyserCSV(texte);
+    if (lignes.length === 0) {
+      afficherToast("Fichier vide ou illisible.");
+      return;
+    }
+    chargerLignes(lignes, colonnesSource);
+    elZoneImport.classList.add("masque");
+    elBarreOutils.classList.remove("masque");
+    rendre();
+    afficherToast(`${lignes.length} occurrence(s) chargée(s).`);
+  };
+  lecteur.onerror = () => afficherToast("Erreur de lecture du fichier.");
+  lecteur.readAsText(fichier, "UTF-8");
+}
+
+document.getElementById("entree-fichier").addEventListener("change", (evenement) => {
+  const fichier = evenement.target.files[0];
+  if (fichier) traiterFichier(fichier);
+});
+
+elZoneImport.addEventListener("dragover", (evenement) => { evenement.preventDefault(); elZoneImport.classList.add("survol"); });
+elZoneImport.addEventListener("dragleave", () => elZoneImport.classList.remove("survol"));
+elZoneImport.addEventListener("drop", (evenement) => {
+  evenement.preventDefault();
+  elZoneImport.classList.remove("survol");
+  const fichier = evenement.dataTransfer.files[0];
+  if (fichier) traiterFichier(fichier);
+});
+
+function horodatage() {
+  const d = new Date();
+  const pad = (n) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}_${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}`;
+}
+
+function exporterCSV(automatique) {
+  if (occurrences.length === 0) return;
+  const colonnes = colonnesFichier.length ? colonnesFichier : COLONNES_ATTENDUES;
+  const csv = construireCSV(occurrences, colonnes);
+  const blob = new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const lien = document.createElement("a");
+  lien.href = url;
+  lien.download = `etape3_export_outil_${horodatage()}.csv`;
+  document.body.appendChild(lien);
+  lien.click();
+  document.body.removeChild(lien);
+  URL.revokeObjectURL(url);
+  afficherToast(automatique ? "Sauvegarde automatique : fichier téléchargé." : "Export téléchargé.");
+}
+
+document.getElementById("bouton-exporter").addEventListener("click", () => exporterCSV(false));
+
+window.addEventListener("beforeunload", (evenement) => {
+  const nonTraitees = occurrences.filter(o => !o.validation_manuelle_statut).length;
+  const dejaTraitees = occurrences.length - nonTraitees;
+  if (dejaTraitees > 0 && compteurDepuisExport > 0) {
+    evenement.preventDefault();
+    evenement.returnValue = "";
+  }
+});
+</script>
+</body>
+</html>
