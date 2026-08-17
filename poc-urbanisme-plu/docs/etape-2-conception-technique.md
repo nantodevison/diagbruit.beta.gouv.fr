@@ -1,6 +1,6 @@
 # Étape 2 — Conception technique : analyse des documents d'urbanisme pour repérer les règles liées au bruit
 
-*Document de cadrage technique, faisant suite à `etape-2-analyse-documents-urbanisme-diagbruit.md` et à `etape-1-conception-technique.md`.*
+*Document de cadrage technique, faisant suite à `etape-2-analyse-documents-urbanisme-diagbruit.md` et à `etape-1-conception-technique.md`. Révisé le 17/08/2026 suite à la conception de l'étape 4 : ajout du champ `portee_geometrique` au schéma structuré et au prompt de classification.*
 
 ## Posture
 
@@ -71,6 +71,7 @@ Le prompt transmet le passage, son contexte immédiat (`contexte_avant`/`context
 - si le passage constitue une règle autonome liée au bruit dans le périmètre de diagBruit (voir `etape-2-analyse-documents-urbanisme-diagbruit.md`, phase 4, pour la définition complète — distinction renvoi simple/règle autonome pour le classement sonore/PEB, et cas des règles limitées à l'infrastructure de transport) ;
 - sa nature (prescription/recommandation) et sa nature sonore ;
 - la zone réglementaire mentionnée, le cas échéant ;
+- **(ajouté le 17/08/2026)** sa portée géométrique — administrative (contour du zonage, de la commune ou de l'EPCI) ou zone spécifique (une zone réglementaire précise) — voir le nouveau bloc de prompt ci-dessous, qui reprend la distinction Alinéa 1/Alinéa 2 déjà posée dans `plan-automatisation-regles-plu-diagbruit.md` ;
 - une citation verbatim (`extrait_significatif`) qui isole le mieux la règle, choisie librement dans le passage et son contexte immédiat — le contexte est transmis précisément pour que le modèle puisse y puiser si la règle y déborde (phrase commencée dans le contexte avant, terminée dans le contexte après, etc.) ;
 - un niveau de confiance (`confiance_extrait`) sur la clarté de cette citation, qui signale aussi, le cas échéant, qu'une règle par ailleurs claire ne concerne que l'infrastructure de transport (la raison précise est alors à lire dans `justification`, le raisonnement complet renvoyé par le modèle).
 
@@ -115,6 +116,18 @@ SCHEMA_CLASSIFICATION = {
             ]
         },
         "zone_reglementaire_mentionnee": {"type": ["string", "null"]},
+        # Ajouté le 17/08/2026 : portée géométrique de la règle, nécessaire à
+        # l'étape 4 pour savoir si une géométrie automatique (contour administratif)
+        # suffit, ou si un tracé manuel dédié est requis. Distinct de
+        # zone_reglementaire_mentionnee ci-dessus : celui-ci dit QUELLE zone est
+        # citée dans le texte (libre, informatif) ; portee_geometrique dit QUEL
+        # PROCESSUS DE GÉOMÉTRIE appliquer (contrôlé, exploité par le code).
+        "portee_geometrique": {
+            "anyOf": [
+                {"type": "string", "enum": ["administrative", "zone_specifique"]},
+                {"type": "null"},
+            ]
+        },
         "justification": {"type": "string"},
         # Citation verbatim choisie par le modèle dans le passage et son
         # contexte immédiat — vérifiée côté code comme sous-ensemble du texte
@@ -135,6 +148,7 @@ SCHEMA_CLASSIFICATION = {
         "nature_occurrence",
         "nature_sonore_zone",
         "zone_reglementaire_mentionnee",
+        "portee_geometrique",
         "justification",
         "extrait_significatif",
         "confiance_extrait",
@@ -165,6 +179,18 @@ automatiquement une règle autonome. Distingue deux cas :
   ou le PEB sert de simple repère géographique pour une règle DIFFÉRENTE de
   l'isolement acoustique standard, ou une exigence d'isolement qui va
   au-delà de celle prévue par l'arrêté/le PEB.
+
+Si retenu=true, détermine aussi la portée géométrique de la règle
+(portee_geometrique) :
+- "administrative" : la règle s'applique à l'ensemble du zonage couvert par
+  le document, à l'ensemble d'une commune, ou à l'ensemble d'un EPCI — le
+  contour administratif déjà connu suffit à la localiser.
+- "zone_specifique" : la règle ne s'applique qu'à une zone réglementaire
+  précise (ex. une zone "UA", un secteur identifié) qui n'a pas de contour
+  automatiquement disponible et devra être tracée manuellement.
+Si le passage ne précise aucune limite spatiale propre (silence total sur la
+portée), pars du principe que la règle s'applique à l'ensemble du document
+("administrative") plutôt que de la classer par défaut en "zone_specifique".
 
 Contexte avant : {contexte_avant}
 PASSAGE À ANALYSER : {passage_texte}
@@ -225,6 +251,7 @@ Colonnes dans l'ordre où elles apparaissent dans le CSV (`COLONNES_SYNTHESE` de
 | `nature_occurrence` | `prescription` / `recommandation` / *(vide)* | Renvoyé par le modèle en phase 4. Vide uniquement sur les lignes `statut_verification = "aucune occurrence trouvée"`. |
 | `nature_juridique_piece` | `opposable en conformité` / `opposable en compatibilité` / `non opposable` | Déduit mécaniquement de `type_piece_source` par `synthese.py` (phase 5) : règlement (PLU/PLUi/POS/CC comme PSMV) → conformité ; OAP → compatibilité ; PADD → non opposable. |
 | `nature_sonore_zone` | `lutte_bruit_existant` / `preservation_zone_calme` / `autre` / *(vide)* | Renvoyé par le modèle en phase 4. Vide dans les mêmes conditions que `nature_occurrence`. |
+| `portee_geometrique` | `administrative` / `zone_specifique` / *(vide)* | **(ajouté le 17/08/2026)** Renvoyé par le modèle en phase 4. Vide dans les mêmes conditions que `nature_occurrence`. Exploité directement par `preparer_geometries.py` à l'étape 4 pour orienter la ligne vers la géométrie automatique ou vers le tracé manuel — voir `etape-4-conception-technique.md`. |
 | `statut_verification` | `validé` / `à vérifier (renvoi CSV-PEB potentiel)` / `aucune occurrence trouvée` | `synthese.py` (phase 5) : `à vérifier...` quand le passage porte le tag d'exclusion lexicale (phase 3) malgré un `retenu=true` en phase 4 ; `aucune occurrence trouvée` quand une pièce extraite avec succès n'a produit aucune occurrence retenue. |
 | `ocr_utilise` | `True` / `False` | `extraction_texte.py` (phase 2). |
 | `ocr_confiance` | `élevée` / `moyenne` / `faible` / *(vide)* | Idem, vide si `ocr_utilise` est `False`. |
@@ -239,4 +266,4 @@ Colonnes dans l'ordre où elles apparaissent dans le CSV (`COLONNES_SYNTHESE` de
 
 ## Prochaine étape
 
-Délimitation géométrique des zones et rédaction des messages (étapes 3 et 4 du plan global), à partir des occurrences produites par `etape2_{dept}.csv`.
+Délimitation géométrique des zones et rédaction des messages (étapes 3, 4 et 5 du plan global), à partir des occurrences produites par `etape2_{dept}.csv`.

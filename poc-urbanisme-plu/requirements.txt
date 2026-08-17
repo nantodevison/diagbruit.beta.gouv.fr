@@ -8,3 +8,10 @@ python-dotenv
 pdfplumber
 pytesseract
 pdf2image
+
+# étape 4 (construction des géométries) — non versionnés précisément, même
+# raison qu'étape 2 : à figer avec `pip freeze` après une première
+# installation réussie.
+geopandas
+pyogrio
+shapely

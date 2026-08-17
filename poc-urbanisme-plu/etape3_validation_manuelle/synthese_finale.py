@@ -4,11 +4,20 @@ Consolide le dernier export de l'outil de relecture (`outil_validation.html`)
 avec `etape2_{dept}.csv` pour produire le contrat de sortie de l'étape 3 —
 l'entrée attendue par l'étape 4 (assignation de géométrie).
 
+Révisé le 17/08/2026, suite à la conception de l'étape 4 : `etape1_{dept}.csv`
+n'est plus seulement une source de contexte documentaire, c'est aussi
+désormais la source directe des lignes de synthèse RNU et trou de couverture
+(voir "Réintégration RNU et trou de couverture" plus bas et
+`etape-3-validation-manuelle.md`) — ces communes n'apparaissent jamais dans
+`etape2_{dept}.csv`, il n'y a donc rien à y lire pour elles.
+
 Usage :
     python -m etape3_validation_manuelle.synthese_finale --dept 033
 
 Entrée (dans `output/`, voir `--output-dir`) :
     etape1_{dept}.csv                     — contexte documentaire (nom, communes)
+                                             ET source directe des lignes RNU
+                                             / trou de couverture
     etape2_{dept}.csv                     — référence complète (tous les id_gpu traités)
     etape3_export_outil_{horodatage}.csv  — export(s) de l'outil ; le plus
                                              récent (horodatage le plus
@@ -37,10 +46,60 @@ STATUT_VALIDE = "validé"
 STATUT_CORRIGE = "corrigé"
 STATUTS_RETENUS = {STATUT_VALIDE, STATUT_CORRIGE}
 STATUT_AUCUNE_OCCURRENCE = "aucune occurrence trouvée"
+# Réservé aux lignes RNU (ajouté le 17/08/2026) : rend explicite qu'aucun
+# opérateur ne les a relues, contrairement à validé/corrigé qui supposent un
+# passage par l'outil de relecture.
+STATUT_VALIDE_AUTOMATIQUE = "validé automatique"
+
+# Valeurs de la colonne `statut` d'etape1_{dept}.csv (voir
+# etape1_identification/documents_urbanisme.py) identifiant les communes RNU
+# et les trous de couverture, réintégrées ici sans jamais passer par l'outil
+# de relecture — voir "Réintégration RNU et trou de couverture" plus bas.
+STATUT_ETAPE1_RNU_CONFIRME = "RNU confirmé"
+STATUT_ETAPE1_TROU_DE_COUVERTURE = "trou de couverture"
+STATUT_ETAPE1_PSMV_ADDITIONNEL = "PSMV additionnel"
+
+# Valeur de `niveau_couverture` (etape1_{dept}.csv) indiquant qu'un document a
+# été trouvé au niveau de l'EPCI plutôt qu'au niveau de la commune — voir
+# etape1_identification/documents_urbanisme.py (NIVEAU_EPCI).
+NIVEAU_COUVERTURE_EPCI = "EPCI"
+
+# Une commune fusionnée/renommée peut avoir son document GPU resté indexé
+# sous un ancien code INSEE plutôt que le code actuel — etape1_{dept}.csv
+# l'annote alors "{code actuel} (ancien code {ancien code})" (voir
+# etape1_identification/synthese.py, _code_insee_avec_origine). C'est ce
+# second code, pas le code actuel, qui a été réellement utilisé pour
+# rechercher le document, et qu'il faut donc utiliser pour reconstruire
+# partition_gpu (voir _partition_gpu ci-dessous).
+_PATRON_ANCIEN_CODE = re.compile(r"^\S+ \(ancien code (?P<ancien>\S+)\)$")
+
+# Valeurs de `nature_zone` (ajouté le 17/08/2026) : origine de la ligne,
+# déterminante pour le choix du processus de géométrie à l'étape 4 — voir
+# etape-3-conception-technique.md, "Contrat de données".
+NATURE_OCCURRENCE_LOCALE = "occurrence_locale"
+NATURE_RNU = "rnu"
+NATURE_DOCUMENT_NON_SIGNIFICATIF = "document_non_significatif"
+NATURE_TROU_DE_COUVERTURE = "trou_de_couverture"
+
+# Justification pré-remplie pour chaque ligne RNU (le régime national ne
+# vient pas d'un document à citer, contrairement aux occurrences locales) —
+# voir etape-3-validation-manuelle.md, "RNU et trou de couverture :
+# réintégration dans le pipeline".
+JUSTIFICATION_RNU = (
+    "Commune soumise au règlement national d'urbanisme (RNU) : l'article "
+    "R.111-2 du code de l'urbanisme permet à l'autorité compétente de refuser "
+    "un projet, ou de le conditionner à des prescriptions spéciales, s'il "
+    "porte atteinte à la salubrité ou à la sécurité publique — la "
+    "jurisprudence y range les nuisances sonores."
+)
 
 COLONNES_FINALES = [
     "id_gpu",
+    "partition_gpu",
     "id_occurrence",
+    "code_insee_commune",
+    "nature_zone",
+    "portee_geometrique",
     "statut_verification_finale",
     "nom_document",
     "communes",
@@ -99,6 +158,78 @@ def _dernier_export(dossier: Path) -> Path:
     return candidats[-1][1]
 
 
+def _code_insee_pour_partition(code_insee_commune: str) -> str:
+    correspondance = _PATRON_ANCIEN_CODE.match(code_insee_commune)
+    return correspondance.group("ancien") if correspondance else code_insee_commune
+
+
+def _partition_gpu(ligne_etape1: dict[str, str]) -> str:
+    """Construit la valeur attendue par le paramètre `partition` de la couche
+    `document` de l'API Carto GPU (format `<DU/PSMV>_<INSEE/SIREN>`) — voir
+    `etape-3-conception-technique.md`, "Calcul de partition_gpu". `id_gpu`
+    seul ne suffit pas : ce n'est pas la valeur attendue par ce paramètre."""
+    famille = "PSMV" if ligne_etape1["statut"] == STATUT_ETAPE1_PSMV_ADDITIONNEL else "DU"
+    if ligne_etape1["niveau_couverture"] == NIVEAU_COUVERTURE_EPCI:
+        code = ligne_etape1["code_siren_epci"]
+    else:
+        code = _code_insee_pour_partition(ligne_etape1["code_insee_commune"])
+    return f"{famille}_{code}"
+
+
+def _partitions_gpu_par_id_gpu(lignes_etape1: list[dict[str, str]]) -> dict[str, str]:
+    """Une entrée par `id_gpu` distinct (déduplication déjà pratiquée par le
+    reste du pipeline, voir etape2_analyse_reglements/resolution_pieces.py :
+    un PLUi intercommunal apparaît sur autant de lignes que de communes
+    couvertes, mais une seule valeur partition_gpu lui correspond)."""
+    partitions: dict[str, str] = {}
+    for ligne in lignes_etape1:
+        id_gpu = ligne.get("id_gpu", "")
+        if id_gpu and id_gpu not in partitions:
+            partitions[id_gpu] = _partition_gpu(ligne)
+    return partitions
+
+
+def _ligne_rnu(ligne_etape1: dict[str, str]) -> dict[str, str]:
+    nouvelle = {colonne: "" for colonne in COLONNES_FINALES}
+    nouvelle.update(
+        code_insee_commune=ligne_etape1["code_insee_commune"],
+        nature_zone=NATURE_RNU,
+        portee_geometrique="administrative",
+        statut_verification_finale=STATUT_VALIDE_AUTOMATIQUE,
+        communes=ligne_etape1["nom_commune"],
+        justification=JUSTIFICATION_RNU,
+    )
+    return nouvelle
+
+
+def _ligne_trou_de_couverture(ligne_etape1: dict[str, str]) -> dict[str, str]:
+    nouvelle = {colonne: "" for colonne in COLONNES_FINALES}
+    nouvelle.update(
+        code_insee_commune=ligne_etape1["code_insee_commune"],
+        nature_zone=NATURE_TROU_DE_COUVERTURE,
+        statut_verification_finale=STATUT_AUCUNE_OCCURRENCE,
+        communes=ligne_etape1["nom_commune"],
+    )
+    return nouvelle
+
+
+def _lignes_rnu_et_trous(lignes_etape1: list[dict[str, str]]) -> tuple[list[dict[str, str]], list[dict[str, str]]]:
+    """Construit les lignes de synthèse RNU et trou de couverture directement
+    depuis `etape1_{dept}.csv` (voir etape-3-validation-manuelle.md, "RNU et
+    trou de couverture : réintégration dans le pipeline") — ces communes
+    n'apparaissent jamais dans etape2_{dept}.csv ni dans un export de l'outil,
+    donc jamais dans `retenues`/`id_gpu_non_significatifs` ci-dessus."""
+    rnu = [
+        _ligne_rnu(ligne) for ligne in lignes_etape1 if ligne.get("statut") == STATUT_ETAPE1_RNU_CONFIRME
+    ]
+    trous = [
+        _ligne_trou_de_couverture(ligne)
+        for ligne in lignes_etape1
+        if ligne.get("statut") == STATUT_ETAPE1_TROU_DE_COUVERTURE
+    ]
+    return rnu, trous
+
+
 def _lire_csv(chemin: Path) -> list[dict[str, str]]:
     with chemin.open(encoding="utf-8-sig", newline="") as fichier:
         return list(csv.DictReader(fichier))
@@ -124,8 +255,10 @@ def synthetiser(code_departement: str, dossier_sortie: str | Path = "output") ->
     print(f"Dernier export de l'outil détecté : {chemin_export.name}")
 
     contexte_documents = charger_contexte_documents(chemin_etape1)
+    lignes_etape1 = _lire_csv(chemin_etape1)
     lignes_etape2 = _lire_csv(chemin_etape2)
     lignes_export = _lire_csv(chemin_export)
+    partitions_gpu = _partitions_gpu_par_id_gpu(lignes_etape1)
 
     if lignes_export and "validation_manuelle_statut" not in lignes_export[0]:
         raise ExportOutilInvalide(
@@ -171,6 +304,8 @@ def synthetiser(code_departement: str, dossier_sortie: str | Path = "output") ->
     for ligne in retenues:
         nouvelle = {colonne: ligne.get(colonne, "") for colonne in COLONNES_FINALES}
         nouvelle["statut_verification_finale"] = ligne["validation_manuelle_statut"]
+        nouvelle["nature_zone"] = NATURE_OCCURRENCE_LOCALE
+        nouvelle["partition_gpu"] = partitions_gpu.get(ligne["id_gpu"], "")
         lignes_sortie.append(nouvelle)
 
     for id_gpu in sorted(id_gpu_non_significatifs):
@@ -178,20 +313,32 @@ def synthetiser(code_departement: str, dossier_sortie: str | Path = "output") ->
         nouvelle = {colonne: "" for colonne in COLONNES_FINALES}
         nouvelle.update(
             id_gpu=id_gpu,
+            partition_gpu=partitions_gpu.get(id_gpu, ""),
+            nature_zone=NATURE_DOCUMENT_NON_SIGNIFICATIF,
             statut_verification_finale=STATUT_AUCUNE_OCCURRENCE,
             nom_document=contexte.get("nom_document", "(document non identifié)"),
             communes=contexte.get("communes", ""),
         )
         lignes_sortie.append(nouvelle)
 
-    lignes_sortie.sort(key=lambda l: (l["nom_document"], l["id_occurrence"]))
+    # Réintégration RNU et trou de couverture (ajouté le 17/08/2026) : lignes
+    # de synthèse construites directement depuis etape1_{dept}.csv, jamais
+    # soumises à l'outil de relecture — voir "RNU et trou de couverture :
+    # réintégration dans le pipeline" dans etape-3-validation-manuelle.md.
+    lignes_rnu, lignes_trou_de_couverture = _lignes_rnu_et_trous(lignes_etape1)
+    lignes_sortie.extend(lignes_rnu)
+    lignes_sortie.extend(lignes_trou_de_couverture)
+
+    lignes_sortie.sort(key=lambda l: (l["nom_document"], l["communes"], l["id_occurrence"]))
 
     chemin_sortie = dossier / f"etape3_{code_departement}.csv"
     _ecrire_csv(chemin_sortie, COLONNES_FINALES, lignes_sortie)
     print(
         f"{len(lignes_sortie)} ligne(s) écrite(s) dans {chemin_sortie} "
         f"({len(retenues)} occurrence(s) significative(s), "
-        f"{len(id_gpu_non_significatifs)} document(s) non significatif(s))."
+        f"{len(id_gpu_non_significatifs)} document(s) non significatif(s), "
+        f"{len(lignes_rnu)} commune(s) RNU, "
+        f"{len(lignes_trou_de_couverture)} trou(s) de couverture)."
     )
     return chemin_sortie
 

@@ -58,6 +58,7 @@ COLONNES_SORTIE = [
     "reference_type",
     "reference_precise",
     "zone_reglementaire_mentionnee",
+    "portee_geometrique",
     "extrait_significatif",
     "contexte_documentaire",
     "confiance_extrait",

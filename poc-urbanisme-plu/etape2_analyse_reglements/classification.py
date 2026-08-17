@@ -126,6 +126,19 @@ SCHEMA_CLASSIFICATION = {
             ]
         },
         "zone_reglementaire_mentionnee": {"type": ["string", "null"]},
+        # Ajouté le 17/08/2026, suite à la conception de l'étape 4 : portée
+        # géométrique de la règle, qui pilote directement le choix entre
+        # géométrie automatique (contour administratif) et tracé manuel à
+        # l'étape 4. Distinct de zone_reglementaire_mentionnee ci-dessus :
+        # celui-ci dit QUELLE zone est citée dans le texte (libre, informatif),
+        # portee_geometrique dit QUEL PROCESSUS DE GÉOMÉTRIE appliquer
+        # (contrôlé, exploité directement par le code de l'étape 4).
+        "portee_geometrique": {
+            "anyOf": [
+                {"type": "string", "enum": ["administrative", "zone_specifique"]},
+                {"type": "null"},
+            ]
+        },
         "justification": {"type": "string"},
         # Ajouté le 13/08/2026 ("option 4", retour utilisateur) : citation
         # verbatim choisie par le modèle dans le passage et son contexte
@@ -148,6 +161,7 @@ SCHEMA_CLASSIFICATION = {
         "nature_occurrence",
         "nature_sonore_zone",
         "zone_reglementaire_mentionnee",
+        "portee_geometrique",
         "justification",
         "extrait_significatif",
         "confiance_extrait",
@@ -163,6 +177,7 @@ class OccurrenceClassifiee:
     nature_occurrence: str | None
     nature_sonore_zone: str | None
     zone_reglementaire_mentionnee: str | None
+    portee_geometrique: str | None
     justification: str
     extrait_significatif: str | None
     confiance_extrait: str | None
@@ -233,6 +248,19 @@ suivent immédiatement le passage dans le document — utilise-les si la règle
 liée au bruit y déborde (phrase commencée dans le contexte avant, terminée
 dans le contexte après, etc.), et pour juger si le passage relève ou non du
 périmètre diagBruit et du cas "simple renvoi" ci-dessus.
+
+Si retenu=true, détermine aussi la portée géométrique de la règle
+(portee_geometrique) :
+- "administrative" : la règle s'applique à l'ensemble du zonage couvert par
+  le document, à l'ensemble d'une commune, ou à l'ensemble d'un EPCI — le
+  contour administratif déjà connu suffit à la localiser.
+- "zone_specifique" : la règle ne s'applique qu'à une zone réglementaire
+  précise (ex. une zone "UA", un secteur identifié) qui n'a pas de contour
+  automatiquement disponible et devra être tracée manuellement.
+Si le passage ne précise aucune limite spatiale propre (silence total sur la
+portée), pars du principe que la règle s'applique à l'ensemble du document
+("administrative") plutôt que de la classer par défaut en "zone_specifique".
+Si retenu=false, mets portee_geometrique à null.
 
 Si retenu=true, remplis extrait_significatif : une **citation verbatim**,
 copiée exactement (aucune reformulation, aucun résumé) depuis le contexte
@@ -316,6 +344,7 @@ def classifier_passage(passage: PassageRetenu) -> OccurrenceClassifiee:
         nature_occurrence=donnees["nature_occurrence"],
         nature_sonore_zone=donnees["nature_sonore_zone"],
         zone_reglementaire_mentionnee=donnees["zone_reglementaire_mentionnee"],
+        portee_geometrique=donnees["portee_geometrique"],
         justification=donnees["justification"],
         extrait_significatif=_extraire_citation_verifiee(donnees, passage),
         confiance_extrait=donnees["confiance_extrait"],

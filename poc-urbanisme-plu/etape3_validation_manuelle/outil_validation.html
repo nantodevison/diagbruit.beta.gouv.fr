@@ -382,7 +382,7 @@ function construireCSV(lignes, colonnes) {
 const COLONNES_ATTENDUES = [
   "id_gpu", "id_occurrence", "nom_document", "communes", "type_piece_source",
   "lien_web_document", "reference_type", "reference_precise",
-  "zone_reglementaire_mentionnee", "extrait_significatif", "contexte_documentaire",
+  "zone_reglementaire_mentionnee", "portee_geometrique", "extrait_significatif", "contexte_documentaire",
   "confiance_extrait", "justification", "nature_occurrence", "nature_juridique_piece",
   "nature_sonore_zone", "statut_verification", "ocr_utilise", "ocr_confiance", "priorite",
   "validation_manuelle_statut", "validation_manuelle_commentaire",
@@ -394,7 +394,7 @@ const COLONNES_ATTENDUES = [
 // 14/08/2026), affichées en lecture seule via .apercu-contexte, jamais
 // modifiées par l'opérateur.
 const CHAMPS_MODIFIABLES = [
-  "zone_reglementaire_mentionnee",
+  "zone_reglementaire_mentionnee", "portee_geometrique",
   "confiance_extrait", "justification", "nature_occurrence", "nature_juridique_piece",
   "nature_sonore_zone", "statut_verification", "type_piece_source", "reference_type",
   "reference_precise", "ocr_utilise", "ocr_confiance",
@@ -440,6 +440,10 @@ const OPTIONS_NATURE_OCCURRENCE = ["", "prescription", "recommandation"];
 const OPTIONS_NATURE_SONORE = ["", "lutte_bruit_existant", "preservation_zone_calme", "autre"];
 const OPTIONS_CONFIANCE = ["", "faible", "moyenne", "forte", "totale"];
 const OPTIONS_NATURE_JURIDIQUE = ["", "opposable en conformité", "opposable en compatibilité", "non opposable"];
+// Ajouté le 17/08/2026 : décide, à l'étape 4, entre géométrie automatique
+// (contour administratif) et tracé manuel — voir etape-3-validation-manuelle.md,
+// "Édition en une seule passe".
+const OPTIONS_PORTEE_GEOMETRIQUE = ["", "administrative", "zone_specifique"];
 
 function echapperHTML(valeur) {
   return String(valeur ?? "")
@@ -532,9 +536,10 @@ function rendreOccurrence(occ) {
       ${champSelect(occ, "nature_occurrence", "Nature de l'occurrence", OPTIONS_NATURE_OCCURRENCE)}
       ${champSelect(occ, "nature_juridique_piece", "Nature juridique de la pièce", OPTIONS_NATURE_JURIDIQUE)}
     </div>
-    <div class="grille-2">
+    <div class="grille-3">
       ${champSelect(occ, "nature_sonore_zone", "Nature sonore", OPTIONS_NATURE_SONORE)}
       ${champSelect(occ, "statut_verification", "Statut de vérification (étape 2)", ["validé", "à vérifier (renvoi CSV-PEB potentiel)"])}
+      ${champSelect(occ, "portee_geometrique", "Portée géométrique (étape 4)", OPTIONS_PORTEE_GEOMETRIQUE)}
     </div>
 
     <div class="champ">
