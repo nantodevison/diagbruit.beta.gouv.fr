@@ -33,7 +33,7 @@ from datetime import date
 from pathlib import Path
 
 import geopandas as gpd
-from shapely.geometry import shape
+from shapely.geometry import MultiPolygon, shape
 from shapely.geometry.base import BaseGeometry
 
 from .sources_gpu import ResultatGeometrie, recuperer_geometrie_commune, recuperer_geometrie_document
@@ -220,10 +220,16 @@ def preparer(code_departement: str, dossier_sortie: str | Path = "output") -> Pa
 
     geodf_administratives = _construire_geodataframe(attributs_admin, geometries_admin)
     geodf_a_georeferencer = _construire_geodataframe(
-        attributs_a_georeferencer, [None] * len(attributs_a_georeferencer)
-    )
+        attributs_a_georeferencer, 
+        # Un MultiPolygon() vide plutôt que None : pyogrio a besoin d'un objet
+        # shapely réel (même vide) pour rattacher le type "MultiPolygon" forcé
+        # par geometry_type à l'écriture — une colonne 100% None ne lui laisse
+        # rien à quoi l'accrocher, d'où le "Unknown" malgré le paramètre.
+        [MultiPolygon()] * len(attributs_a_georeferencer),
+        )
 
     chemin_sortie = dossier / f"etape4_{code_departement}_a_completer.gpkg"
+    print("Types réellement présents dans geometries_admin :", {g.geom_type for g in geometries_admin})
     geodf_administratives.to_file(
         chemin_sortie,
         layer=COUCHE_ADMINISTRATIVE,
