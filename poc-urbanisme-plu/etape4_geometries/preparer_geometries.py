@@ -40,6 +40,15 @@ from .sources_gpu import ResultatGeometrie, recuperer_geometrie_commune, recuper
 
 PORTEE_ZONE_SPECIFIQUE = "zone_specifique"
 CRS_SORTIE = "EPSG:4326"
+# GeoPackage n'autorise qu'un seul type de géométrie déclaré par couche
+# (gpkg_geometry_columns). On force "MultiPolygon" pour les deux couches :
+# ça couvre aussi bien une commune simple (un seul polygone) qu'un document
+# GPU renvoyé en plusieurs parties disjointes (voir _unir_features). Sans ce
+# paramètre, pyogrio ne peut pas déduire le type d'une couche dont toutes les
+# géométries sont vides — occurrences_a_georeferencer au moment de sa
+# création — et GDAL l'écrit alors comme une simple table attributaire, sans
+# CRS associé : c'est ce que QGIS affichait comme "couche non géoréférencée".
+TYPE_GEOMETRIE_SORTIE = "MultiPolygon"
 
 COUCHE_ADMINISTRATIVE = "geometries_administratives"
 COUCHE_A_GEOREFERENCER = "occurrences_a_georeferencer"
@@ -215,8 +224,25 @@ def preparer(code_departement: str, dossier_sortie: str | Path = "output") -> Pa
     )
 
     chemin_sortie = dossier / f"etape4_{code_departement}_a_completer.gpkg"
-    geodf_administratives.to_file(chemin_sortie, layer=COUCHE_ADMINISTRATIVE, driver="GPKG", mode="w")
-    geodf_a_georeferencer.to_file(chemin_sortie, layer=COUCHE_A_GEOREFERENCER, driver="GPKG", mode="a")
+    geodf_administratives.to_file(
+        chemin_sortie,
+        layer=COUCHE_ADMINISTRATIVE,
+        driver="GPKG",
+        mode="w",
+        geometry_type=TYPE_GEOMETRIE_SORTIE,
+        # promote_to_multi : au cas où une géométrie de cette couche serait un
+        # Polygon simple plutôt qu'un MultiPolygon — GeoPackage n'accepte pas
+        # un mélange des deux types dans une même couche.
+        promote_to_multi=True,
+    )
+    geodf_a_georeferencer.to_file(
+        chemin_sortie,
+        layer=COUCHE_A_GEOREFERENCER,
+        driver="GPKG",
+        mode="a",
+        geometry_type=TYPE_GEOMETRIE_SORTIE,
+        promote_to_multi=True,
+    )
 
     if erreurs:
         chemin_erreurs = dossier / f"etape4_{code_departement}_erreurs.csv"
