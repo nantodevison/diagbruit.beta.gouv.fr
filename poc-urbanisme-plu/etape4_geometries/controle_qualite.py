@@ -15,6 +15,14 @@ en première ligne). En pratique, les deux appelants (`preparer_geometries.py`
 et `synthese_geometries.py`) manipulent déjà des géométries Shapely via
 `geopandas` — cette fonction prend donc directement une géométrie Shapely
 (ou `None`), sans étape de conversion GeoJSON intermédiaire inutile.
+
+Exception à la règle "jamais de géométrie vide" : une occurrence membre d'un
+groupe fusionné (`fusionne_avec_id_occurrence` renseigné, voir
+`synthese_geometries.py` et `etape-4-conception-technique.md`, "Mécanisme de
+fusion") n'a pas besoin de sa propre géométrie — la localisation du groupe
+est portée par le meneur. `autorise_vide` couvre ce cas, décidé par
+l'appelant (lui-même après vérification de cohérence avec le meneur), pas par
+cette fonction.
 """
 
 from __future__ import annotations
@@ -25,11 +33,16 @@ from shapely.validation import make_valid
 TYPES_AUTORISES = ("Polygon", "MultiPolygon")
 
 
-def controler_geometrie(geom: BaseGeometry | None) -> tuple[BaseGeometry | None, str | None]:
+def controler_geometrie(
+    geom: BaseGeometry | None, autorise_vide: bool = False
+) -> tuple[BaseGeometry | None, str | None]:
     """Renvoie (geometrie_corrigee, erreur). `erreur` est `None` si tout est
     en ordre, auquel cas `geometrie_corrigee` est la géométrie à écrire dans
-    le livrable final (identique à `geom`, ou corrigée par `make_valid`)."""
+    le livrable final (identique à `geom`, ou corrigée par `make_valid`,
+    ou `None` si `autorise_vide` et qu'aucune géométrie n'est fournie)."""
     if geom is None or geom.is_empty:
+        if autorise_vide:
+            return None, None
         return None, "géométrie vide"
 
     if geom.geom_type not in TYPES_AUTORISES:

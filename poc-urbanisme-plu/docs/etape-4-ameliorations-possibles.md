@@ -23,6 +23,8 @@ Le seul palliatif actuel est purement opérationnel : ne jamais relancer `prepar
 
 ## Pas de mécanisme de rejet ou de fusion pour les occurrences à géométrie manuelle
 
+**Partie fusion résolue le 19/08/2026** — voir `etape-4-conception-technique.md`, "Mécanisme de fusion" : deux nouvelles colonnes (`fusionne_avec_id_gpu`/`fusionne_avec_id_occurrence`), renseignées par l'opérateur en Phase 2 sur l'occurrence membre, revérifiées automatiquement en Phase 3 (meneur existant, non chaîné, `nature_zone`/`nature_sonore_zone` cohérents, meneur géoréférencé — `lien_web_document` a été envisagé comme critère puis retiré le 19/08/2026, trop restrictif en usage réel). Le besoin déclencheur : en traçant le PLUi de l'Eurométropole de Strasbourg (département 067), l'opérateur a effectivement rencontré des occurrences partageant localisation, document et objectif de lutte contre le bruit, avec des extraits différents — exactement le cas anticipé ci-dessous. **La partie rejet reste ouverte**, non traitée par cette évolution.
+
 **Identifié le 17/08/2026**, en anticipant deux besoins réels pendant la Phase 2 : fusionner deux occurrences qui s'avèrent, une fois localisées, décrire la même règle sur le même secteur ; et rejeter une occurrence qu'un opérateur juge finalement hors périmètre en la traçant.
 
 **Contexte** : contrairement à l'étape 3 (bouton "✕ Rejeter" dans `outil_validation.html`, tracé dans `etape3_{dept}_rejetees.csv`, jamais une suppression silencieuse), l'étape 4 n'offre aucun moyen propre d'écarter ou de regrouper une occurrence de la couche `occurrences_a_georeferencer` : la seule option disponible à l'opérateur est de supprimer la ligne directement dans QGIS.
@@ -31,4 +33,4 @@ Le seul palliatif actuel est purement opérationnel : ne jamais relancer `prepar
 
 **Piste de correction envisageable, non retenue pour l'instant** : un champ ou statut renseigné par l'opérateur dans QGIS plutôt qu'une suppression, exploité par `synthese_geometries.py` pour écrire une ligne dans un `etape4_{dept}_rejetees.csv` dédié (rejet) ou pour reporter la référence de l'occurrence absorbée sur la ligne survivante (fusion) — plutôt que de perdre la trace dans les deux cas.
 
-**Décision** : non mis en œuvre pour l'instant (17/08/2026) — discuté avec l'utilisateur, reporté à une prochaine session de conception dédiée.
+**Décision** : non mis en œuvre pour l'instant (17/08/2026) — discuté avec l'utilisateur, reporté à une prochaine session de conception dédiée. **Mise à jour du 19/08/2026** : la partie fusion a été mise en œuvre (voir note en tête de section) ; la partie rejet reste, elle, non mise en œuvre.

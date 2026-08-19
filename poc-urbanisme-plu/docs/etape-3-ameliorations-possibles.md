@@ -19,6 +19,8 @@
 
 **Décision** : non mis en œuvre pour l'instant (17/08/2026) — besoin noté par anticipation, avant qu'un cas réel ne se présente dans une relecture effective. À reprendre si un opérateur rencontre effectivement ce cas en pratique. Si/quand cette évolution est mise en œuvre, le couple `id_gpu` + `id_occurrence` est la piste retenue par défaut pour la référence croisée, plutôt que `id_occurrence` seul.
 
+**Mise à jour du 19/08/2026** : le cas anticipé ici s'est effectivement présenté, mais découvert plus tard dans le pipeline qu'imaginé — non pas à la relecture (étape 3), mais à la localisation (étape 4), en traçant le PLUi de l'Eurométropole de Strasbourg (département 067). Un mécanisme de fusion y a été mis en œuvre à cette occasion (voir `etape-4-conception-technique.md`, "Mécanisme de fusion", et `etape-4-ameliorations-possibles.md`), reprenant bien le couple `id_gpu` + `id_occurrence` pressenti ici. Le besoin décrit dans cette entrée reste néanmoins distinct et non couvert : signaler un doublon *au moment de la relecture* (étape 3), avant même que la géométrie n'existe — ce que le mécanisme de l'étape 4 ne permet pas de faire plus tôt dans le pipeline.
+
 ## `reference_precise` ne donne pas toujours le numéro de page
 
 **Identifié le 17/08/2026**, en réfléchissant au confort de relecture de l'opérateur en étape 3.

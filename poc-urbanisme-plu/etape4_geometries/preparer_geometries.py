@@ -55,7 +55,10 @@ COUCHE_A_GEOREFERENCER = "occurrences_a_georeferencer"
 
 # Ordre des colonnes d'attributs, identique dans les deux couches — voir
 # etape-4-conception-technique.md, "Contrat de données". `id_geometrie` est
-# ajoutée par ce module, toutes les autres sont reprises de etape3_{dept}.csv.
+# ajoutée par ce module, toutes les autres sont reprises de etape3_{dept}.csv,
+# à l'exception de `fusionne_avec_id_gpu`/`fusionne_avec_id_occurrence`,
+# laissées vides ici et destinées à être renseignées par l'opérateur en
+# Phase 2 (voir "Mécanisme de fusion" dans etape-4-conception-technique.md).
 COLONNES_ATTRIBUTS = [
     "id_geometrie",
     "id_gpu",
@@ -70,9 +73,12 @@ COLONNES_ATTRIBUTS = [
     "reference_precise",
     "lien_web_document",
     "zone_reglementaire_mentionnee",
+    "nature_sonore_zone",
     "justification",
     "validation_manuelle_commentaire",
     "statut_verification_finale",
+    "fusionne_avec_id_gpu",
+    "fusionne_avec_id_occurrence",
     "date_traitement",
 ]
 
@@ -110,9 +116,16 @@ def _attributs(ligne: dict[str, str], id_geometrie: int, date_traitement: str) -
         "reference_precise": ligne.get("reference_precise", ""),
         "lien_web_document": ligne.get("lien_web_document", ""),
         "zone_reglementaire_mentionnee": ligne.get("zone_reglementaire_mentionnee", ""),
+        "nature_sonore_zone": ligne.get("nature_sonore_zone", ""),
         "justification": ligne.get("justification", ""),
         "validation_manuelle_commentaire": ligne.get("validation_manuelle_commentaire", ""),
         "statut_verification_finale": ligne.get("statut_verification_finale", ""),
+        # Jamais reprises de etape3_{dept}.csv : renseignées par l'opérateur
+        # dans QGIS en Phase 2, pour signaler qu'une occurrence fusionne avec
+        # une autre (voir etape-4-conception-technique.md, "Mécanisme de
+        # fusion").
+        "fusionne_avec_id_gpu": "",
+        "fusionne_avec_id_occurrence": "",
         "date_traitement": date_traitement,
     }
 

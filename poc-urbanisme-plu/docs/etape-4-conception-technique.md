@@ -20,7 +20,8 @@ poc-urbanisme-plu/
 │   ├── sources_gpu.py                   # aide partagée : appels API Carto GPU (couches document/municipality)
 │   ├── preparer_geometries.py           # Phase 1 — auto : remplit geometries_administratives, prépare occurrences_a_georeferencer
 │   ├── controle_qualite.py              # aide partagée : validité OGC et type de géométrie (pas le CRS, vérifié séparément — voir Phase 3)
-│   └── synthese_geometries.py           # Phase 3 — fusionne + contrôle qualité + vérification/reprojection CRS → etape4_{dept}.gpkg
+│   ├── synthese_geometries.py           # Phase 3 — fusionne + contrôle qualité + vérification/reprojection CRS → etape4_{dept}.gpkg
+│   └── modele_validation_manuelle.qgz   # projet QGIS de fond de carte pour la Phase 2 — voir "Phase 2 — Édition manuelle (QGIS)"
 └── output/
     ├── etape1_{dept}.csv
     ├── etape2_{dept}.csv
@@ -28,7 +29,7 @@ poc-urbanisme-plu/
     ├── etape4_{dept}_a_completer.gpkg       # sortie de preparer_geometries.py ; édité manuellement dans QGIS (Phase 2)
     ├── etape4_{dept}.gpkg                   # sortie de synthese_geometries.py — contrat pour l'étape 5/6 (couche unique "geometries")
     ├── etape4_{dept}_non_traitees.csv       # occurrences jamais géoréférencées, si non vide
-    └── etape4_{dept}_erreurs.csv            # échecs d'appel API Carto GPU (Phase 1) + géométries rejetées au contrôle qualité (Phase 3), si non vide
+    └── etape4_{dept}_erreurs.csv            # échecs d'appel API Carto GPU (Phase 1) + géométries rejetées au contrôle qualité + fusions incohérentes (Phase 3), si non vide
 ```
 
 Comme l'étape 3, l'étape 4 n'a pas de `main.py` unique : le travail manuel dans QGIS (Phase 2) s'intercale entre les deux phases automatisées. Usage, depuis `poc-urbanisme-plu/` :
@@ -132,18 +133,28 @@ Un échec (document introuvable dans le GPU, timeout persistant après les tenta
 
 Aucun script : l'opérateur ouvre `etape4_{dept}_a_completer.gpkg` dans QGIS, charge les deux couches. `geometries_administratives` sert de fond de carte de référence pendant le travail — elle permet de vérifier au passage que le pré-remplissage automatique a l'air correct (bonne occasion de repérer une géométrie qui semble étrange avant même la synthèse finale).
 
+**Fond de carte recommandé** : `modele_validation_manuelle.qgz`, un projet QGIS de base à réutiliser plutôt qu'à reconstruire à chaque département — fortement conseillé pour repérer précisément les limites d'une zone réglementaire (parcelle par parcelle) pendant le tracé. Il charge :
+- les parcelles cadastrales (flux WFS de la Géoplateforme, service "Parcellaire express", table `parcelle`), filtrées sur le département 67 pour limiter le volume de données — symbologie trait pointillé noir fin ;
+- les communes, au format surfacique (flux WFS du GPU), filtrées sur le département 67 — symbologie trait pointillé gris foncé épais ;
+- un fond de photographies aériennes (flux WMTS de la Géoplateforme, service Orthophotos — `https://data.geopf.fr/annexes/ressources/wmts/ortho.xml`) ;
+- un fond OpenStreetMap.
+
+**Avant de l'utiliser sur un autre département que le 067**, penser à mettre à jour les filtres départementaux des deux couches WFS (parcelles, communes) — sans quoi elles resteraient limitées au département 67 quel que soit le département réellement travaillé.
+
 Pour chaque entité de `occurrences_a_georeferencer` (déjà pré-remplie en attributs, géométrie vide) : sélectionner la ligne dans la table attributaire, passer en mode édition, utiliser l'outil de digitalisation avec la fonction **"Ajouter une partie"** pour dessiner directement la géométrie de l'entité sélectionnée, en s'appuyant sur `lien_web_document` (ouvrir le PDF), `reference_precise` (aller au bon article ou à la bonne page) et `zone_reglementaire_mentionnee`/`justification` (savoir ce qu'on cherche à représenter). QGIS écrit directement dans le GeoPackage à chaque sauvegarde — pas d'export séparé à gérer.
+
+Si, en traçant, l'opérateur constate que deux occurrences décrivent en réalité la même règle sur le même secteur (voir "Mécanisme de fusion" plus bas), renseigner `fusionne_avec_id_gpu`/`fusionne_avec_id_occurrence` sur l'occurrence membre plutôt que de la tracer une deuxième fois — la géométrie peut alors rester vide pour cette ligne. Si cette vérification révèle par ailleurs que `nature_sonore_zone` est manifestement erronée sur l'une des deux occurrences (classification automatique de l'étape 2 prise en défaut), l'opérateur peut la corriger directement dans le gpkg — voir "Contrat de données", `nature_sonore_zone`.
 
 **Recommandation de validation** (même logique que le test Playwright de l'étape 3) : avant tout usage réel, tester ce flux avec un jeu de données factice couvrant les cas limites (une occurrence avec un attribut vide, une occurrence dont le tracé recouvre volontairement une géométrie de `geometries_administratives`, une occurrence volontairement laissée sans géométrie) pour s'assurer que la Phase 3 les traite correctement.
 
 ## Phase 3 — Synthèse (`synthese_geometries.py`)
 
-Lit `etape4_{dept}_a_completer.gpkg` (deux couches). Sépare `occurrences_a_georeferencer` en deux lots selon que la géométrie est renseignée ou non :
+Lit `etape4_{dept}_a_completer.gpkg` (deux couches). Sépare `occurrences_a_georeferencer` en deux lots selon que la géométrie est renseignée ou non — sauf exception, voir plus bas :
 
-- **géométrie vide** → écrites à part dans `etape4_{dept}_non_traitees.csv` (attributs seuls, pas de géométrie à exporter), exclues de la suite — même logique que les occurrences non traitées de l'étape 3 : jamais silencieusement ignorées, toujours listées pour reprise.
-- **géométrie renseignée** → passent au contrôle qualité avec les entités de `geometries_administratives`.
+- **géométrie vide, et aucune fusion déclarée** → écrites à part dans `etape4_{dept}_non_traitees.csv` (attributs seuls, pas de géométrie à exporter), exclues de la suite — même logique que les occurrences non traitées de l'étape 3 : jamais silencieusement ignorées, toujours listées pour reprise.
+- **géométrie renseignée, ou géométrie vide avec une fusion déclarée** (`fusionne_avec_id_occurrence` renseigné — voir "Mécanisme de fusion" ci-dessous) → passent au contrôle qualité avec les entités de `geometries_administratives`.
 
-**Contrôle qualité** (`controle_qualite.py`), appliqué à chaque géométrie avant écriture dans le fichier final. Écart par rapport à la version initiale de ce document : les deux appelants (`preparer_geometries.py` et `synthese_geometries.py`) manipulent déjà des géométries Shapely via `geopandas`, jamais du GeoJSON brut — la fonction prend donc directement une géométrie Shapely (ou `None`) plutôt qu'un GeoJSON à convertir en interne. Conséquence directe : la vérification "géométrie vide/absente" doit passer en premier (un `geom.geom_type` sur `None` ferait planter la fonction), avant la vérification de type :
+**Contrôle qualité** (`controle_qualite.py`), appliqué à chaque géométrie avant écriture dans le fichier final. Écart par rapport à la version initiale de ce document : les deux appelants (`preparer_geometries.py` et `synthese_geometries.py`) manipulent déjà des géométries Shapely via `geopandas`, jamais du GeoJSON brut — la fonction prend donc directement une géométrie Shapely (ou `None`) plutôt qu'un GeoJSON à convertir en interne. Conséquence directe : la vérification "géométrie vide/absente" doit passer en premier (un `geom.geom_type` sur `None` ferait planter la fonction), avant la vérification de type. Révisée le 19/08/2026 (voir "Mécanisme de fusion" ci-dessous) : un paramètre `autorise_vide` permet à l'appelant, après ses propres vérifications de cohérence, d'accepter une géométrie vide plutôt que de la rejeter systématiquement — cas d'une occurrence membre d'un groupe fusionné, dont la localisation est portée par le meneur :
 
 ```python
 from shapely.geometry.base import BaseGeometry
@@ -152,9 +163,11 @@ from shapely.validation import make_valid
 TYPES_AUTORISES = ("Polygon", "MultiPolygon")
 
 
-def controler_geometrie(geom: BaseGeometry | None):
+def controler_geometrie(geom: BaseGeometry | None, autorise_vide: bool = False):
     """Renvoie (geometrie_corrigee, erreur). erreur est None si tout est en ordre."""
     if geom is None or geom.is_empty:
+        if autorise_vide:
+            return None, None
         return None, "géométrie vide"
 
     if geom.geom_type not in TYPES_AUTORISES:
@@ -172,9 +185,36 @@ def controler_geometrie(geom: BaseGeometry | None):
     return geom, None
 ```
 
-Une géométrie qui échoue au contrôle qualité part elle aussi dans `etape4_{dept}_erreurs.csv`, plutôt que de bloquer l'écriture du reste du fichier — **dans le même fichier** que celui éventuellement déjà écrit par `preparer_geometries.py` (Phase 1, échecs d'appel API) : `synthese_geometries.py` relit ce fichier s'il existe et complète la liste plutôt que de l'écraser, pour qu'un enchaînement Phase 1 → Phase 2 → Phase 3 ne fasse jamais disparaître une erreur déjà consignée.
+Une géométrie qui échoue au contrôle qualité part elle aussi dans `etape4_{dept}_erreurs.csv`, plutôt que de bloquer l'écriture du reste du fichier — **dans le même fichier** que celui éventuellement déjà écrit par `preparer_geometries.py` (Phase 1, échecs d'appel API) : `synthese_geometries.py` relit ce fichier s'il existe et complète la liste plutôt que de l'écraser, pour qu'un enchaînement Phase 1 → Phase 2 → Phase 3 ne fasse jamais disparaître une erreur déjà consignée. Cette reprise ne concerne toutefois que les erreurs de Phase 1 : les erreurs de contrôle qualité et de fusion (voir "Mécanisme de fusion" ci-dessous), elles, sont toujours recalculées à neuf et jamais reprises d'une exécution antérieure — contrairement à `preparer_geometries.py`, `synthese_geometries.py` est amené à être relancé plusieurs fois (ex. ajustement itératif d'une fusion dans QGIS), et reprendre ses propres erreurs d'une exécution à l'autre les dupliquerait à chaque relance, en plus de faire indéfiniment resurgir une erreur déjà corrigée entre-temps. Pour la même raison, `etape4_{dept}_erreurs.csv` et `etape4_{dept}_non_traitees.csv` sont supprimés (pas seulement laissés tels quels) si une exécution ne trouve plus rien à y consigner — un fichier de la Phase 3 reflète toujours l'état de la dernière exécution, jamais un mélange d'anciens et de nouveaux constats.
+
+Avant le contrôle qualité, chaque occurrence déclarant une fusion (voir "Mécanisme de fusion" ci-dessous) est vérifiée : une fusion cohérente autorise une géométrie vide pour cette occurrence (elle n'est alors plus routée vers `_non_traitees.csv`) ; une fusion incohérente part en erreur, et l'occurrence n'est conservée dans le livrable que si elle a par ailleurs sa propre géométrie.
 
 Fusionne enfin les géométries validées des deux couches d'origine en une seule couche finale (nommée `geometries`), et écrit `etape4_{dept}.gpkg` — le contrat de données pour l'étape 5/6. Le CRS est vérifié (et reprojeté si besoin) en EPSG:4326 avant écriture, pour garantir que le fichier final est homogène même si une des sources a, par erreur, répondu dans un autre système de coordonnées.
+
+## Mécanisme de fusion
+
+*Ajouté le 19/08/2026, en réponse au besoin identifié pendant le tracé manuel réel du département 067 (Eurométropole de Strasbourg) — voir `etape-4-ameliorations-possibles.md`, "Pas de mécanisme de rejet ou de fusion pour les occurrences à géométrie manuelle" (partie fusion, résolue par cette section ; la partie rejet reste ouverte).*
+
+**Besoin** : plusieurs occurrences peuvent, une fois localisées, s'avérer décrire la même règle sur le même secteur — même objectif de lutte contre le bruit (`nature_sonore_zone`), même localisation — avec des citations différentes (`extrait_significatif`, `contexte_documentaire`, `justification`), y compris entre deux pièces distinctes d'un même document (ex. règlement écrit et OAP). Sans mécanisme dédié, chacune produirait sa propre géométrie et, en aval, son propre message — redondant pour l'utilisateur final de diagBruit.
+
+**Principe retenu** : ne jamais fusionner les géométries elles-mêmes — le chevauchement de géométries est déjà un non-problème assumé par le pipeline (voir `etape-4-construction-geometries-diagbruit.md`, "Chevauchement des géométries"). La fusion ne fait que relier des occurrences entre elles ; le regroupement effectif (un seul message plutôt qu'un par occurrence) revient à l'étape 5, pas à celle-ci.
+
+**Déclaration par l'opérateur (Phase 2)** : deux nouvelles colonnes, présentes dans les deux couches (mêmes colonnes partout, voir "Contrat de données") — `fusionne_avec_id_gpu` et `fusionne_avec_id_occurrence`. Vides par défaut (écrites ainsi par `preparer_geometries.py`), elles sont renseignées à la main dans QGIS par l'opérateur, sur une occurrence *membre*, avec l'`id_gpu`/`id_occurrence` de l'occurrence *meneuse* du groupe — jamais l'inverse. Un meneur n'a pas de statut déclaré séparément : c'est simplement toute occurrence référencée par au moins un `fusionne_avec_id_occurrence` d'une autre ligne (0 référence = occurrence indépendante ordinaire, plusieurs références = groupe à plusieurs membres). Ce choix de référence (le couple `id_gpu` + `id_occurrence` du meneur, plutôt qu'un identifiant de groupe inventé) reprend la conclusion déjà actée pour le besoin équivalent identifié à l'étape 3 (voir `etape-3-ameliorations-possibles.md`, "Détection des occurrences 'doublons'").
+
+Une occurrence membre (`fusionne_avec_id_occurrence` renseigné) n'a pas besoin de sa propre géométrie : sa localisation est portée par le meneur, ce qui évite à l'opérateur de retracer deux fois le même secteur.
+
+**Vérification automatique (Phase 3, `synthese_geometries.py`)** : toute fusion déclarée est revérifiée avant d'être acceptée, jamais prise sur la seule foi de l'opérateur pour les critères vérifiables automatiquement. Une fusion est valide si, et seulement si :
+- le meneur référencé existe (recherché dans les deux couches par `id_gpu` + `id_occurrence`) ;
+- le meneur n'est lui-même membre d'aucun autre groupe — **pas de chaînage**, une seule profondeur de référence autorisée ;
+- membre et meneur ont tous deux `nature_zone == "occurrence_locale"` — la fusion est réservée aux occurrences porteuses d'une vraie règle, pas aux lignes de synthèse (`document_non_significatif` / `rnu` / `trou_de_couverture`), qui n'ont pas de contenu de règle distinct à combiner et partagent souvent un `lien_web_document` identique sans rapport géographique (ex. toutes les communes RNU du département pointent vers la même fiche Légifrance) — cette restriction est d'autant plus nécessaire que `lien_web_document` lui-même n'est plus un critère vérifié (voir ci-dessous) ;
+- `nature_sonore_zone` est identique entre membre et meneur, et non vide — valeur lue dans le gpkg, donc l'éventuelle correction faite par l'opérateur (voir "Contrat de données") est bien celle prise en compte ;
+- le meneur a lui-même une géométrie (non vide) — un groupe ne peut pas être privé de localisation.
+
+`lien_web_document` n'est **pas** vérifié automatiquement (retiré le 19/08/2026 — le critère s'est avéré trop restrictif en usage réel : une même règle peut être citée dans deux pièces distinctes d'un même document, avec deux liens différents). Comme la **localisation** (le critère "même secteur"), c'est un jugement humain assumé de l'opérateur en Phase 2, jamais recontrôlé par le code.
+
+Une fusion invalide part dans `etape4_{dept}_erreurs.csv` (source `"fusion"`). Si le membre a par ailleurs sa propre géométrie (cas d'une fusion mal déclarée sur une occurrence par ailleurs correctement tracée), elle est tout de même conservée comme occurrence indépendante — seule la référence de groupe est écartée, la géométrie n'est jamais perdue pour une erreur de métadonnées.
+
+**Sortie** : chaque occurrence d'un groupe garde sa propre ligne dans `etape4_{dept}.gpkg` (géométrie propre pour le meneur et tout membre qui en a une, géométrie vide pour un membre qui s'appuie sur celle du meneur), avec `fusionne_avec_id_gpu`/`fusionne_avec_id_occurrence` renseignés pour la retrouver. L'étape 5 reconstruit un groupe par simple requête attributaire sur ces deux colonnes, sans avoir besoin d'un identifiant de groupe matérialisé séparé.
 
 ## Contrat de données
 
@@ -191,14 +231,16 @@ Fusionne enfin les géométries validées des deux couches d'origine en une seul
 | `type_piece_source`, `reference_type`, `reference_precise` | reprises de `etape3_{dept}.csv`, vides sauf `occurrence_locale`. |
 | `lien_web_document` | reprise de `etape3_{dept}.csv` pour `occurrence_locale` et `document_non_significatif` ; vide pour `trou_de_couverture` ; pointe vers la fiche Légifrance de l'article R.111-2 pour `rnu` (`https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000031721316`), plutôt que vers un document qui n'existe pas. |
 | `zone_reglementaire_mentionnee` | reprise de `etape3_{dept}.csv`, vide sauf `occurrence_locale`. |
+| `nature_sonore_zone` | reprise de `etape3_{dept}.csv` — `lutte_bruit_existant` / `preservation_zone_calme` / `autre` (voir `etape-2-analyse-documents-urbanisme-diagbruit.md`). Ajoutée le 19/08/2026 : critère central du mécanisme de fusion, voir "Mécanisme de fusion" ci-dessus. **Corrigible par l'opérateur en Phase 2** (contrairement aux autres colonnes reprises telles quelles) si la classification automatique de l'étape 2 s'avère erronée à l'usage — par exemple deux occurrences qu'un opérateur sait devoir fusionner mais dont l'une porte une valeur visiblement fausse. Une fois corrigée dans le gpkg, c'est cette valeur qui fait référence pour la suite du pipeline (vérification de fusion en Phase 3, puis étape 5) : `synthese_geometries.py` ne relit jamais `etape3_{dept}.csv` pour ce champ, seulement le gpkg — la correction n'est donc jamais écrasée par une relecture de la source d'origine. Aucune trace séparée de la correction n'est conservée (pas de colonne "valeur d'origine") ; discipline opérationnelle jugée suffisante pour ce POC, dans le même esprit que d'autres arbitrages déjà actés dans `etape-4-ameliorations-possibles.md`. |
 | `justification` | reprise de `etape3_{dept}.csv`. |
 | `validation_manuelle_commentaire` | reprise de `etape3_{dept}.csv`. |
 | `statut_verification_finale` | reprise de `etape3_{dept}.csv` — `validé` / `corrigé` / `validé automatique` / `aucune occurrence trouvée`. |
+| `fusionne_avec_id_gpu`, `fusionne_avec_id_occurrence` | jamais reprises de `etape3_{dept}.csv` — vides à la sortie de `preparer_geometries.py`, renseignées par l'opérateur en Phase 2 pour désigner le meneur d'un groupe fusionné. Ajoutées le 19/08/2026, voir "Mécanisme de fusion" ci-dessus. |
 | `date_traitement` | date de génération de la géométrie (Phase 1 pour `geometries_administratives`, Phase 3 pour une entité issue de `occurrences_a_georeferencer` — distincte de la `date_traitement` des étapes précédentes, conservée telle quelle par ailleurs). |
 
 ## Gestion des erreurs
 
-Même principe que les trois étapes précédentes : aucun échec isolé (appel API Carto GPU, géométrie invalide, entité jamais géoréférencée) n'interrompt le traitement du reste du département. `preparer_geometries.py` et `synthese_geometries.py` s'arrêtent en revanche avec un message explicite si `etape3_{dept}.csv` (ou, pour la phase 3, `etape4_{dept}_a_completer.gpkg`) est introuvable — l'absence du fichier d'entrée entier ne laisse rien d'exploitable en aval, contrairement à un échec isolé sur une ligne.
+Même principe que les trois étapes précédentes : aucun échec isolé (appel API Carto GPU, géométrie invalide, fusion incohérente, entité jamais géoréférencée) n'interrompt le traitement du reste du département. `preparer_geometries.py` et `synthese_geometries.py` s'arrêtent en revanche avec un message explicite si `etape3_{dept}.csv` (ou, pour la phase 3, `etape4_{dept}_a_completer.gpkg`) est introuvable — l'absence du fichier d'entrée entier ne laisse rien d'exploitable en aval, contrairement à un échec isolé sur une ligne.
 
 ## Dépendances retenues
 
@@ -215,4 +257,4 @@ Le nom exact du paramètre de filtrage de la couche `document` de l'API Carto GP
 
 ## Prochaine étape
 
-Étape 5 — rédaction du ton des messages associés aux occurrences validées des documents significatifs, à partir de `etape4_{dept}.gpkg` et du contenu textuel de `etape3_{dept}.csv`.
+Étape 5 — rédaction du ton des messages associés aux occurrences validées des documents significatifs, à partir de `etape4_{dept}.gpkg` et du contenu textuel de `etape3_{dept}.csv`. Devra exploiter `fusionne_avec_id_gpu`/`fusionne_avec_id_occurrence` (voir "Mécanisme de fusion" plus haut) pour composer un seul message par groupe fusionné plutôt qu'un par occurrence — c'est là, pas à l'étape 4, que le regroupement textuel doit avoir lieu.

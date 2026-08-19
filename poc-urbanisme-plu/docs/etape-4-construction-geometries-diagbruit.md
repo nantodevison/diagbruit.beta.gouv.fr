@@ -17,6 +17,8 @@ Cette distinction reprend explicitement l'Alinéa 1 / Alinéa 2 déjà posé dan
 
 Le plan global pose déjà la règle : *"plusieurs surfaces peuvent se chevaucher si plusieurs règles s'appliquent à un même endroit"*. Cette étape ne cherche donc jamais à fusionner ou à dédupliquer des géométries qui se recouvrent — un PLUi qui porte trois occurrences distinctes (par exemple une portée administrative et deux zones spécifiques) produit trois géométries superposées dans le livrable final, une par occurrence. C'est voulu : la requête SIG d'intersection de l'utilisateur final retrouvera naturellement toutes les règles applicables à sa parcelle, quel que soit le nombre de surfaces qui s'y superposent.
 
+**Cas particulier, distinct de ce non-problème** : il arrive que deux occurrences se recouvrant décrivent en réalité la *même* règle, citée deux fois dans le document source (même secteur, même objectif de lutte contre le bruit — voir `nature_sonore_zone`), plutôt que deux règles différentes. Produire deux géométries superposées dans ce cas ferait apparaître deux messages redondants à l'utilisateur final. Un mécanisme de fusion (ajouté le 19/08/2026, voir `etape-4-conception-technique.md`, "Mécanisme de fusion") permet à l'opérateur de relier ces occurrences en Phase 2 sans fusionner leurs géométries — le regroupement du message revient à l'étape 5.
+
 ## Réintégration RNU et trou de couverture : pourquoi ici, et pas à part
 
 La décision a été prise à l'étape 3 (voir `etape-3-validation-manuelle.md`) de traiter RNU et trou de couverture comme des lignes de synthèse ordinaires plutôt que comme un cas à part géré au moment de la mise en forme finale (étape 6). La raison est simple : la couverture SIG de diagBruit doit couvrir *tout* le département, y compris les communes RNU (qui portent une règle bien réelle — l'article R.111-2 du code de l'urbanisme) et les trous de couverture (qui n'en portent pas, mais dont l'absence de donnée doit rester visible plutôt que silencieuse). Différer leur géométrie à une étape ultérieure aurait revalidé une deuxième fois, pour ces deux cas particuliers, tout le travail déjà fait ici pour les documents non significatifs — sans bénéfice.
@@ -56,4 +58,4 @@ Avant qu'une géométrie n'entre dans le livrable final (`etape4_{dept}.gpkg`), 
 
 ## Prochaine étape
 
-Étape 5 — rédaction du ton des messages associés aux occurrences validées des documents significatifs, à partir des géométries produites ici et du contenu textuel de `etape3_{dept}.csv`.
+Étape 5 — rédaction du ton des messages associés aux occurrences validées des documents significatifs, à partir des géométries produites ici et du contenu textuel de `etape3_{dept}.csv`. Devra regrouper en un seul message les occurrences reliées par le mécanisme de fusion (voir "Chevauchement des géométries" ci-dessus et `etape-4-conception-technique.md`, "Mécanisme de fusion").
