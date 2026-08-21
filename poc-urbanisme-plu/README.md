@@ -11,6 +11,11 @@ dans [`docs/`](docs/) :
 - [`etape-1-conception-technique.md`](docs/etape-1-conception-technique.md) — décisions techniques (structure du code, gestion des erreurs, formats)
 - [`etape-2-analyse-documents-urbanisme-diagbruit.md`](docs/etape-2-analyse-documents-urbanisme-diagbruit.md) — détail de l'étape 2
 - [`etape-2-conception-technique.md`](docs/etape-2-conception-technique.md) — décisions techniques de l'étape 2 (SDK Anthropic, structured outputs, OCR)
+- [`etape-5-redaction-messages-diagbruit.md`](docs/etape-5-redaction-messages-diagbruit.md) — détail de l'étape 5
+- [`etape-5-conception-technique.md`](docs/etape-5-conception-technique.md) — décisions techniques de l'étape 5
+- [`etape-6-mise-en-forme-diagbruit.md`](docs/etape-6-mise-en-forme-diagbruit.md) — note initiale, minimale, à développer
+
+*(Les étapes 3 et 4 ont aussi leurs documents dans `docs/`, non listés ici — cette liste n'a pas été tenue à jour à chaque étape ; à corriger si vous voulez qu'elle serve de sommaire fiable.)*
 
 ## Installation
 
@@ -20,9 +25,9 @@ source venv/bin/activate   # ou venv\Scripts\activate sous Windows
 pip install -r requirements.txt
 ```
 
-### Clé API Anthropic (nécessaire pour l'étape 2)
+### Clé API Anthropic (nécessaire pour les étapes 2 et 5)
 
-L'étape 2 (analyse des règlements) appelle l'API Anthropic. Copier
+L'étape 2 (analyse des règlements) et l'étape 5 (rédaction des messages, Phase 2) appellent l'API Anthropic. Copier
 `.env.example` vers `.env` à la racine de `poc-urbanisme-plu/` et y
 renseigner une clé créée sur la [Console Anthropic](https://console.anthropic.com/) :
 
@@ -83,4 +88,18 @@ détail de ce découpage et son raisonnement.
   # --limit plafonne le nombre de pièces traitées, utile pour un premier
   # essai maîtrisé en coût (chaque passage classifié est un appel facturé).
   python -m etape2_analyse_reglements.main --dept 067 --limit 5
+  ```
+- `etape5_redaction_messages/` — garde-fou de cohérence géométrique puis
+  rédaction des messages (nécessite un `etape4_{dept}.gpkg` existant, ainsi
+  que la clé API Anthropic ci-dessus pour la Phase 2). Entre la Phase 2 et la
+  Phase 4, ouvrir `etape5_redaction_messages/outil_validation.html` dans un
+  navigateur pour relire/corriger (voir `etape-5-conception-technique.md`,
+  "Phase 3").
+  ```bash
+  python -m etape5_redaction_messages.controle_similarite --dept 067
+  python -m etape5_redaction_messages.preparer_messages --dept 067
+  # ouvrir outil_validation.html, charger les CSV produits, exporter
+  python -m etape5_redaction_messages.synthese_messages --dept 067
+  python -m etape5_redaction_messages.verifier_orthographe --dept 067
+  # ouvrir etape5_067.gpkg dans QGIS, filtrer sur "_validation_orthographe" != ''
   ```

@@ -1,0 +1,774 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>diagBruit — Validation des messages (étape 5)</title>
+<style>
+  :root {
+    --couleur-fond: #f5f6f8;
+    --couleur-carte: #ffffff;
+    --couleur-bordure: #d8dce1;
+    --couleur-texte: #1f2430;
+    --couleur-texte-attenue: #5a6270;
+    --couleur-accent: #2a4d8f;
+    --couleur-corrige: #b4740e;
+    --couleur-natif: #8a90a0;
+    font-family: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--couleur-fond); color: var(--couleur-texte); line-height: 1.4; }
+  header { background: var(--couleur-accent); color: white; padding: 16px 20px; }
+  header h1 { margin: 0 0 4px 0; font-size: 1.25rem; }
+  header p { margin: 0; font-size: 0.85rem; opacity: 0.9; }
+
+  #aide {
+    background: #eef2fa;
+    border-bottom: 1px solid var(--couleur-bordure);
+    padding: 10px 20px;
+    font-size: 0.85rem;
+  }
+  #aide summary { cursor: pointer; font-weight: 600; color: var(--couleur-accent); }
+  #aide ol, #aide ul { margin: 8px 0 8px 20px; padding: 0; }
+  #aide li { margin-bottom: 4px; }
+
+  /* Onglets + barre d'outils regroupés dans un seul conteneur sticky : les
+     deux restent visibles au défilement (retour utilisateur du 21/08/2026 —
+     changer de mode sans avoir à remonter en haut de page), empilés l'un
+     sous l'autre sans calcul de décalage en pixels puisqu'ils partagent la
+     même ancre "top: 0". */
+  #entete-sticky {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    background: var(--couleur-carte);
+  }
+
+  #onglets {
+    display: flex;
+    gap: 4px;
+    padding: 10px 20px 0;
+    background: var(--couleur-carte);
+    border-bottom: 1px solid var(--couleur-bordure);
+  }
+  .onglet {
+    padding: 8px 16px;
+    border: 1px solid var(--couleur-bordure);
+    border-bottom: none;
+    border-radius: 6px 6px 0 0;
+    background: var(--couleur-fond);
+    cursor: pointer;
+    font-size: 0.88rem;
+    color: var(--couleur-texte-attenue);
+  }
+  .onglet.actif { background: var(--couleur-carte); color: var(--couleur-texte); font-weight: 600; }
+
+  #barre-outils {
+    background: var(--couleur-carte);
+    border-bottom: 1px solid var(--couleur-bordure);
+    padding: 10px 20px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    align-items: center;
+  }
+  #barre-outils label { font-size: 0.8rem; color: var(--couleur-texte-attenue); margin-right: 4px; }
+  #barre-outils select, #barre-outils input[type=text] {
+    padding: 5px 8px;
+    border: 1px solid var(--couleur-bordure);
+    border-radius: 4px;
+    font-size: 0.85rem;
+  }
+  .bouton {
+    padding: 6px 12px;
+    border-radius: 4px;
+    border: 1px solid var(--couleur-bordure);
+    background: var(--couleur-carte);
+    cursor: pointer;
+    font-size: 0.85rem;
+  }
+  .bouton-principal { background: var(--couleur-accent); color: white; border-color: var(--couleur-accent); }
+  .bouton-principal:hover { opacity: 0.9; }
+  #progression { margin-left: auto; font-size: 0.85rem; color: var(--couleur-texte-attenue); white-space: nowrap; }
+  #progression strong { color: var(--couleur-texte); }
+
+  main { padding: 16px 20px 60px; max-width: 980px; margin: 0 auto; }
+
+  .zone-import {
+    background: var(--couleur-carte);
+    border: 2px dashed var(--couleur-bordure);
+    border-radius: 8px;
+    padding: 20px;
+    margin-bottom: 10px;
+    color: var(--couleur-texte-attenue);
+  }
+  .zone-import.survol { border-color: var(--couleur-accent); background: #eef2fa; }
+  .zone-import p { margin: 0 0 8px 0; font-size: 0.88rem; }
+  .zone-import .statut-fichier { font-weight: 600; color: var(--couleur-texte); }
+
+  .carte {
+    background: var(--couleur-carte);
+    border: 1px solid var(--couleur-bordure);
+    border-left: 5px solid var(--couleur-natif);
+    border-radius: 8px;
+    padding: 14px 16px;
+    margin-bottom: 12px;
+  }
+  .carte.est-corrigee { border-left-color: var(--couleur-corrige); }
+
+  .ligne-badges { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-bottom: 10px; }
+  .badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 0.72rem;
+    font-weight: 600;
+    background: #e4e7ec;
+    color: var(--couleur-texte-attenue);
+  }
+  .badge-corrige { background: #fbeecd; color: var(--couleur-corrige); }
+  .lien-source { margin-left: auto; font-size: 0.8rem; }
+  .lien-source a { color: var(--couleur-accent); }
+
+  .champ { margin-bottom: 8px; }
+  .champ label {
+    display: block;
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    color: var(--couleur-texte-attenue);
+    margin-bottom: 2px;
+  }
+  .champ input[type=text], .champ textarea {
+    width: 100%;
+    padding: 6px 8px;
+    border: 1px solid var(--couleur-bordure);
+    border-radius: 4px;
+    font-size: 0.87rem;
+    font-family: inherit;
+    resize: vertical;
+    background: white;
+  }
+  .champ textarea { min-height: 4.5em; }
+  /* Message de synthèse plus long à reformuler qu'un message d'occurrence
+     (retour utilisateur du 21/08/2026) : zone de reformulation doublée,
+     uniquement en mode "Message fusion". */
+  .carte[data-type="synthese"] .champ textarea { min-height: 9em; }
+
+  /* Blocs en lecture seule : citation source (mode occurrence) et messages
+     déjà rédigés par le LLM (les deux modes) — jamais des zones de saisie,
+     même principe que .apercu-contexte à l'étape 3
+     (etape3_validation_manuelle/outil_validation.html). */
+  .apercu-contexte, .bloc-lecture-seule {
+    width: 100%;
+    padding: 6px 8px;
+    border: 1px solid var(--couleur-bordure);
+    border-radius: 4px;
+    font-size: 0.87rem;
+    background: #fafbfc;
+    color: var(--couleur-texte-attenue);
+    white-space: pre-wrap;
+    overflow-y: auto;
+  }
+  .apercu-contexte { min-height: 7.2em; max-height: 13em; }
+  .bloc-lecture-seule { color: var(--couleur-texte); }
+  .apercu-contexte mark {
+    background: #fde68a;
+    color: var(--couleur-texte);
+    padding: 0 2px;
+    border-radius: 2px;
+    font-weight: 600;
+  }
+  .apercu-citation-manquante {
+    margin: 0 0 6px 0;
+    font-size: 0.8rem;
+    font-style: italic;
+    color: var(--couleur-texte-attenue);
+  }
+  .apercu-citation-manquante em { font-style: normal; font-weight: 600; color: var(--couleur-texte); }
+
+  .liste-messages-occurrence { margin-bottom: 10px; }
+  .liste-messages-occurrence .sous-libelle {
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    color: var(--couleur-texte-attenue);
+    margin: 0 0 4px 0;
+  }
+  /* Un message rappelé + sa référence/son lien, côte à côte (retour
+     utilisateur du 21/08/2026) — la référence reste "en petit" à droite,
+     jamais aussi visible que le texte du message lui-même. */
+  .ligne-message-membre { display: flex; gap: 10px; align-items: flex-start; margin-bottom: 6px; }
+  .ligne-message-membre .bloc-lecture-seule { flex: 1; margin-bottom: 0; }
+  .reference-membre {
+    flex-shrink: 0;
+    max-width: 11em;
+    font-size: 0.72rem;
+    color: var(--couleur-texte-attenue);
+    text-align: right;
+  }
+  .reference-membre a { color: var(--couleur-accent); display: block; }
+
+  .zone-correction {
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px dashed var(--couleur-bordure);
+  }
+  .ligne-case-a-cocher { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+  .ligne-case-a-cocher input[type=checkbox] { width: 16px; height: 16px; }
+  .ligne-case-a-cocher label { font-size: 0.85rem; font-weight: 600; color: var(--couleur-texte); }
+
+  #toast {
+    position: fixed;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%) translateY(20px);
+    background: var(--couleur-texte);
+    color: white;
+    padding: 10px 18px;
+    border-radius: 6px;
+    font-size: 0.85rem;
+    opacity: 0;
+    transition: opacity 0.2s, transform 0.2s;
+    pointer-events: none;
+    z-index: 100;
+  }
+  #toast.visible { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+  .masque { display: none !important; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>diagBruit — Validation des messages</h1>
+  <p>Étape 5 du plan d'automatisation des règles PLU — relecture des messages produits par <code>preparer_messages.py</code></p>
+</header>
+
+<details id="aide">
+  <summary>Mode d'emploi</summary>
+  <ol>
+    <li>Chargez <code>etape5_{dept}_occurrences.csv</code> (mode "Message par occurrence") et/ou <code>etape5_{dept}_syntheses.csv</code> (mode "Message fusion") — ou un export précédent de cet outil, pour reprendre une session. Les deux fichiers sont indépendants ; charger les deux permet au mode "Message fusion" d'afficher aussi le détail des messages d'occurrence du groupe.</li>
+    <li><strong>Mode occurrence</strong> : la citation source et son contexte sont en lecture seule (non modifiables, citation surlignée) — comme à l'étape 3. Le message rédigé par le LLM est affiché en lecture seule ; cochez « Corriger ce message » pour faire apparaître un champ pré-rempli avec ce texte, à retoucher librement. Un commentaire est possible, indépendamment de la correction.</li>
+    <li><strong>Mode message fusion</strong> : les messages d'occurrence du groupe sont rappelés en lecture seule au-dessus du message de synthèse, pour suivre le raisonnement du LLM. Même mécanique de correction que le mode occurrence, appliquée ici au message de synthèse.</li>
+    <li>Décocher la case ne supprime jamais le texte déjà saisi — elle indique seulement si la version corrigée doit être utilisée à la place de la version native. Le texte reste en mémoire si vous recochez.</li>
+    <li>Les deux corrections (occurrence et synthèse) sont indépendantes : corriger l'une n'implique pas de corriger l'autre, et rien ne l'exige.</li>
+    <li>Exportez régulièrement votre progression (un bouton par mode) — un export automatique se déclenche aussi tous les 10 traitements. Sans sauvegarde navigateur possible dans cet outil, un export non téléchargé = un travail non conservé si l'onglet se ferme.</li>
+    <li>Une fois la relecture terminée, lancez <code>synthese_messages.py</code> : il retrouve seul vos derniers exports (les plus récents des fichiers <code>etape5_export_occurrences_*.csv</code> et <code>etape5_export_syntheses_*.csv</code>) dans le dossier <code>output/</code>.</li>
+  </ol>
+</details>
+
+<div id="entete-sticky">
+  <div id="onglets">
+    <div class="onglet actif" data-mode="occurrence">Message par occurrence</div>
+    <div class="onglet" data-mode="synthese">Message fusion</div>
+  </div>
+
+  <div id="barre-outils" class="masque">
+    <label for="recherche">Recherche</label>
+    <input type="text" id="recherche" placeholder="message, référence…">
+
+    <label for="filtre-correction">Afficher</label>
+    <select id="filtre-correction">
+      <option value="tous">Tout</option>
+      <option value="corrige">Corrigés uniquement</option>
+      <option value="natif">Non corrigés uniquement</option>
+    </select>
+
+    <span id="progression">Chargement…</span>
+    <button class="bouton bouton-principal" id="bouton-exporter">⬇ Exporter (CSV)</button>
+  </div>
+</div>
+
+<main>
+  <div class="zone-import" id="zone-import-occurrences">
+    <p><span class="statut-fichier" id="statut-fichier-occurrences">Aucun fichier chargé.</span> Sélectionnez <code>etape5_{dept}_occurrences.csv</code> (ou un export précédent).</p>
+    <input type="file" id="entree-fichier-occurrences" accept=".csv,text/csv">
+  </div>
+  <div class="zone-import" id="zone-import-syntheses">
+    <p><span class="statut-fichier" id="statut-fichier-syntheses">Aucun fichier chargé.</span> Sélectionnez <code>etape5_{dept}_syntheses.csv</code> (ou un export précédent).</p>
+    <input type="file" id="entree-fichier-syntheses" accept=".csv,text/csv">
+  </div>
+
+  <div id="liste-occurrences"></div>
+  <div id="liste-syntheses" class="masque"></div>
+</main>
+
+<div id="toast"></div>
+
+<script>
+"use strict";
+
+/* ---------------------------------------------------------------------- *
+ * 1. Lecture / écriture CSV (RFC 4180 minimal), reprise à l'identique de
+ *    etape3_validation_manuelle/outil_validation.html — aucune dépendance
+ *    externe, POC utilisable hors ligne.
+ * ---------------------------------------------------------------------- */
+
+function analyserCSV(texte) {
+  if (texte.charCodeAt(0) === 0xFEFF) texte = texte.slice(1);
+
+  const lignes = [];
+  let champActuel = "";
+  let ligneActuelle = [];
+  let dansGuillemets = false;
+
+  for (let i = 0; i < texte.length; i++) {
+    const car = texte[i];
+    const suivant = texte[i + 1];
+
+    if (dansGuillemets) {
+      if (car === '"' && suivant === '"') { champActuel += '"'; i++; }
+      else if (car === '"') { dansGuillemets = false; }
+      else { champActuel += car; }
+    } else {
+      if (car === '"') { dansGuillemets = true; }
+      else if (car === ',') { ligneActuelle.push(champActuel); champActuel = ""; }
+      else if (car === '\r') { /* ignoré, traité via \n */ }
+      else if (car === '\n') {
+        ligneActuelle.push(champActuel);
+        champActuel = "";
+        lignes.push(ligneActuelle);
+        ligneActuelle = [];
+      } else { champActuel += car; }
+    }
+  }
+  if (champActuel.length > 0 || ligneActuelle.length > 0) {
+    ligneActuelle.push(champActuel);
+    lignes.push(ligneActuelle);
+  }
+
+  const lignesUtiles = lignes.filter(l => !(l.length === 1 && l[0] === ""));
+  if (lignesUtiles.length === 0) return [];
+
+  const entetes = lignesUtiles[0];
+  return lignesUtiles.slice(1).map(valeurs => {
+    const objet = {};
+    entetes.forEach((entete, index) => { objet[entete] = valeurs[index] ?? ""; });
+    return objet;
+  });
+}
+
+function echapperChampCSV(valeur) {
+  valeur = valeur === undefined || valeur === null ? "" : String(valeur);
+  if (/[",\n\r]/.test(valeur)) {
+    return '"' + valeur.replace(/"/g, '""') + '"';
+  }
+  return valeur;
+}
+
+function construireCSV(lignes, colonnes) {
+  const entete = colonnes.map(echapperChampCSV).join(",");
+  const corps = lignes.map(ligne => colonnes.map(c => echapperChampCSV(ligne[c])).join(","));
+  return [entete, ...corps].join("\r\n");
+}
+
+function echapperHTML(valeur) {
+  return String(valeur ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+// Repérage visuel de extrait_significatif au sein de contexte_documentaire —
+// identique à apercuAvecCitationSurlignee de l'étape 3.
+function apercuAvecCitationSurlignee(contexteDocumentaire, extraitSignificatif) {
+  const contexte = contexteDocumentaire || "";
+  const extrait = (extraitSignificatif || "").trim();
+  if (!extrait) return echapperHTML(contexte);
+  const indexTrouve = contexte.indexOf(extrait);
+  if (indexTrouve === -1) {
+    return `<p class="apercu-citation-manquante">Citation retenue (non repérée telle quelle dans le contexte ci-dessous) : <em>${echapperHTML(extrait)}</em></p>${echapperHTML(contexte)}`;
+  }
+  const avant = contexte.slice(0, indexTrouve);
+  const apres = contexte.slice(indexTrouve + extrait.length);
+  return `${echapperHTML(avant)}<mark>${echapperHTML(extrait)}</mark>${echapperHTML(apres)}`;
+}
+
+function horodatage() {
+  const d = new Date();
+  const pad = (n) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}_${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}`;
+}
+
+function afficherToast(message) {
+  const toast = document.getElementById("toast");
+  toast.textContent = message;
+  toast.classList.add("visible");
+  setTimeout(() => toast.classList.remove("visible"), 2500);
+}
+
+/* ---------------------------------------------------------------------- *
+ * 2. État applicatif — deux jeux de données indépendants (occurrences,
+ *    syntheses), chacun avec son propre compteur d'export automatique.
+ *    Pas de stockage navigateur (même contrainte qu'à l'étape 3).
+ * ---------------------------------------------------------------------- */
+
+const SEUIL_EXPORT_AUTO = 10;
+
+const COLONNES_OCCURRENCES = [
+  "id_geometrie_synthese", "id_gpu", "id_occurrence", "message_occurrence",
+  "occurrence_corrigee", "message_occurrence_corrige", "validation_message_commentaire",
+  "extrait_significatif", "contexte_documentaire", "justification",
+  "lien_web_document", "reference_precise", "nature_sonore_zone",
+];
+
+const COLONNES_SYNTHESES = [
+  "id_geometrie", "id_gpu", "id_occurrence", "message_synthese_llm",
+  "synthese_corrigee", "message_synthese_corrige", "validation_message_commentaire",
+];
+
+const etat = {
+  occurrences: [],
+  syntheses: [],
+  colonnesOccurrences: COLONNES_OCCURRENCES,
+  colonnesSyntheses: COLONNES_SYNTHESES,
+  compteurOccurrences: 0,
+  compteurSyntheses: 0,
+  modeActif: "occurrence",
+};
+
+function idOccurrence(occ) { return occ.id_gpu + "␟" + occ.id_occurrence; }
+function idSynthese(synth) { return synth.id_geometrie; }
+
+function normaliserLigneOccurrence(ligne) {
+  const occ = { ...ligne };
+  if (occ.occurrence_corrigee === undefined) occ.occurrence_corrigee = "False";
+  if (occ.message_occurrence_corrige === undefined) occ.message_occurrence_corrige = "";
+  if (occ.validation_message_commentaire === undefined) occ.validation_message_commentaire = "";
+  return occ;
+}
+
+function normaliserLigneSynthese(ligne) {
+  const synth = { ...ligne };
+  if (synth.synthese_corrigee === undefined) synth.synthese_corrigee = "False";
+  if (synth.message_synthese_corrige === undefined) synth.message_synthese_corrige = "";
+  if (synth.validation_message_commentaire === undefined) synth.validation_message_commentaire = "";
+  return synth;
+}
+
+/* ---------------------------------------------------------------------- *
+ * 3. Rendu — mode occurrence
+ * ---------------------------------------------------------------------- */
+
+const elListeOccurrences = document.getElementById("liste-occurrences");
+const elListeSyntheses = document.getElementById("liste-syntheses");
+const elBarreOutils = document.getElementById("barre-outils");
+const elProgression = document.getElementById("progression");
+const elRecherche = document.getElementById("recherche");
+const elFiltreCorrection = document.getElementById("filtre-correction");
+
+function estCoche(valeur) { return valeur === "True" || valeur === "true"; }
+
+function blocCorrection(entite, champBoolean, champTexte, champCommentaire) {
+  const corrigee = estCoche(entite[champBoolean]);
+  return `
+    <div class="zone-correction">
+      <div class="ligne-case-a-cocher">
+        <input type="checkbox" data-role="case-corriger" ${corrigee ? "checked" : ""}>
+        <label>Corriger ce message</label>
+      </div>
+      <div class="champ ${corrigee ? "" : "masque"}" data-role="zone-texte-corrige">
+        <label>Reformulation</label>
+        <textarea data-champ="${champTexte}">${echapperHTML(entite[champTexte] || "")}</textarea>
+      </div>
+      <div class="champ">
+        <label>Commentaire (facultatif)</label>
+        <input type="text" data-champ="${champCommentaire}" value="${echapperHTML(entite[champCommentaire] || "")}" placeholder="précision utile, avec ou sans correction…">
+      </div>
+    </div>`;
+}
+
+function rendreOccurrence(occ) {
+  const id = idOccurrence(occ);
+  const corrigee = estCoche(occ.occurrence_corrigee);
+  return `
+  <div class="carte ${corrigee ? "est-corrigee" : ""}" data-id="${echapperHTML(id)}" data-type="occurrence">
+    <div class="ligne-badges">
+      <span class="badge">${echapperHTML(occ.reference_precise || "référence inconnue")}</span>
+      ${occ.nature_sonore_zone ? `<span class="badge">${echapperHTML(occ.nature_sonore_zone)}</span>` : ""}
+      ${corrigee ? `<span class="badge badge-corrige">corrigé</span>` : ""}
+      ${occ.lien_web_document ? `<span class="lien-source"><a href="${echapperHTML(occ.lien_web_document)}" target="_blank" rel="noopener">Ouvrir le PDF source ↗</a></span>` : ""}
+    </div>
+
+    <div class="champ">
+      <label>Citation significative et contexte</label>
+      <div class="apercu-contexte">${apercuAvecCitationSurlignee(occ.contexte_documentaire, occ.extrait_significatif)}</div>
+    </div>
+
+    <div class="champ">
+      <label>Message d'occurrence (natif, LLM)</label>
+      <div class="bloc-lecture-seule">${echapperHTML(occ.message_occurrence || "")}</div>
+    </div>
+
+    ${blocCorrection(occ, "occurrence_corrigee", "message_occurrence_corrige", "validation_message_commentaire")}
+  </div>`;
+}
+
+/* ---------------------------------------------------------------------- *
+ * 4. Rendu — mode message fusion
+ * ---------------------------------------------------------------------- */
+
+function messagesOccurrenceDuGroupe(synth) {
+  return etat.occurrences.filter(occ => occ.id_geometrie_synthese === synth.id_geometrie);
+}
+
+function rendreSynthese(synth) {
+  const id = idSynthese(synth);
+  const corrigee = estCoche(synth.synthese_corrigee);
+  const membres = messagesOccurrenceDuGroupe(synth);
+
+  const detailMembres = etat.occurrences.length === 0
+    ? `<p class="apercu-citation-manquante">Chargez aussi <code>etape5_{dept}_occurrences.csv</code> pour voir le détail des messages d'occurrence de ce groupe.</p>`
+    : membres.length === 0
+      ? `<p class="apercu-citation-manquante">Aucune occurrence individuelle rattachée (message fixe, non issu du LLM).</p>`
+      : `<div class="liste-messages-occurrence">
+          <p class="sous-libelle">${membres.length} message(s) d'occurrence du groupe</p>
+          ${membres.map(m => `
+            <div class="ligne-message-membre">
+              <div class="bloc-lecture-seule">${echapperHTML(m.message_occurrence || "")}</div>
+              <div class="reference-membre">
+                ${echapperHTML(m.reference_precise || "référence inconnue")}
+                ${m.lien_web_document ? `<a href="${echapperHTML(m.lien_web_document)}" target="_blank" rel="noopener">Ouvrir ↗</a>` : ""}
+              </div>
+            </div>`).join("")}
+        </div>`;
+
+  return `
+  <div class="carte ${corrigee ? "est-corrigee" : ""}" data-id="${echapperHTML(id)}" data-type="synthese">
+    <div class="ligne-badges">
+      <span class="badge">${echapperHTML(synth.id_gpu || "(sans document)")}</span>
+      ${corrigee ? `<span class="badge badge-corrige">corrigé</span>` : ""}
+    </div>
+
+    ${detailMembres}
+
+    <div class="champ">
+      <label>Message de synthèse (natif, LLM)</label>
+      <div class="bloc-lecture-seule">${echapperHTML(synth.message_synthese_llm || "")}</div>
+    </div>
+
+    ${blocCorrection(synth, "synthese_corrigee", "message_synthese_corrige", "validation_message_commentaire")}
+  </div>`;
+}
+
+/* ---------------------------------------------------------------------- *
+ * 5. Recherche, filtre, rendu global
+ * ---------------------------------------------------------------------- */
+
+function correspondRechercheOccurrence(occ, terme) {
+  if (!terme) return true;
+  const t = terme.toLowerCase();
+  return [occ.message_occurrence, occ.reference_precise, occ.extrait_significatif].some(v => (v || "").toLowerCase().includes(t));
+}
+
+function correspondRechercheSynthese(synth, terme) {
+  if (!terme) return true;
+  const t = terme.toLowerCase();
+  return [synth.message_synthese_llm, synth.id_gpu, synth.id_occurrence].some(v => (v || "").toLowerCase().includes(t));
+}
+
+function correspondFiltre(corrigee, filtre) {
+  if (filtre === "corrige") return corrigee;
+  if (filtre === "natif") return !corrigee;
+  return true;
+}
+
+function rendre() {
+  const terme = elRecherche.value.trim();
+  const filtre = elFiltreCorrection.value;
+
+  if (etat.modeActif === "occurrence") {
+    const visibles = etat.occurrences.filter(o =>
+      correspondRechercheOccurrence(o, terme) && correspondFiltre(estCoche(o.occurrence_corrigee), filtre)
+    );
+    elListeOccurrences.innerHTML = visibles.map(rendreOccurrence).join("") || "<p>Aucune occurrence chargée ou ne correspondant aux filtres.</p>";
+  } else {
+    // Textes fixes (rnu / document_non_significatif / trou_de_couverture) :
+    // jamais soumis au circuit de correction, exclus de ce mode — voir
+    // docs/etape-5-redaction-messages-diagbruit.md, "Messages fixes".
+    const visibles = etat.syntheses
+      .filter(s => (s.id_occurrence || "") !== "")
+      .filter(s => correspondRechercheSynthese(s, terme) && correspondFiltre(estCoche(s.synthese_corrigee), filtre));
+    elListeSyntheses.innerHTML = visibles.map(rendreSynthese).join("") || "<p>Aucune synthèse chargée ou ne correspondant aux filtres.</p>";
+  }
+
+  mettreAJourProgression();
+}
+
+function mettreAJourProgression() {
+  const donnees = etat.modeActif === "occurrence" ? etat.occurrences : etat.syntheses.filter(s => (s.id_occurrence || "") !== "");
+  const champBoolean = etat.modeActif === "occurrence" ? "occurrence_corrigee" : "synthese_corrigee";
+  const total = donnees.length;
+  const corriges = donnees.filter(d => estCoche(d[champBoolean])).length;
+  elProgression.innerHTML = `<strong>${corriges} / ${total}</strong> corrigé(s)`;
+}
+
+/* ---------------------------------------------------------------------- *
+ * 6. Interactions
+ * ---------------------------------------------------------------------- */
+
+function trouver(id, type) {
+  return type === "occurrence" ? etat.occurrences.find(o => idOccurrence(o) === id) : etat.syntheses.find(s => idSynthese(s) === id);
+}
+
+function gererInteraction(conteneur, incrementerCompteur) {
+  conteneur.addEventListener("change", (evenement) => {
+    const carte = evenement.target.closest(".carte");
+    if (!carte) return;
+    const entite = trouver(carte.dataset.id, carte.dataset.type);
+    if (!entite) return;
+
+    if (evenement.target.dataset.role === "case-corriger") {
+      const champBoolean = carte.dataset.type === "occurrence" ? "occurrence_corrigee" : "synthese_corrigee";
+      const champTexte = carte.dataset.type === "occurrence" ? "message_occurrence_corrige" : "message_synthese_corrige";
+      const champNatif = carte.dataset.type === "occurrence" ? "message_occurrence" : "message_synthese_llm";
+      entite[champBoolean] = evenement.target.checked ? "True" : "False";
+      // Pré-remplissage au moment de cocher, seulement si rien n'a encore
+      // été saisi — une reformulation déjà tapée n'est jamais écrasée.
+      if (evenement.target.checked && !entite[champTexte]) {
+        entite[champTexte] = entite[champNatif] || "";
+      }
+      incrementerCompteur();
+      rendre();
+      return;
+    }
+
+    const champ = evenement.target.dataset.champ;
+    if (champ) {
+      entite[champ] = evenement.target.value;
+      incrementerCompteur();
+    }
+  });
+
+  // "input" pour les textarea/texte : mise à jour en continu sans attendre
+  // la perte de focus (contrairement à "change" ci-dessus), pour ne rien
+  // perdre en cas de fermeture accidentelle de l'onglet juste après la
+  // frappe.
+  conteneur.addEventListener("input", (evenement) => {
+    const carte = evenement.target.closest(".carte");
+    if (!carte) return;
+    const champ = evenement.target.dataset.champ;
+    if (!champ) return;
+    const entite = trouver(carte.dataset.id, carte.dataset.type);
+    if (!entite) return;
+    entite[champ] = evenement.target.value;
+  });
+}
+
+gererInteraction(elListeOccurrences, () => { etat.compteurOccurrences++; verifierExportAuto("occurrence"); });
+gererInteraction(elListeSyntheses, () => { etat.compteurSyntheses++; verifierExportAuto("synthese"); });
+
+let delaiRecherche = null;
+elRecherche.addEventListener("input", () => { clearTimeout(delaiRecherche); delaiRecherche = setTimeout(rendre, 150); });
+elFiltreCorrection.addEventListener("change", rendre);
+
+document.querySelectorAll(".onglet").forEach(onglet => {
+  onglet.addEventListener("click", () => {
+    document.querySelectorAll(".onglet").forEach(o => o.classList.remove("actif"));
+    onglet.classList.add("actif");
+    etat.modeActif = onglet.dataset.mode;
+    elListeOccurrences.classList.toggle("masque", etat.modeActif !== "occurrence");
+    elListeSyntheses.classList.toggle("masque", etat.modeActif !== "synthese");
+    rendre();
+  });
+});
+
+/* ---------------------------------------------------------------------- *
+ * 7. Import / export — un fichier, un jeu de données, chacun indépendant.
+ * ---------------------------------------------------------------------- */
+
+function chargerFichier(fichier, { onLignes, elStatut }) {
+  const lecteur = new FileReader();
+  lecteur.onload = (evenement) => {
+    const lignes = analyserCSV(evenement.target.result);
+    if (lignes.length === 0) {
+      afficherToast("Fichier vide ou illisible.");
+      return;
+    }
+    onLignes(lignes);
+    elStatut.textContent = `${fichier.name} — ${lignes.length} ligne(s) chargée(s).`;
+    elBarreOutils.classList.remove("masque");
+    rendre();
+    afficherToast(`${lignes.length} ligne(s) chargée(s) depuis ${fichier.name}.`);
+  };
+  lecteur.onerror = () => afficherToast("Erreur de lecture du fichier.");
+  lecteur.readAsText(fichier, "UTF-8");
+}
+
+function brancherZoneImport(idZone, idEntree, callback) {
+  const zone = document.getElementById(idZone);
+  const entree = document.getElementById(idEntree);
+  entree.addEventListener("change", (evenement) => {
+    const fichier = evenement.target.files[0];
+    if (fichier) callback(fichier);
+  });
+  zone.addEventListener("dragover", (evenement) => { evenement.preventDefault(); zone.classList.add("survol"); });
+  zone.addEventListener("dragleave", () => zone.classList.remove("survol"));
+  zone.addEventListener("drop", (evenement) => {
+    evenement.preventDefault();
+    zone.classList.remove("survol");
+    const fichier = evenement.dataTransfer.files[0];
+    if (fichier) callback(fichier);
+  });
+}
+
+brancherZoneImport("zone-import-occurrences", "entree-fichier-occurrences", (fichier) => {
+  chargerFichier(fichier, {
+    elStatut: document.getElementById("statut-fichier-occurrences"),
+    onLignes: (lignes) => { etat.occurrences = lignes.map(normaliserLigneOccurrence); etat.compteurOccurrences = 0; },
+  });
+});
+
+brancherZoneImport("zone-import-syntheses", "entree-fichier-syntheses", (fichier) => {
+  chargerFichier(fichier, {
+    elStatut: document.getElementById("statut-fichier-syntheses"),
+    onLignes: (lignes) => { etat.syntheses = lignes.map(normaliserLigneSynthese); etat.compteurSyntheses = 0; },
+  });
+});
+
+function exporter(type) {
+  const donnees = type === "occurrence" ? etat.occurrences : etat.syntheses;
+  const colonnes = type === "occurrence" ? etat.colonnesOccurrences : etat.colonnesSyntheses;
+  if (donnees.length === 0) {
+    afficherToast("Rien à exporter dans ce mode.");
+    return;
+  }
+  const csv = construireCSV(donnees, colonnes);
+  const blob = new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const lien = document.createElement("a");
+  lien.href = url;
+  lien.download = `etape5_export_${type === "occurrence" ? "occurrences" : "syntheses"}_${horodatage()}.csv`;
+  document.body.appendChild(lien);
+  lien.click();
+  document.body.removeChild(lien);
+  URL.revokeObjectURL(url);
+  return true;
+}
+
+function verifierExportAuto(type) {
+  const compteur = type === "occurrence" ? etat.compteurOccurrences : etat.compteurSyntheses;
+  if (compteur < SEUIL_EXPORT_AUTO) return;
+  if (exporter(type)) {
+    afficherToast("Sauvegarde automatique : fichier téléchargé.");
+    if (type === "occurrence") etat.compteurOccurrences = 0; else etat.compteurSyntheses = 0;
+  }
+}
+
+document.getElementById("bouton-exporter").addEventListener("click", () => {
+  const exporte = exporter(etat.modeActif);
+  if (exporte) afficherToast("Export téléchargé.");
+});
+
+window.addEventListener("beforeunload", (evenement) => {
+  if (etat.compteurOccurrences > 0 || etat.compteurSyntheses > 0) {
+    evenement.preventDefault();
+    evenement.returnValue = "";
+  }
+});
+</script>
+</body>
+</html>

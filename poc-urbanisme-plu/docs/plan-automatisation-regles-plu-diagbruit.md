@@ -77,4 +77,4 @@ flowchart TD
 
 ## Prochaine étape
 
-Conception détaillée de l'étape 5 (rédaction du ton des messages), à partir des géométries et des occurrences produites par l'étape 4 — voir `etape-4-construction-geometries-diagbruit.md` et `etape-4-conception-technique.md`.
+**(Mise à jour du 19/08/2026)** Conception détaillée de l'étape 5 faite — voir `etape-5-redaction-messages-diagbruit.md` et `etape-5-conception-technique.md`. Prochaine étape : implémentation de l'étape 5, en commençant par la Phase 2 (génération des messages par LLM), avant de concevoir l'outil de validation humaine (Phase 3, non conçu à ce stade).

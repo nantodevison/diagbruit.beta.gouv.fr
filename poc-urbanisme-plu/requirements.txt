@@ -15,3 +15,9 @@ pdf2image
 geopandas
 pyogrio
 shapely
+
+# étape 5 (rédaction des messages) — vérification orthographique/grammaticale
+# des messages corrigés manuellement (verifier_orthographe.py). Installe à la
+# demande, au premier import, sa propre dépendance Grammalecte-fr (pas de
+# JVM, entièrement hors ligne une fois installée).
+pygrammalecte
