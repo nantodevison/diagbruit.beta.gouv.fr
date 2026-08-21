@@ -78,3 +78,5 @@ flowchart TD
 ## Prochaine étape
 
 **(Mise à jour du 19/08/2026)** Conception détaillée de l'étape 5 faite — voir `etape-5-redaction-messages-diagbruit.md` et `etape-5-conception-technique.md`. Prochaine étape : implémentation de l'étape 5, en commençant par la Phase 2 (génération des messages par LLM), avant de concevoir l'outil de validation humaine (Phase 3, non conçu à ce stade).
+
+**(Mise à jour du 21/08/2026)** Étapes 5 et 6 implémentées. Cadrage initial de l'étape 7 (automatisation de la saisie Strapi/Notion, aujourd'hui manuelle) démarré — voir `etape-7-stockage-diagbruit.md` — mais bloqué sur plusieurs points ouverts (accès API Strapi/Notion, contenu de la colonne Notion `Description`, pièce jointe géométrie, idempotence) avant de pouvoir passer à une conception technique détaillée puis à l'implémentation.

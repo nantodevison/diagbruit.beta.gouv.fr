@@ -13,7 +13,9 @@ dans [`docs/`](docs/) :
 - [`etape-2-conception-technique.md`](docs/etape-2-conception-technique.md) — décisions techniques de l'étape 2 (SDK Anthropic, structured outputs, OCR)
 - [`etape-5-redaction-messages-diagbruit.md`](docs/etape-5-redaction-messages-diagbruit.md) — détail de l'étape 5
 - [`etape-5-conception-technique.md`](docs/etape-5-conception-technique.md) — décisions techniques de l'étape 5
-- [`etape-6-mise-en-forme-diagbruit.md`](docs/etape-6-mise-en-forme-diagbruit.md) — note initiale, minimale, à développer
+- [`etape-6-mise-en-forme-diagbruit.md`](docs/etape-6-mise-en-forme-diagbruit.md) — détail de l'étape 6
+- [`etape-6-conception-technique.md`](docs/etape-6-conception-technique.md) — décisions techniques de l'étape 6
+- [`etape-7-stockage-diagbruit.md`](docs/etape-7-stockage-diagbruit.md) — cadrage initial de l'étape 7 (insertion Strapi/Notion), à développer — planification uniquement, pas encore implémentée
 
 *(Les étapes 3 et 4 ont aussi leurs documents dans `docs/`, non listés ici — cette liste n'a pas été tenue à jour à chaque étape ; à corriger si vous voulez qu'elle serve de sommaire fiable.)*
 
@@ -102,4 +104,14 @@ détail de ce découpage et son raisonnement.
   python -m etape5_redaction_messages.synthese_messages --dept 067
   python -m etape5_redaction_messages.verifier_orthographe --dept 067
   # ouvrir etape5_067.gpkg dans QGIS, filtrer sur "_validation_orthographe" != ''
+  ```
+- `etape6_mise_en_forme/` — mise en forme des messages validés à l'étape 5
+  pour la saisie manuelle dans Strapi et Notion (nécessite un `etape4_{dept}.gpkg`,
+  un `etape5_{dept}.gpkg` et un `etape5_{dept}_documents_par_synthese.csv`
+  existants).
+  ```bash
+  python -m etape6_mise_en_forme.generer_export --dept 067
+  # ouvrir outil_validation.html, charger etape6_067_export.csv, compléter
+  # alert_slug pour chaque ligne, exporter (renommer le dernier export en
+  # etape6_067_export.csv, ou l'utiliser tel quel)
   ```

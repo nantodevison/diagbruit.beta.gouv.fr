@@ -1,0 +1,540 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>diagBruit — Validation des alert_slug (étape 6)</title>
+<style>
+  :root {
+    --couleur-fond: #f5f6f8;
+    --couleur-carte: #ffffff;
+    --couleur-bordure: #d8dce1;
+    --couleur-texte: #1f2430;
+    --couleur-texte-attenue: #5a6270;
+    --couleur-accent: #2a4d8f;
+    --couleur-corrige: #b4740e;
+    font-family: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--couleur-fond); color: var(--couleur-texte); line-height: 1.4; }
+  header { background: var(--couleur-accent); color: white; padding: 16px 20px; }
+  header h1 { margin: 0 0 4px 0; font-size: 1.25rem; }
+  header p { margin: 0; font-size: 0.85rem; opacity: 0.9; }
+
+  #aide {
+    background: #eef2fa;
+    border-bottom: 1px solid var(--couleur-bordure);
+    padding: 10px 20px;
+    font-size: 0.85rem;
+  }
+  #aide summary { cursor: pointer; font-weight: 600; color: var(--couleur-accent); }
+  #aide ol, #aide ul { margin: 8px 0 8px 20px; padding: 0; }
+  #aide li { margin-bottom: 4px; }
+
+  #entete-sticky { position: sticky; top: 0; z-index: 10; background: var(--couleur-carte); }
+
+  #barre-outils {
+    background: var(--couleur-carte);
+    border-bottom: 1px solid var(--couleur-bordure);
+    padding: 10px 20px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    align-items: center;
+  }
+  #barre-outils label { font-size: 0.8rem; color: var(--couleur-texte-attenue); margin-right: 4px; }
+  #barre-outils select, #barre-outils input[type=text] {
+    padding: 5px 8px;
+    border: 1px solid var(--couleur-bordure);
+    border-radius: 4px;
+    font-size: 0.85rem;
+  }
+  .bouton {
+    padding: 6px 12px;
+    border-radius: 4px;
+    border: 1px solid var(--couleur-bordure);
+    background: var(--couleur-carte);
+    cursor: pointer;
+    font-size: 0.85rem;
+  }
+  .bouton-principal { background: var(--couleur-accent); color: white; border-color: var(--couleur-accent); }
+  .bouton-principal:hover { opacity: 0.9; }
+  #progression { margin-left: auto; font-size: 0.85rem; color: var(--couleur-texte-attenue); white-space: nowrap; }
+  #progression strong { color: var(--couleur-texte); }
+
+  main { padding: 16px 20px 60px; max-width: 980px; margin: 0 auto; }
+
+  .zone-import {
+    background: var(--couleur-carte);
+    border: 2px dashed var(--couleur-bordure);
+    border-radius: 8px;
+    padding: 20px;
+    margin-bottom: 10px;
+    color: var(--couleur-texte-attenue);
+  }
+  .zone-import.survol { border-color: var(--couleur-accent); background: #eef2fa; }
+  .zone-import p { margin: 0 0 8px 0; font-size: 0.88rem; }
+  .zone-import .statut-fichier { font-weight: 600; color: var(--couleur-texte); }
+
+  .carte {
+    background: var(--couleur-carte);
+    border: 1px solid var(--couleur-bordure);
+    border-left: 5px solid var(--couleur-bordure);
+    border-radius: 8px;
+    padding: 14px 16px;
+    margin-bottom: 12px;
+  }
+  .carte.est-modifiee { border-left-color: var(--couleur-corrige); }
+
+  .ligne-badges { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-bottom: 10px; }
+  .badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 0.72rem;
+    font-weight: 600;
+    background: #e4e7ec;
+    color: var(--couleur-texte-attenue);
+  }
+  .badge-fichier { font-weight: 400; font-family: ui-monospace, Consolas, monospace; }
+  .badge-corrige { background: #fbeecd; color: var(--couleur-corrige); }
+
+  .champ { margin-bottom: 8px; }
+  .champ label {
+    display: block;
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    color: var(--couleur-texte-attenue);
+    margin-bottom: 2px;
+  }
+  .champ input[type=text] {
+    width: 100%;
+    padding: 6px 8px;
+    border: 1px solid var(--couleur-bordure);
+    border-radius: 4px;
+    font-size: 0.87rem;
+    font-family: ui-monospace, Consolas, monospace;
+    background: white;
+  }
+
+  /* Blocs en lecture seule : message final déjà validé à l'étape 5 et
+     communes reprises telles quelles — jamais des zones de saisie, même
+     principe qu'aux étapes 3 et 5. */
+  .bloc-lecture-seule {
+    width: 100%;
+    padding: 6px 8px;
+    border: 1px solid var(--couleur-bordure);
+    border-radius: 4px;
+    font-size: 0.87rem;
+    background: #fafbfc;
+    color: var(--couleur-texte);
+    white-space: pre-wrap;
+    max-height: 14em;
+    overflow-y: auto;
+  }
+  .bloc-communes { color: var(--couleur-texte-attenue); max-height: 4.5em; }
+
+  .zone-alert-slug {
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px dashed var(--couleur-bordure);
+    display: flex;
+    gap: 8px;
+    align-items: flex-end;
+  }
+  .zone-alert-slug .champ { flex: 1; margin-bottom: 0; }
+  .bouton-reinitialiser { flex-shrink: 0; font-size: 0.78rem; padding: 6px 10px; }
+
+  #toast {
+    position: fixed;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%) translateY(20px);
+    background: var(--couleur-texte);
+    color: white;
+    padding: 10px 18px;
+    border-radius: 6px;
+    font-size: 0.85rem;
+    opacity: 0;
+    transition: opacity 0.2s, transform 0.2s;
+    pointer-events: none;
+    z-index: 100;
+  }
+  #toast.visible { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+  .masque { display: none !important; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>diagBruit — Validation des alert_slug</h1>
+  <p>Étape 6 du plan d'automatisation des règles PLU — complétion des <code>alert_slug</code> produits par <code>generer_export.py</code></p>
+</header>
+
+<details id="aide">
+  <summary>Mode d'emploi</summary>
+  <ol>
+    <li>Chargez <code>etape6_{dept}_export.csv</code> (ou un export précédent de cet outil, pour reprendre une session).</li>
+    <li>Le champ <strong>Alert slug</strong> est préempli avec la proposition mécanique (<code>alert-{Territoire}-</code>, partie territoire déjà calculée) — complétez-le directement avec le terme métier (ex. <code>alert-EurometropoledeStrasbourg-exhaussement</code>), ou corrigez-le entièrement si <code>territoire_propose</code> vous semble faux. Voir <code>docs/etape-6-mise-en-forme-diagbruit.md</code>, "Format de l'alert_slug", pour ce que doit être ce terme métier (jamais un résumé du message : un vocable technique du domaine, parfois absent du texte).</li>
+    <li>Le <strong>message final</strong> (<code>message_strapi</code>), déjà validé à l'étape 5 qu'il soit natif ou corrigé manuellement, s'affiche en lecture seule pour vous aider à choisir un terme cohérent avec le document concerné.</li>
+    <li><strong>↺</strong> revient à la proposition mécanique d'origine si votre saisie ne convient pas.</li>
+    <li>Exportez régulièrement votre progression — un export automatique se déclenche aussi tous les 10 champs modifiés. Sans sauvegarde navigateur possible dans cet outil, un export non téléchargé = un travail non conservé si l'onglet se ferme.</li>
+    <li>Le fichier exporté a exactement la même structure que <code>etape6_{dept}_export.csv</code> — une fois la relecture terminée, renommez le dernier export téléchargé pour remplacer <code>etape6_{dept}_export.csv</code> (ou utilisez-le tel quel) : c'est directement le fichier pour la saisie Strapi/Notion, aucun script Python supplémentaire à relancer.</li>
+  </ol>
+</details>
+
+<div id="entete-sticky">
+  <div id="barre-outils" class="masque">
+    <label for="recherche">Recherche</label>
+    <input type="text" id="recherche" placeholder="territoire, commune, message, alert_slug…">
+
+    <label for="filtre-modification">Afficher</label>
+    <select id="filtre-modification">
+      <option value="tous">Tout</option>
+      <option value="modifie">Modifiés uniquement</option>
+      <option value="non-modifie">Non modifiés uniquement</option>
+    </select>
+
+    <span id="progression">Chargement…</span>
+    <button class="bouton bouton-principal" id="bouton-exporter">⬇ Exporter (CSV)</button>
+  </div>
+</div>
+
+<main>
+  <div class="zone-import" id="zone-import">
+    <p><span class="statut-fichier" id="statut-fichier">Aucun fichier chargé.</span> Sélectionnez <code>etape6_{dept}_export.csv</code> (ou un export précédent de cet outil).</p>
+    <input type="file" id="entree-fichier" accept=".csv,text/csv">
+  </div>
+
+  <div id="liste"></div>
+</main>
+
+<div id="toast"></div>
+
+<script>
+"use strict";
+
+/* ---------------------------------------------------------------------- *
+ * 1. Lecture / écriture CSV (RFC 4180 minimal), reprise à l'identique de
+ *    etape3_validation_manuelle/outil_validation.html et
+ *    etape5_redaction_messages/outil_validation.html — aucune dépendance
+ *    externe, POC utilisable hors ligne.
+ * ---------------------------------------------------------------------- */
+
+function analyserCSV(texte) {
+  if (texte.charCodeAt(0) === 0xFEFF) texte = texte.slice(1);
+
+  const lignes = [];
+  let champActuel = "";
+  let ligneActuelle = [];
+  let dansGuillemets = false;
+
+  for (let i = 0; i < texte.length; i++) {
+    const car = texte[i];
+    const suivant = texte[i + 1];
+
+    if (dansGuillemets) {
+      if (car === '"' && suivant === '"') { champActuel += '"'; i++; }
+      else if (car === '"') { dansGuillemets = false; }
+      else { champActuel += car; }
+    } else {
+      if (car === '"') { dansGuillemets = true; }
+      else if (car === ',') { ligneActuelle.push(champActuel); champActuel = ""; }
+      else if (car === '\r') { /* ignoré, traité via \n */ }
+      else if (car === '\n') {
+        ligneActuelle.push(champActuel);
+        champActuel = "";
+        lignes.push(ligneActuelle);
+        ligneActuelle = [];
+      } else { champActuel += car; }
+    }
+  }
+  if (champActuel.length > 0 || ligneActuelle.length > 0) {
+    ligneActuelle.push(champActuel);
+    lignes.push(ligneActuelle);
+  }
+
+  const lignesUtiles = lignes.filter(l => !(l.length === 1 && l[0] === ""));
+  if (lignesUtiles.length === 0) return [];
+
+  const entetes = lignesUtiles[0];
+  return lignesUtiles.slice(1).map(valeurs => {
+    const objet = {};
+    entetes.forEach((entete, index) => { objet[entete] = valeurs[index] ?? ""; });
+    return objet;
+  });
+}
+
+function echapperChampCSV(valeur) {
+  valeur = valeur === undefined || valeur === null ? "" : String(valeur);
+  if (/[",\n\r]/.test(valeur)) {
+    return '"' + valeur.replace(/"/g, '""') + '"';
+  }
+  return valeur;
+}
+
+function construireCSV(lignes, colonnes) {
+  const entete = colonnes.map(echapperChampCSV).join(",");
+  const corps = lignes.map(ligne => colonnes.map(c => echapperChampCSV(ligne[c])).join(","));
+  return [entete, ...corps].join("\r\n");
+}
+
+function echapperHTML(valeur) {
+  return String(valeur ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+function horodatage() {
+  const d = new Date();
+  const pad = (n) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}_${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}`;
+}
+
+function afficherToast(message) {
+  const toast = document.getElementById("toast");
+  toast.textContent = message;
+  toast.classList.add("visible");
+  setTimeout(() => toast.classList.remove("visible"), 2500);
+}
+
+/* ---------------------------------------------------------------------- *
+ * 2. État applicatif — un seul jeu de données (etape6_{dept}_export.csv),
+ *    contrairement aux deux fichiers indépendants de l'étape 5 : l'étape 6
+ *    n'a qu'une seule ligne par géométrie finale, pas de distinction
+ *    occurrence/synthèse. Pas de colonne "corrigee" dédiée dans le contrat
+ *    de données (voir etape-6-conception-technique.md, "Contrat de
+ *    données") : le suivi "modifié" ci-dessous est purement une commodité
+ *    d'affichage pour cette session, recalculé à chaque chargement — rien
+ *    n'est perdu si un export est rechargé plus tard, la comparaison se
+ *    refait simplement contre les valeurs de ce nouveau chargement.
+ * ---------------------------------------------------------------------- */
+
+const SEUIL_EXPORT_AUTO = 10;
+
+const COLONNES_EXPORT = [
+  "id_geometrie", "territoire_propose", "description_slug",
+  "alert_slug_propose", "message_strapi", "nom_fichier_geometrie", "communes",
+];
+
+const etat = { lignes: [], compteur: 0 };
+
+function idLigne(ligne) { return ligne.id_geometrie; }
+
+function normaliserLigne(ligne) {
+  const l = { ...ligne };
+  COLONNES_EXPORT.forEach(c => { if (l[c] === undefined) l[c] = ""; });
+  // Valeur de référence pour le suivi "modifié" — capturée telle que chargée,
+  // jamais mise à jour ensuite : seule la saisie de CETTE session compte.
+  l._alertSlugOrigine = l.alert_slug_propose;
+  return l;
+}
+
+function estModifiee(ligne) { return ligne.alert_slug_propose !== ligne._alertSlugOrigine; }
+
+/* ---------------------------------------------------------------------- *
+ * 3. Rendu
+ * ---------------------------------------------------------------------- */
+
+const elListe = document.getElementById("liste");
+const elBarreOutils = document.getElementById("barre-outils");
+const elProgression = document.getElementById("progression");
+const elRecherche = document.getElementById("recherche");
+const elFiltreModification = document.getElementById("filtre-modification");
+
+function rendreLigne(ligne) {
+  const modifiee = estModifiee(ligne);
+  return `
+  <div class="carte ${modifiee ? "est-modifiee" : ""}" data-id="${echapperHTML(idLigne(ligne))}">
+    <div class="ligne-badges">
+      <span class="badge">${echapperHTML(ligne.territoire_propose || "territoire inconnu")}</span>
+      <span class="badge badge-fichier">${echapperHTML(ligne.nom_fichier_geometrie || "")}</span>
+      ${modifiee ? `<span class="badge badge-corrige">modifié</span>` : ""}
+    </div>
+
+    <div class="champ">
+      <label>Communes</label>
+      <div class="bloc-lecture-seule bloc-communes">${echapperHTML(ligne.communes || "")}</div>
+    </div>
+
+    <div class="champ">
+      <label>Message final (message_strapi, validé à l'étape 5)</label>
+      <div class="bloc-lecture-seule">${echapperHTML(ligne.message_strapi || "")}</div>
+    </div>
+
+    <div class="zone-alert-slug">
+      <div class="champ">
+        <label>Alert slug</label>
+        <input type="text" data-champ="alert_slug_propose" value="${echapperHTML(ligne.alert_slug_propose || "")}" placeholder="alert-Territoire-terme-metier">
+      </div>
+      <button type="button" class="bouton bouton-reinitialiser" data-role="reinitialiser" title="Revenir à la proposition mécanique d'origine">↺</button>
+    </div>
+  </div>`;
+}
+
+function correspondRecherche(ligne, terme) {
+  if (!terme) return true;
+  const t = terme.toLowerCase();
+  return [ligne.territoire_propose, ligne.communes, ligne.message_strapi, ligne.alert_slug_propose]
+    .some(v => (v || "").toLowerCase().includes(t));
+}
+
+function correspondFiltre(modifiee, filtre) {
+  if (filtre === "modifie") return modifiee;
+  if (filtre === "non-modifie") return !modifiee;
+  return true;
+}
+
+function rendre() {
+  const terme = elRecherche.value.trim();
+  const filtre = elFiltreModification.value;
+
+  const visibles = etat.lignes.filter(l =>
+    correspondRecherche(l, terme) && correspondFiltre(estModifiee(l), filtre)
+  );
+  elListe.innerHTML = visibles.map(rendreLigne).join("") || "<p>Aucune ligne chargée ou ne correspondant aux filtres.</p>";
+
+  mettreAJourProgression();
+}
+
+function mettreAJourProgression() {
+  const total = etat.lignes.length;
+  const modifiees = etat.lignes.filter(estModifiee).length;
+  elProgression.innerHTML = `<strong>${modifiees} / ${total}</strong> modifié(s)`;
+}
+
+/* ---------------------------------------------------------------------- *
+ * 4. Interactions
+ * ---------------------------------------------------------------------- */
+
+function trouver(id) { return etat.lignes.find(l => idLigne(l) === id); }
+
+elListe.addEventListener("click", (evenement) => {
+  if (evenement.target.dataset.role !== "reinitialiser") return;
+  const carte = evenement.target.closest(".carte");
+  const ligne = trouver(carte.dataset.id);
+  if (!ligne) return;
+  ligne.alert_slug_propose = ligne._alertSlugOrigine;
+  rendre();
+});
+
+// "input" : capture en continu (à chaque frappe) et retour visuel immédiat
+// (bordure, badge) sans reconstruire toute la liste — perdrait le focus/le
+// curseur en plein milieu de la frappe. Ne compte jamais vers l'export
+// automatique : ce serait un déclenchement par frappe, pas par champ
+// réellement modifié (voir "change" ci-dessous, même distinction qu'à
+// l'étape 5, outil_validation.html).
+elListe.addEventListener("input", (evenement) => {
+  const champ = evenement.target.dataset.champ;
+  if (!champ) return;
+  const carte = evenement.target.closest(".carte");
+  const ligne = trouver(carte.dataset.id);
+  if (!ligne) return;
+  ligne[champ] = evenement.target.value;
+  mettreAJourProgression();
+  carte.classList.toggle("est-modifiee", estModifiee(ligne));
+  const badgeModifie = carte.querySelector(".badge-corrige");
+  if (estModifiee(ligne) && !badgeModifie) {
+    carte.querySelector(".ligne-badges").insertAdjacentHTML("beforeend", `<span class="badge badge-corrige">modifié</span>`);
+  } else if (!estModifiee(ligne) && badgeModifie) {
+    badgeModifie.remove();
+  }
+});
+
+// "change" : ne se déclenche qu'à la perte de focus après une frappe — un
+// champ effectivement modifié, jamais une frappe isolée. C'est ce qui
+// alimente le compteur d'export automatique.
+elListe.addEventListener("change", (evenement) => {
+  if (!evenement.target.dataset.champ) return;
+  etat.compteur++;
+  verifierExportAuto();
+});
+
+let delaiRecherche = null;
+elRecherche.addEventListener("input", () => { clearTimeout(delaiRecherche); delaiRecherche = setTimeout(rendre, 150); });
+elFiltreModification.addEventListener("change", rendre);
+
+/* ---------------------------------------------------------------------- *
+ * 5. Import / export
+ * ---------------------------------------------------------------------- */
+
+function chargerFichier(fichier) {
+  const lecteur = new FileReader();
+  lecteur.onload = (evenement) => {
+    const lignes = analyserCSV(evenement.target.result);
+    if (lignes.length === 0) {
+      afficherToast("Fichier vide ou illisible.");
+      return;
+    }
+    etat.lignes = lignes.map(normaliserLigne);
+    etat.compteur = 0;
+    document.getElementById("statut-fichier").textContent = `${fichier.name} — ${lignes.length} ligne(s) chargée(s).`;
+    elBarreOutils.classList.remove("masque");
+    rendre();
+    afficherToast(`${lignes.length} ligne(s) chargée(s) depuis ${fichier.name}.`);
+  };
+  lecteur.onerror = () => afficherToast("Erreur de lecture du fichier.");
+  lecteur.readAsText(fichier, "UTF-8");
+}
+
+(function brancherZoneImport() {
+  const zone = document.getElementById("zone-import");
+  const entree = document.getElementById("entree-fichier");
+  entree.addEventListener("change", (evenement) => {
+    const fichier = evenement.target.files[0];
+    if (fichier) chargerFichier(fichier);
+  });
+  zone.addEventListener("dragover", (evenement) => { evenement.preventDefault(); zone.classList.add("survol"); });
+  zone.addEventListener("dragleave", () => zone.classList.remove("survol"));
+  zone.addEventListener("drop", (evenement) => {
+    evenement.preventDefault();
+    zone.classList.remove("survol");
+    const fichier = evenement.dataTransfer.files[0];
+    if (fichier) chargerFichier(fichier);
+  });
+})();
+
+function exporter() {
+  if (etat.lignes.length === 0) {
+    afficherToast("Rien à exporter.");
+    return false;
+  }
+  const csv = construireCSV(etat.lignes, COLONNES_EXPORT);
+  const blob = new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const lien = document.createElement("a");
+  lien.href = url;
+  lien.download = `etape6_export_alert_slugs_${horodatage()}.csv`;
+  document.body.appendChild(lien);
+  lien.click();
+  document.body.removeChild(lien);
+  URL.revokeObjectURL(url);
+  return true;
+}
+
+function verifierExportAuto() {
+  if (etat.compteur < SEUIL_EXPORT_AUTO) return;
+  if (exporter()) {
+    afficherToast("Sauvegarde automatique : fichier téléchargé.");
+    etat.compteur = 0;
+  }
+}
+
+document.getElementById("bouton-exporter").addEventListener("click", () => {
+  if (exporter()) afficherToast("Export téléchargé.");
+});
+
+window.addEventListener("beforeunload", (evenement) => {
+  if (etat.compteur > 0) {
+    evenement.preventDefault();
+    evenement.returnValue = "";
+  }
+});
+</script>
+</body>
+</html>
