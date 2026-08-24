@@ -9,7 +9,7 @@
 Deux objectifs indépendants, dans l'ordre où ils s'exécutent :
 
 1. **Un garde-fou de cohérence géométrique**, en tout début d'étape : un contrôle a posteriori des décisions de fusion prises à l'étape 4, pour repérer les occurrences qui *auraient dû* être fusionnées mais ne le sont pas — jamais bloquant, à charge de l'opérateur d'en tenir compte ou de l'ignorer.
-2. **La rédaction d'un message par géométrie finale**, à l'intention de l'utilisateur de diagBruit, respectant le ton de voix défini par le design de diagBruit (voir "Ton de voix" plus bas) — générée par LLM pour les occurrences réelles, fixe pour les trois cas qui n'en portent pas.
+2. **La rédaction d'un message par géométrie finale**, à l'intention de l'utilisateur de diagBruit, respectant le ton de voix défini par le design de diagBruit (voir "Ton de voix" plus bas) — générée par LLM pour les occurrences réelles, fixe pour les trois cas qui n'en portent pas. Complété le 24/08/2026 (voir `docs/etape-5-ameliorations-possibles.md`, "Génération LLM d'un titre court") par un titre court associé à chaque message, destiné à `title` (Strapi) et `Description` (Notion) — même distinction généré/fixe.
 
 ## Garde-fou de cohérence géométrique
 
@@ -39,6 +39,8 @@ Ces trois cas ne portent pas de citation d'un document à reformuler : le messag
 > Les documents d'urbanisme présents sur le territoire ne mentionnent pas de recommandations ou de prescriptions particulières relatives au bruit. Seul le plan d'exposition au bruit limite la constructibilité, et seul le classement sonore protège les habitants. Toutefois, l'autorité compétente en matière de permis de construire peut toujours s'appuyer sur l'article R.111-2 du code de l'urbanisme, qui stipule qu'un « projet peut être refusé ou n'être accepté que sous réserve (…) s'il est de nature à porter atteinte à la salubrité ou à la sécurité publique (…) ». Si votre projet présente un risque sonore fort ou extrême, rapprochez-vous de l'autorité compétente.
 
 Ces trois textes sont considérés définitifs : ils ne passent pas par le circuit de validation humaine décrit plus bas, propre aux messages générés.
+
+**Titres fixes (ajouté le 24/08/2026)** : ces trois cas ont de même un titre court fixe (`TITRES_FIXES` dans `messages_fixes.py`), jamais soumis au circuit de correction — même principe que leur message.
 
 ### `occurrence_locale` — message généré
 

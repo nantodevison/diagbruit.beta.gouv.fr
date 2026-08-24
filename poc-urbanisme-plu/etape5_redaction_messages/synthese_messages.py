@@ -4,7 +4,8 @@ Lit `etape5_{dept}_a_completer.gpkg` (géométries + messages natifs du LLM,
 Phase 2) et le plus récent export de `outil_validation.html`
 (`etape5_export_syntheses_{horodatage}.csv`, Phase 3 — voir
 `docs/etape-5-conception-technique.md`, "Phase 3"), résout la valeur finale
-de chaque message (corrigée si `synthese_corrigee`, sinon native), et écrit
+de chaque message et de chaque titre (corrigé si `synthese_corrigee`/
+`titre_corrigee`, sinon natif — deux résolutions indépendantes), et écrit
 le livrable `etape5_{dept}.gpkg` — le contrat pour l'étape 6.
 
 Les corrections d'occurrence (`etape5_export_occurrences_*.csv`) ne sont
@@ -49,6 +50,10 @@ COLONNES_FINALES = [
     "message_synthese_llm",
     "synthese_corrigee",
     "message_synthese_corrige",
+    "titre_propose",
+    "titre_propose_llm",
+    "titre_corrigee",
+    "titre_propose_corrige",
     "validation_message_commentaire",
 ]
 
@@ -126,6 +131,11 @@ def synthetiser(code_departement: str, dossier_sortie: str | Path = "output") ->
         message_natif = ligne.get("message_synthese_llm", "")
         message_final = message_corrige if corrigee and message_corrige else message_natif
 
+        titre_corrigee = _texte(ligne_export.get("titre_corrigee")) in ("True", "true")
+        titre_corrige = _texte(ligne_export.get("titre_propose_corrige"))
+        titre_natif = ligne.get("titre_propose_llm", "")
+        titre_final = titre_corrige if titre_corrigee and titre_corrige else titre_natif
+
         lignes_finales.append(
             {
                 "id_geometrie": id_geometrie,
@@ -135,6 +145,10 @@ def synthetiser(code_departement: str, dossier_sortie: str | Path = "output") ->
                 "message_synthese_llm": message_natif,
                 "synthese_corrigee": "True" if corrigee else "False",
                 "message_synthese_corrige": message_corrige,
+                "titre_propose": titre_final,
+                "titre_propose_llm": titre_natif,
+                "titre_corrigee": "True" if titre_corrigee else "False",
+                "titre_propose_corrige": titre_corrige,
                 "validation_message_commentaire": _texte(ligne_export.get("validation_message_commentaire")),
             }
         )

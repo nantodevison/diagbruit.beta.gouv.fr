@@ -5,6 +5,10 @@ portent pas de citation d'un document à reformuler (`rnu`,
 Textes validés le 19/08/2026 (voir `docs/etape-5-redaction-messages-diagbruit.md`,
 "Messages fixes") — définitifs, ne passent jamais par la génération LLM ni
 par le circuit de validation humaine propre aux messages générés.
+
+`TITRES_FIXES` (ajouté le 24/08/2026, voir `docs/etape-5-ameliorations-possibles.md`,
+"Génération LLM d'un titre court") : même principe pour ces 3 cas, un titre
+fixe écrit une fois, jamais régénéré ni soumis à correction.
 """
 
 MESSAGES_FIXES: dict[str, str] = {
@@ -36,4 +40,10 @@ MESSAGES_FIXES: dict[str, str] = {
         "présente un risque sonore fort ou extrême, rapprochez-vous de "
         "l'autorité compétente."
     ),
+}
+
+TITRES_FIXES: dict[str, str] = {
+    "trou_de_couverture": "Absence de document d'urbanisme référencé",
+    "rnu": "Règlement National de l'Urbanisme applicable",
+    "document_non_significatif": "Aucune prescription bruit spécifique",
 }

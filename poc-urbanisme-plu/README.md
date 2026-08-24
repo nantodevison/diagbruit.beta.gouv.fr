@@ -13,9 +13,11 @@ dans [`docs/`](docs/) :
 - [`etape-2-conception-technique.md`](docs/etape-2-conception-technique.md) — décisions techniques de l'étape 2 (SDK Anthropic, structured outputs, OCR)
 - [`etape-5-redaction-messages-diagbruit.md`](docs/etape-5-redaction-messages-diagbruit.md) — détail de l'étape 5
 - [`etape-5-conception-technique.md`](docs/etape-5-conception-technique.md) — décisions techniques de l'étape 5
+- [`etape-5-ameliorations-possibles.md`](docs/etape-5-ameliorations-possibles.md) — limites identifiées, non corrigées pour l'instant
 - [`etape-6-mise-en-forme-diagbruit.md`](docs/etape-6-mise-en-forme-diagbruit.md) — détail de l'étape 6
 - [`etape-6-conception-technique.md`](docs/etape-6-conception-technique.md) — décisions techniques de l'étape 6
-- [`etape-7-stockage-diagbruit.md`](docs/etape-7-stockage-diagbruit.md) — cadrage initial de l'étape 7 (insertion Strapi/Notion), à développer — planification uniquement, pas encore implémentée
+- [`etape-7-stockage-diagbruit.md`](docs/etape-7-stockage-diagbruit.md) — cadrage de l'étape 7 (insertion Strapi/Notion)
+- [`etape-7-conception-technique.md`](docs/etape-7-conception-technique.md) — décisions techniques de l'étape 7 — prête pour implémentation, pas encore codée
 
 *(Les étapes 3 et 4 ont aussi leurs documents dans `docs/`, non listés ici — cette liste n'a pas été tenue à jour à chaque étape ; à corriger si vous voulez qu'elle serve de sommaire fiable.)*
 

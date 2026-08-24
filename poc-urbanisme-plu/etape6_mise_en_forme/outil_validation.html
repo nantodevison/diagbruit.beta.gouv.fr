@@ -317,9 +317,16 @@ function afficherToast(message) {
 
 const SEUIL_EXPORT_AUTO = 10;
 
+// Ajout du 24/08/2026 : message_content/strapi_source/strapi_reference/
+// label_propose/titre_propose (voir etape6_mise_en_forme/generer_export.py)
+// — toutes reprises intégralement ici même si l'outil ne les édite pas,
+// pour ne pas les perdre au réexport (seul alert_slug_propose est modifié
+// par cet outil).
 const COLONNES_EXPORT = [
   "id_geometrie", "territoire_propose", "description_slug",
-  "alert_slug_propose", "message_strapi", "nom_fichier_geometrie", "communes",
+  "alert_slug_propose", "message_strapi", "message_content", "strapi_source",
+  "strapi_reference", "label_propose", "titre_propose",
+  "nom_fichier_geometrie", "communes",
 ];
 
 const etat = { lignes: [], compteur: 0 };
@@ -353,6 +360,7 @@ function rendreLigne(ligne) {
   <div class="carte ${modifiee ? "est-modifiee" : ""}" data-id="${echapperHTML(idLigne(ligne))}">
     <div class="ligne-badges">
       <span class="badge">${echapperHTML(ligne.territoire_propose || "territoire inconnu")}</span>
+      <span class="badge">${echapperHTML(ligne.label_propose || "")}</span>
       <span class="badge badge-fichier">${echapperHTML(ligne.nom_fichier_geometrie || "")}</span>
       ${modifiee ? `<span class="badge badge-corrige">modifié</span>` : ""}
     </div>
@@ -360,6 +368,11 @@ function rendreLigne(ligne) {
     <div class="champ">
       <label>Communes</label>
       <div class="bloc-lecture-seule bloc-communes">${echapperHTML(ligne.communes || "")}</div>
+    </div>
+
+    <div class="champ">
+      <label>Titre proposé (title Strapi / Description Notion, validé à l'étape 5)</label>
+      <div class="bloc-lecture-seule">${echapperHTML(ligne.titre_propose || "")}</div>
     </div>
 
     <div class="champ">
@@ -380,7 +393,7 @@ function rendreLigne(ligne) {
 function correspondRecherche(ligne, terme) {
   if (!terme) return true;
   const t = terme.toLowerCase();
-  return [ligne.territoire_propose, ligne.communes, ligne.message_strapi, ligne.alert_slug_propose]
+  return [ligne.territoire_propose, ligne.communes, ligne.message_strapi, ligne.alert_slug_propose, ligne.label_propose, ligne.titre_propose]
     .some(v => (v || "").toLowerCase().includes(t));
 }
 

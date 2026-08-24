@@ -14,6 +14,11 @@ chaque géométrie finale :
   si le groupe compte plus d'une occurrence, un second appel LLM qui les
   combine en un unique `message_synthese`. Pour un groupe d'une seule
   occurrence, `message_synthese` reprend directement `message_occurrence`.
+  Dans tous les cas, un troisième appel LLM génère ensuite `titre_propose_llm`
+  (titre court, quelques mots) à partir de ce `message_synthese` — voir
+  `docs/etape-5-ameliorations-possibles.md`, "Génération LLM d'un titre
+  court". Pour les cas fixes, un titre fixe (`TITRES_FIXES`) est utilisé à
+  la place, comme pour le message.
 
 Usage :
     python -m etape5_redaction_messages.preparer_messages --dept 033
@@ -52,7 +57,7 @@ from anthropic import Anthropic
 from dotenv import load_dotenv
 from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
 
-from .messages_fixes import MESSAGES_FIXES
+from .messages_fixes import MESSAGES_FIXES, TITRES_FIXES
 from .ton_de_voix import TON_DE_VOIX
 
 load_dotenv()
@@ -92,6 +97,19 @@ SCHEMA_MESSAGE_SYNTHESE = {
     "additionalProperties": False,
 }
 
+# Ajouté le 24/08/2026, voir docs/etape-5-ameliorations-possibles.md,
+# "Génération LLM d'un titre court" — appel dédié et uniforme, un par
+# géométrie finale (occurrence unique ou groupe fusionné), toujours généré
+# à partir du message_synthese natif (jamais de la version corrigée en
+# Phase 3, même principe que "Correction humaine : natif + correction,
+# jamais de cascade" pour message_synthese).
+SCHEMA_TITRE = {
+    "type": "object",
+    "properties": {"titre_propose": {"type": "string"}},
+    "required": ["titre_propose"],
+    "additionalProperties": False,
+}
+
 COLONNES_OCCURRENCES = [
     "id_geometrie_synthese",
     "id_gpu",
@@ -125,6 +143,10 @@ COLONNES_DOCUMENTS = [
 # même principe que message_occurrence ci-dessus. La valeur "active" (native
 # ou corrigée) n'est calculée qu'à la Phase 4 (synthese_messages.py), jamais
 # ici.
+# titre_propose_llm : même principe, sortie native de _generer_titre (ou du
+# titre fixe pour rnu/document_non_significatif/trou_de_couverture), jamais
+# réécrite en place. validation_message_commentaire reste partagé entre les
+# deux corrections (message et titre) de la ligne — pas de colonne dédiée.
 COLONNES_SYNTHESES = [
     "id_geometrie",
     "id_gpu",
@@ -132,6 +154,9 @@ COLONNES_SYNTHESES = [
     "message_synthese_llm",
     "synthese_corrigee",
     "message_synthese_corrige",
+    "titre_propose_llm",
+    "titre_corrigee",
+    "titre_propose_corrige",
     "validation_message_commentaire",
 ]
 
@@ -261,6 +286,31 @@ Rédige un message unique et cohérent (2 à 5 phrases), qui couvre l'ensemble
 du contenu des messages ci-dessus sans ajouter d'information nouvelle."""
 
 
+def _construire_prompt_titre(message_synthese: str) -> str:
+    return f"""Tu rédiges, pour diagBruit, un titre court (quelques mots, pas une
+phrase complète) qui résume le message ci-dessous — destiné à identifier ce
+message dans une liste (titre d'une alerte, d'une fiche). Respecte le ton de
+voix suivant :
+
+{TON_DE_VOIX}
+
+Message à résumer :
+"{message_synthese}"
+
+Rédige un titre de 3 à 8 mots, sans point final, sans guillemets, qui
+identifie le sujet principal du message (ex. la nature de la règle et sa
+localisation si elle y figure) sans en reprendre toutes les nuances."""
+
+
+def _generer_titre(message_synthese: str) -> str:
+    prompt = _construire_prompt_titre(message_synthese)
+    try:
+        response = _appeler_claude(prompt, SCHEMA_TITRE)
+    except anthropic.APIError as exc:
+        raise _ErreurRedaction(f"appel API échoué : {exc}") from exc
+    return _extraire_champ(response, "titre_propose")
+
+
 def _generer_message_occurrence(donnees_etape4: pd.Series, donnees_etape3: dict[str, str]) -> str:
     prompt = _construire_prompt_occurrence(donnees_etape4, donnees_etape3)
     try:
@@ -284,6 +334,7 @@ class ResultatGroupe:
     id_geometrie_synthese: int
     geometry: object
     message_synthese: str
+    titre_propose_llm: str
     lignes_documents: list[dict]
 
 
@@ -375,10 +426,27 @@ def _traiter_groupe_occurrence_locale(
             )
             return None
 
+    # Un échec ici n'invalide pas le message déjà produit ci-dessus : tracé
+    # dans `erreurs`, mais le groupe reste écrit avec un titre vide plutôt
+    # qu'exclu (contrairement à un échec de message_synthese).
+    try:
+        titre_propose_llm = _generer_titre(message_synthese)
+    except _ErreurRedaction as exc:
+        erreurs.append(
+            {
+                "identifiant": str(meneur.get("id_occurrence", "")),
+                "source": "generation_titre",
+                "message": str(exc),
+                "date_traitement": date_traitement,
+            }
+        )
+        titre_propose_llm = ""
+
     return ResultatGroupe(
         id_geometrie_synthese=meneur.get("id_geometrie", ""),
         geometry=meneur.geometry,
         message_synthese=message_synthese,
+        titre_propose_llm=titre_propose_llm,
         lignes_documents=lignes_documents,
     )
 
@@ -419,6 +487,9 @@ def preparer(code_departement: str, dossier_sortie: str | Path = "output") -> Pa
                 # donc vides ici par construction, jamais lues.
                 "synthese_corrigee": "False",
                 "message_synthese_corrige": "",
+                "titre_propose_llm": TITRES_FIXES[_texte(ligne.get("nature_zone"))],
+                "titre_corrigee": "False",
+                "titre_propose_corrige": "",
                 "validation_message_commentaire": "",
             }
         )
@@ -462,6 +533,9 @@ def preparer(code_departement: str, dossier_sortie: str | Path = "output") -> Pa
                 "message_synthese_llm": resultat.message_synthese,
                 "synthese_corrigee": "False",
                 "message_synthese_corrige": "",
+                "titre_propose_llm": resultat.titre_propose_llm,
+                "titre_corrigee": "False",
+                "titre_propose_corrige": "",
                 "validation_message_commentaire": "",
             }
         )

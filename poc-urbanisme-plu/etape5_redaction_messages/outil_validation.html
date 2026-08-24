@@ -250,7 +250,7 @@
   <ol>
     <li>Chargez <code>etape5_{dept}_occurrences.csv</code> (mode "Message par occurrence") et/ou <code>etape5_{dept}_syntheses.csv</code> (mode "Message fusion") — ou un export précédent de cet outil, pour reprendre une session. Les deux fichiers sont indépendants ; charger les deux permet au mode "Message fusion" d'afficher aussi le détail des messages d'occurrence du groupe.</li>
     <li><strong>Mode occurrence</strong> : la citation source et son contexte sont en lecture seule (non modifiables, citation surlignée) — comme à l'étape 3. Le message rédigé par le LLM est affiché en lecture seule ; cochez « Corriger ce message » pour faire apparaître un champ pré-rempli avec ce texte, à retoucher librement. Un commentaire est possible, indépendamment de la correction.</li>
-    <li><strong>Mode message fusion</strong> : les messages d'occurrence du groupe sont rappelés en lecture seule au-dessus du message de synthèse, pour suivre le raisonnement du LLM. Même mécanique de correction que le mode occurrence, appliquée ici au message de synthèse.</li>
+    <li><strong>Mode message fusion</strong> : les messages d'occurrence du groupe sont rappelés en lecture seule au-dessus du message de synthèse, pour suivre le raisonnement du LLM. Même mécanique de correction que le mode occurrence, appliquée ici à la fois au titre proposé (quelques mots) et au message de synthèse — deux corrections indépendantes.</li>
     <li>Décocher la case ne supprime jamais le texte déjà saisi — elle indique seulement si la version corrigée doit être utilisée à la place de la version native. Le texte reste en mémoire si vous recochez.</li>
     <li>Les deux corrections (occurrence et synthèse) sont indépendantes : corriger l'une n'implique pas de corriger l'autre, et rien ne l'exige.</li>
     <li>Exportez régulièrement votre progression (un bouton par mode) — un export automatique se déclenche aussi tous les 10 traitements. Sans sauvegarde navigateur possible dans cet outil, un export non téléchargé = un travail non conservé si l'onglet se ferme.</li>
@@ -417,7 +417,9 @@ const COLONNES_OCCURRENCES = [
 
 const COLONNES_SYNTHESES = [
   "id_geometrie", "id_gpu", "id_occurrence", "message_synthese_llm",
-  "synthese_corrigee", "message_synthese_corrige", "validation_message_commentaire",
+  "synthese_corrigee", "message_synthese_corrige",
+  "titre_propose_llm", "titre_corrigee", "titre_propose_corrige",
+  "validation_message_commentaire",
 ];
 
 const etat = {
@@ -445,6 +447,8 @@ function normaliserLigneSynthese(ligne) {
   const synth = { ...ligne };
   if (synth.synthese_corrigee === undefined) synth.synthese_corrigee = "False";
   if (synth.message_synthese_corrige === undefined) synth.message_synthese_corrige = "";
+  if (synth.titre_corrigee === undefined) synth.titre_corrigee = "False";
+  if (synth.titre_propose_corrige === undefined) synth.titre_propose_corrige = "";
   if (synth.validation_message_commentaire === undefined) synth.validation_message_commentaire = "";
   return synth;
 }
@@ -462,18 +466,28 @@ const elFiltreCorrection = document.getElementById("filtre-correction");
 
 function estCoche(valeur) { return valeur === "True" || valeur === "true"; }
 
-function blocCorrection(entite, champBoolean, champTexte, champCommentaire) {
+// Bloc "case à cocher + textarea de reformulation", sans commentaire ni
+// enrobage — factorisé pour être réutilisé par le titre
+// (validation_message_commentaire reste un champ unique, partagé par les
+// deux corrections d'une même ligne de synthèse, voir
+// docs/etape-5-ameliorations-possibles.md, "Génération LLM d'un titre court").
+function blocCorrectionSimple(entite, champBoolean, champTexte, libelle, libelleReformulation) {
   const corrigee = estCoche(entite[champBoolean]);
   return `
-    <div class="zone-correction">
       <div class="ligne-case-a-cocher">
-        <input type="checkbox" data-role="case-corriger" ${corrigee ? "checked" : ""}>
-        <label>Corriger ce message</label>
+        <input type="checkbox" data-role="case-corriger" data-champ-boolean="${champBoolean}" data-champ-texte="${champTexte}" ${corrigee ? "checked" : ""}>
+        <label>${libelle}</label>
       </div>
       <div class="champ ${corrigee ? "" : "masque"}" data-role="zone-texte-corrige">
-        <label>Reformulation</label>
+        <label>${libelleReformulation}</label>
         <textarea data-champ="${champTexte}">${echapperHTML(entite[champTexte] || "")}</textarea>
-      </div>
+      </div>`;
+}
+
+function blocCorrection(entite, champBoolean, champTexte, champCommentaire) {
+  return `
+    <div class="zone-correction">
+      ${blocCorrectionSimple(entite, champBoolean, champTexte, "Corriger ce message", "Reformulation")}
       <div class="champ">
         <label>Commentaire (facultatif)</label>
         <input type="text" data-champ="${champCommentaire}" value="${echapperHTML(entite[champCommentaire] || "")}" placeholder="précision utile, avec ou sans correction…">
@@ -546,6 +560,15 @@ function rendreSynthese(synth) {
     ${detailMembres}
 
     <div class="champ">
+      <label>Titre proposé (natif, LLM)</label>
+      <div class="bloc-lecture-seule">${echapperHTML(synth.titre_propose_llm || "")}</div>
+    </div>
+
+    <div class="zone-correction">
+      ${blocCorrectionSimple(synth, "titre_corrigee", "titre_propose_corrige", "Corriger ce titre", "Titre reformulé")}
+    </div>
+
+    <div class="champ">
       <label>Message de synthèse (natif, LLM)</label>
       <div class="bloc-lecture-seule">${echapperHTML(synth.message_synthese_llm || "")}</div>
     </div>
@@ -614,6 +637,17 @@ function trouver(id, type) {
   return type === "occurrence" ? etat.occurrences.find(o => idOccurrence(o) === id) : etat.syntheses.find(s => idSynthese(s) === id);
 }
 
+// Un champ corrigé par son champ natif correspondant — la carte "synthese"
+// porte désormais deux corrections indépendantes (message et titre), la
+// case à cocher ne peut donc plus être résolue à partir du seul type de
+// carte (voir data-champ-boolean/data-champ-texte posés par
+// blocCorrectionSimple).
+const CHAMP_NATIF_PAR_CORRIGE = {
+  message_occurrence_corrige: "message_occurrence",
+  message_synthese_corrige: "message_synthese_llm",
+  titre_propose_corrige: "titre_propose_llm",
+};
+
 function gererInteraction(conteneur, incrementerCompteur) {
   conteneur.addEventListener("change", (evenement) => {
     const carte = evenement.target.closest(".carte");
@@ -622,9 +656,9 @@ function gererInteraction(conteneur, incrementerCompteur) {
     if (!entite) return;
 
     if (evenement.target.dataset.role === "case-corriger") {
-      const champBoolean = carte.dataset.type === "occurrence" ? "occurrence_corrigee" : "synthese_corrigee";
-      const champTexte = carte.dataset.type === "occurrence" ? "message_occurrence_corrige" : "message_synthese_corrige";
-      const champNatif = carte.dataset.type === "occurrence" ? "message_occurrence" : "message_synthese_llm";
+      const champBoolean = evenement.target.dataset.champBoolean;
+      const champTexte = evenement.target.dataset.champTexte;
+      const champNatif = CHAMP_NATIF_PAR_CORRIGE[champTexte];
       entite[champBoolean] = evenement.target.checked ? "True" : "False";
       // Pré-remplissage au moment de cocher, seulement si rien n'a encore
       // été saisi — une reformulation déjà tapée n'est jamais écrasée.
