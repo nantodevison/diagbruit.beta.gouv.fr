@@ -6,9 +6,8 @@ Textes validés le 19/08/2026 (voir `docs/etape-5-redaction-messages-diagbruit.m
 "Messages fixes") — définitifs, ne passent jamais par la génération LLM ni
 par le circuit de validation humaine propre aux messages générés.
 
-`TITRES_FIXES` (ajouté le 24/08/2026, voir `docs/etape-5-ameliorations-possibles.md`,
-"Génération LLM d'un titre court") : même principe pour ces 3 cas, un titre
-fixe écrit une fois, jamais régénéré ni soumis à correction.
+`TITRES_FIXES` : même principe que pour le message — un titre
+fixe écrit une fois pour ces 3 cas, jamais régénéré ni soumis à correction.
 """
 
 MESSAGES_FIXES: dict[str, str] = {

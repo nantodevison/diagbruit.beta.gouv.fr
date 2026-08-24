@@ -469,8 +469,7 @@ function estCoche(valeur) { return valeur === "True" || valeur === "true"; }
 // Bloc "case à cocher + textarea de reformulation", sans commentaire ni
 // enrobage — factorisé pour être réutilisé par le titre
 // (validation_message_commentaire reste un champ unique, partagé par les
-// deux corrections d'une même ligne de synthèse, voir
-// docs/etape-5-ameliorations-possibles.md, "Génération LLM d'un titre court").
+// deux corrections d'une même ligne de synthèse).
 function blocCorrectionSimple(entite, champBoolean, champTexte, libelle, libelleReformulation) {
   const corrigee = estCoche(entite[champBoolean]);
   return `

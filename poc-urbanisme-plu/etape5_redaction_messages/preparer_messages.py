@@ -15,10 +15,9 @@ chaque géométrie finale :
   combine en un unique `message_synthese`. Pour un groupe d'une seule
   occurrence, `message_synthese` reprend directement `message_occurrence`.
   Dans tous les cas, un troisième appel LLM génère ensuite `titre_propose_llm`
-  (titre court, quelques mots) à partir de ce `message_synthese` — voir
-  `docs/etape-5-ameliorations-possibles.md`, "Génération LLM d'un titre
-  court". Pour les cas fixes, un titre fixe (`TITRES_FIXES`) est utilisé à
-  la place, comme pour le message.
+  (titre court, quelques mots) à partir de ce `message_synthese`. Pour les
+  cas fixes, un titre fixe (`TITRES_FIXES`) est utilisé à la place, comme
+  pour le message.
 
 Usage :
     python -m etape5_redaction_messages.preparer_messages --dept 033
@@ -97,9 +96,8 @@ SCHEMA_MESSAGE_SYNTHESE = {
     "additionalProperties": False,
 }
 
-# Ajouté le 24/08/2026, voir docs/etape-5-ameliorations-possibles.md,
-# "Génération LLM d'un titre court" — appel dédié et uniforme, un par
-# géométrie finale (occurrence unique ou groupe fusionné), toujours généré
+# Appel dédié et uniforme, un par géométrie finale (occurrence unique ou
+# groupe fusionné), toujours généré
 # à partir du message_synthese natif (jamais de la version corrigée en
 # Phase 3, même principe que "Correction humaine : natif + correction,
 # jamais de cascade" pour message_synthese).

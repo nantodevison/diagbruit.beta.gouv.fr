@@ -68,7 +68,7 @@ la clarté de la citation (`extrait_significatif`) ; il sert désormais aussi à
 signaler une règle hors périmètre bâtiment/aménagement, deux raisons
 différentes de valoir "faible". Plutôt que d'ajouter une colonne dédiée, la
 consigne exige que `justification` précise laquelle des deux s'applique —
-voir `etape-2-ameliorations-possibles.md` pour la piste d'un champ séparé si
+voir `docs/ameliorations-identifiees.md` pour la piste d'un champ séparé si
 ce choix s'avère gênant à l'usage.
 """
 

@@ -1,6 +1,6 @@
 # Étape 4 — Construction des géométries associées aux occurrences validées
 
-*Document de cadrage détaillé de l'étape 4 du plan d'automatisation des règles PLU de diagBruit (voir `plan-automatisation-regles-plu-diagbruit.md`). Suite de `etape-3-validation-manuelle.md` et `etape-3-conception-technique.md`. Version issue des échanges du 17/08/2026.*
+*Document de cadrage détaillé de l'étape 4 du plan d'automatisation des règles PLU de diagBruit (voir `plan-automatisation-regles-plu-diagbruit.md`). Suite de `etape-3-validation-manuelle.md` et `etape-3-conception-technique.md`.*
 
 **Entrée** : le CSV `etape3_{dept}.csv` produit par l'étape 3, dans son intégralité — occurrences locales validées, documents non significatifs, communes RNU et trous de couverture. C'est la seule entrée de cette étape : contrairement à l'étape 3, l'étape 4 ne relit jamais `etape1_{dept}.csv` ni `etape2_{dept}.csv` directement — tout ce dont elle a besoin (`nature_zone`, `portee_geometrique`, `code_insee_commune`, `id_gpu`) est déjà consolidé dans `etape3_{dept}.csv`.
 
@@ -17,7 +17,7 @@ Cette distinction reprend explicitement l'Alinéa 1 / Alinéa 2 déjà posé dan
 
 Le plan global pose déjà la règle : *"plusieurs surfaces peuvent se chevaucher si plusieurs règles s'appliquent à un même endroit"*. Cette étape ne cherche donc jamais à fusionner ou à dédupliquer des géométries qui se recouvrent — un PLUi qui porte trois occurrences distinctes (par exemple une portée administrative et deux zones spécifiques) produit trois géométries superposées dans le livrable final, une par occurrence. C'est voulu : la requête SIG d'intersection de l'utilisateur final retrouvera naturellement toutes les règles applicables à sa parcelle, quel que soit le nombre de surfaces qui s'y superposent.
 
-**Cas particulier, distinct de ce non-problème** : il arrive que deux occurrences se recouvrant décrivent en réalité la *même* règle, citée deux fois dans le document source (même secteur, même objectif de lutte contre le bruit — voir `nature_sonore_zone`), plutôt que deux règles différentes. Produire deux géométries superposées dans ce cas ferait apparaître deux messages redondants à l'utilisateur final. Un mécanisme de fusion (ajouté le 19/08/2026, voir `etape-4-conception-technique.md`, "Mécanisme de fusion") permet à l'opérateur de relier ces occurrences en Phase 2 sans fusionner leurs géométries — le regroupement du message revient à l'étape 5.
+**Cas particulier, distinct de ce non-problème** : il arrive que deux occurrences se recouvrant décrivent en réalité la *même* règle, citée deux fois dans le document source (même secteur, même objectif de lutte contre le bruit — voir `nature_sonore_zone`), plutôt que deux règles différentes. Produire deux géométries superposées dans ce cas ferait apparaître deux messages redondants à l'utilisateur final. Un mécanisme de fusion (voir `etape-4-conception-technique.md`, "Mécanisme de fusion") permet à l'opérateur de relier ces occurrences en Phase 2 sans fusionner leurs géométries — le regroupement du message revient à l'étape 5.
 
 ## Réintégration RNU et trou de couverture : pourquoi ici, et pas à part
 

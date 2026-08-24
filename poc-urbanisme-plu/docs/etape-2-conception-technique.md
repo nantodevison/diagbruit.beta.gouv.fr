@@ -1,6 +1,6 @@
 # Étape 2 — Conception technique : analyse des documents d'urbanisme pour repérer les règles liées au bruit
 
-*Document de cadrage technique, faisant suite à `etape-2-analyse-documents-urbanisme-diagbruit.md` et à `etape-1-conception-technique.md`. Révisé le 17/08/2026 suite à la conception de l'étape 4 : ajout du champ `portee_geometrique` au schéma structuré et au prompt de classification.*
+*Document de cadrage technique, faisant suite à `etape-2-analyse-documents-urbanisme-diagbruit.md` et à `etape-1-conception-technique.md`.*
 
 ## Posture
 
@@ -12,7 +12,7 @@ Ce module reste un sous-dossier du même POC que l'étape 1, sous la même postu
 poc-urbanisme-plu/
 ├── etape1_identification/               # existant
 ├── etape2_analyse_reglements/
-│   ├── main.py                          # point d'entrée : python -m etape2_analyse_reglements.main --dept 033
+│   ├── main.py                          # point d'entrée, voir "Utilisation en ligne de commande"
 │   ├── resolution_pieces.py             # Phase 1 — document-details : id_gpu → pièces + URLs
 │   ├── extraction_texte.py              # Phase 2 — extraction PDF par page, OCR si besoin
 │   ├── filtrage_lexical.py              # Phase 3 — inclusion + tag d'exclusion
@@ -26,6 +26,21 @@ poc-urbanisme-plu/
 ```
 
 Chaque module correspond à une phase du document descriptif et reste relançable indépendamment à partir de son fichier d'entrée : aucune dépendance de code entre `etape1_identification/` et `etape2_analyse_reglements/`, seulement une dépendance de données via les fichiers CSV.
+
+## Utilisation en ligne de commande
+
+```bash
+python -m etape2_analyse_reglements.main --dept 067
+python -m etape2_analyse_reglements.main --dept 067 --limit 5
+```
+
+Arguments de `main.py` :
+
+| Argument | Obligatoire | Détail |
+|---|---|---|
+| `--dept` | oui | Code département diagBruit (3 chiffres, ex. `067`, `971`) — doit correspondre à un `etape1_{dept}.csv` déjà présent dans le dossier de sortie. |
+| `--output-dir` | non (défaut `output`) | Dossier de lecture de `etape1_{dept}.csv` et d'écriture des CSV produits par cette étape. |
+| `--limit` | non | Plafonne, après la phase 1, le nombre de pièces effectivement traitées par les phases 2 à 5. Chaque passage classifié en phase 4 correspond à un appel facturé à l'API Anthropic ; `--limit` permet un premier essai maîtrisé en coût avant un run complet sur tout un département. |
 
 ## Résolution des pièces (Phase 1)
 
@@ -71,15 +86,15 @@ Le prompt transmet le passage, son contexte immédiat (`contexte_avant`/`context
 - si le passage constitue une règle autonome liée au bruit dans le périmètre de diagBruit (voir `etape-2-analyse-documents-urbanisme-diagbruit.md`, phase 4, pour la définition complète — distinction renvoi simple/règle autonome pour le classement sonore/PEB, et cas des règles limitées à l'infrastructure de transport) ;
 - sa nature (prescription/recommandation) et sa nature sonore ;
 - la zone réglementaire mentionnée, le cas échéant ;
-- **(ajouté le 17/08/2026)** sa portée géométrique — administrative (contour du zonage, de la commune ou de l'EPCI) ou zone spécifique (une zone réglementaire précise) — voir le nouveau bloc de prompt ci-dessous, qui reprend la distinction Alinéa 1/Alinéa 2 déjà posée dans `plan-automatisation-regles-plu-diagbruit.md` ;
+- sa portée géométrique — administrative (contour du zonage, de la commune ou de l'EPCI) ou zone spécifique (une zone réglementaire précise) — voir le bloc de prompt ci-dessous, qui reprend la distinction Alinéa 1/Alinéa 2 posée dans `plan-automatisation-regles-plu-diagbruit.md` ;
 - une citation verbatim (`extrait_significatif`) qui isole le mieux la règle, choisie librement dans le passage et son contexte immédiat — le contexte est transmis précisément pour que le modèle puisse y puiser si la règle y déborde (phrase commencée dans le contexte avant, terminée dans le contexte après, etc.) ;
 - un niveau de confiance (`confiance_extrait`) sur la clarté de cette citation, qui signale aussi, le cas échéant, qu'une règle par ailleurs claire ne concerne que l'infrastructure de transport (la raison précise est alors à lire dans `justification`, le raisonnement complet renvoyé par le modèle).
 
 Le raisonnement (thinking) est désactivé sur cet appel : `claude-sonnet-5` réfléchit par défaut (adaptive thinking) dès lors que ce paramètre n'est pas précisé, et ce raisonnement est décompté de `max_tokens` même s'il n'est pas affiché. Une tâche de classification structurée comme celle-ci n'a pas besoin de raisonnement approfondi ; le désactiver laisse tout le budget de tokens (`max_tokens=800`, calibré pour laisser la place à une justification détaillée) à la réponse, et réduit coût et latence.
 
-La citation renvoyée par le modèle (`extrait_significatif`) est vérifiée côté code comme étant réellement un extrait verbatim du texte fourni (contexte avant + passage + contexte après, après normalisation des espaces) ; si elle ne l'est pas (le modèle a reformulé malgré la consigne), le code retombe sur un découpage mécanique du passage plutôt que de perdre l'occurrence. `confiance_extrait` peut valoir "faible" pour deux raisons distinctes (citation peu claire, ou règle limitée à l'infrastructure de transport) : plutôt qu'une colonne dédiée à chacune, la consigne exige que `justification` précise laquelle des deux s'applique — voir `etape-2-ameliorations-possibles.md` pour la piste d'un champ séparé si ce choix gêne la relecture à l'usage.
+La citation renvoyée par le modèle (`extrait_significatif`) est vérifiée côté code comme étant réellement un extrait verbatim du texte fourni (contexte avant + passage + contexte après, après normalisation des espaces) ; si elle ne l'est pas (le modèle a reformulé malgré la consigne), le code retombe sur un découpage mécanique du passage plutôt que de perdre l'occurrence. `confiance_extrait` peut valoir "faible" pour deux raisons distinctes (citation peu claire, ou règle limitée à l'infrastructure de transport) : plutôt qu'une colonne dédiée à chacune, la consigne exige que `justification` précise laquelle des deux s'applique — voir `ameliorations-identifiees.md` pour la piste d'un champ séparé si ce choix gêne la relecture à l'usage.
 
-Note sur `contexte_documentaire` (colonne du CSV de synthèse, voir plus bas) : quand `extrait_significatif` déborde sur `contexte_avant` ou `contexte_apres`, la portion commune s'affiche deux fois dans cette colonne (concaténation simple, sans déduplication) — voir `etape-2-ameliorations-possibles.md` pour le détail.
+Note sur `contexte_documentaire` (colonne du CSV de synthèse, voir plus bas) : quand `extrait_significatif` déborde sur `contexte_avant` ou `contexte_apres`, la portion commune s'affiche deux fois dans cette colonne (concaténation simple, sans déduplication) — voir `ameliorations-identifiees.md` pour le détail.
 
 ```python
 import json
@@ -116,7 +131,7 @@ SCHEMA_CLASSIFICATION = {
             ]
         },
         "zone_reglementaire_mentionnee": {"type": ["string", "null"]},
-        # Ajouté le 17/08/2026 : portée géométrique de la règle, nécessaire à
+        # Portée géométrique de la règle, nécessaire à
         # l'étape 4 pour savoir si une géométrie automatique (contour administratif)
         # suffit, ou si un tracé manuel dédié est requis. Distinct de
         # zone_reglementaire_mentionnee ci-dessus : celui-ci dit QUELLE zone est
@@ -251,7 +266,7 @@ Colonnes dans l'ordre où elles apparaissent dans le CSV (`COLONNES_SYNTHESE` de
 | `nature_occurrence` | `prescription` / `recommandation` / *(vide)* | Renvoyé par le modèle en phase 4. Vide uniquement sur les lignes `statut_verification = "aucune occurrence trouvée"`. |
 | `nature_juridique_piece` | `opposable en conformité` / `opposable en compatibilité` / `non opposable` | Déduit mécaniquement de `type_piece_source` par `synthese.py` (phase 5) : règlement (PLU/PLUi/POS/CC comme PSMV) → conformité ; OAP → compatibilité ; PADD → non opposable. |
 | `nature_sonore_zone` | `lutte_bruit_existant` / `preservation_zone_calme` / `autre` / *(vide)* | Renvoyé par le modèle en phase 4. Vide dans les mêmes conditions que `nature_occurrence`. |
-| `portee_geometrique` | `administrative` / `zone_specifique` / *(vide)* | **(ajouté le 17/08/2026)** Renvoyé par le modèle en phase 4. Vide dans les mêmes conditions que `nature_occurrence`. Exploité directement par `preparer_geometries.py` à l'étape 4 pour orienter la ligne vers la géométrie automatique ou vers le tracé manuel — voir `etape-4-conception-technique.md`. |
+| `portee_geometrique` | `administrative` / `zone_specifique` / *(vide)* | Renvoyé par le modèle en phase 4. Vide dans les mêmes conditions que `nature_occurrence`. Exploité directement par `preparer_geometries.py` à l'étape 4 pour orienter la ligne vers la géométrie automatique ou vers le tracé manuel — voir `etape-4-conception-technique.md`. |
 | `statut_verification` | `validé` / `à vérifier (renvoi CSV-PEB potentiel)` / `aucune occurrence trouvée` | `synthese.py` (phase 5) : `à vérifier...` quand le passage porte le tag d'exclusion lexicale (phase 3) malgré un `retenu=true` en phase 4 ; `aucune occurrence trouvée` quand une pièce extraite avec succès n'a produit aucune occurrence retenue. |
 | `ocr_utilise` | `True` / `False` | `extraction_texte.py` (phase 2). |
 | `ocr_confiance` | `élevée` / `moyenne` / `faible` / *(vide)* | Idem, vide si `ocr_utilise` est `False`. |

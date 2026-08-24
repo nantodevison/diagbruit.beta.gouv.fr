@@ -1,9 +1,8 @@
 """Étape 6 — phase unique : génération de l'export pour la saisie Strapi/Notion
 (`generer_export.py`), voir `docs/etape-6-conception-technique.md`.
 
-Lit `etape5_{dept}.gpkg` (couche `messages`, dont `titre_propose` — voir
-`docs/etape-5-ameliorations-possibles.md`, "Génération LLM d'un titre
-court"), `etape5_{dept}_documents_par_synthese.csv` et `etape4_{dept}.gpkg`
+Lit `etape5_{dept}.gpkg` (couche `messages`, dont `titre_propose`, généré par
+LLM à l'étape 5 et validé par l'opérateur), `etape5_{dept}_documents_par_synthese.csv` et `etape4_{dept}.gpkg`
 (couche `geometries` — relu pour `communes` et `nature_sonore_zone`,
 absentes de `etape5_{dept}.gpkg` en pratique ; voir la note du 21/08/2026
 dans `etape-6-conception-technique.md`, "Architecture des dossiers"). Pour

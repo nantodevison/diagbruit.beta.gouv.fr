@@ -1,12 +1,12 @@
 # Étape 2 — Analyse des documents d'urbanisme pour repérer les règles liées au bruit
 
-*Document de cadrage détaillé de l'étape 2 du plan d'automatisation des règles PLU de diagBruit (voir `plan-automatisation-regles-plu-diagbruit.md`). Suite de `etape-1-identification-documents-urbanisme-diagbruit.md`. Révisé le 17/08/2026 suite à la conception de l'étape 4 (ajout du champ `portee_geometrique`, clarification du sort des lignes RNU/trou de couverture).*
+*Document de cadrage détaillé de l'étape 2 du plan d'automatisation des règles PLU de diagBruit (voir `plan-automatisation-regles-plu-diagbruit.md`). Suite de `etape-1-identification-documents-urbanisme-diagbruit.md`.*
 
 **Entrée** : le CSV `etape1_{dept}.csv` produit par l'étape 1. Seules les lignes dont le `statut` vaut **`document trouvé`** ou **`PSMV additionnel`** sont traitées ici — elles seules portent un `id_gpu` exploitable.
 
 Les lignes `RNU confirmé` et `trou de couverture` ne passent pas par les phases d'analyse de cette étape : il n'y a pas de document PDF à lire (pas de règlement pour une commune au RNU, pas de document trouvé du tout pour un trou de couverture).
 
-*Précision du 17/08/2026, suite à la conception de l'étape 4 :* ça ne signifie pas que ces lignes restent en dehors du pipeline jusqu'à l'étape 6, comme l'affirmait une version précédente de ce document. C'est en réalité l'étape 3 (`synthese_finale.py`) qui les réintègre directement dans `etape3_{dept}.csv`, sous forme de lignes de synthèse construites depuis `etape1_{dept}.csv` — au même titre que les documents non significatifs — pour qu'elles bénéficient d'une géométrie dès l'étape 4 (voir `etape-3-validation-manuelle.md`, section "RNU et trou de couverture : réintégration dans le pipeline"). Le RNU en particulier porte une règle de fond bien réelle, ce n'est pas une absence de donnée : l'article R.111-2 du code de l'urbanisme permet à l'autorité compétente de refuser un permis de construire, ou de le conditionner à des prescriptions spéciales, si le projet porte atteinte à la salubrité ou à la sécurité publique — la jurisprudence y range explicitement les nuisances sonores. Une commune au RNU n'est donc pas "sans règle" : elle est sous un régime déjà écrit une fois pour toutes au niveau national, plutôt que dans un document local à aller lire.
+Cela ne signifie pas que ces lignes restent en dehors du pipeline jusqu'à l'étape 6 : c'est l'étape 3 (`synthese_finale.py`) qui les réintègre directement dans `etape3_{dept}.csv`, sous forme de lignes de synthèse construites depuis `etape1_{dept}.csv` — au même titre que les documents non significatifs — pour qu'elles bénéficient d'une géométrie dès l'étape 4 (voir `etape-3-validation-manuelle.md`, section "RNU et trou de couverture : réintégration dans le pipeline"). Le RNU en particulier porte une règle de fond bien réelle, ce n'est pas une absence de donnée : l'article R.111-2 du code de l'urbanisme permet à l'autorité compétente de refuser un permis de construire, ou de le conditionner à des prescriptions spéciales, si le projet porte atteinte à la salubrité ou à la sécurité publique — la jurisprudence y range explicitement les nuisances sonores. Une commune au RNU n'est donc pas "sans règle" : elle est sous un régime déjà écrit une fois pour toutes au niveau national, plutôt que dans un document local à aller lire.
 
 ## Sources écartées de l'analyse
 
@@ -46,7 +46,7 @@ Chaque passage retenu en phase 3 est analysé pour déterminer :
 - sa **nature** : prescription ou recommandation ;
 - sa **nature sonore** : lutte contre une nuisance existante, ou préservation d'une zone calme ;
 - la **zone réglementaire** concernée, quand le texte la précise (texte libre — ex. "UA", "ensemble du zonage", "non précisé") ;
-- **(ajouté le 17/08/2026)** la **portée géométrique** de la règle : **administrative** (la règle s'applique à l'ensemble du zonage, de la commune ou de l'EPCI couvert par le document — une géométrie de contour administratif suffira à l'étape 4) ou **zone spécifique** (la règle ne concerne qu'une zone réglementaire précise — ex. "UA" — qui nécessitera un tracé manuel dédié, faute de source automatique fiable). Ce champ est distinct de la zone réglementaire mentionnée elle-même : l'un dit *quelle* zone est citée dans le texte (`zone_reglementaire_mentionnee`, texte libre, informatif), l'autre dit *quel processus de géométrie* appliquer (`portee_geometrique`, valeur contrôlée, exploitée directement par le code de l'étape 4) ;
+- la **portée géométrique** de la règle : **administrative** (la règle s'applique à l'ensemble du zonage, de la commune ou de l'EPCI couvert par le document — une géométrie de contour administratif suffira à l'étape 4) ou **zone spécifique** (la règle ne concerne qu'une zone réglementaire précise — ex. "UA" — qui nécessitera un tracé manuel dédié, faute de source automatique fiable). Ce champ est distinct de la zone réglementaire mentionnée elle-même : l'un dit *quelle* zone est citée dans le texte (`zone_reglementaire_mentionnee`, texte libre, informatif), l'autre dit *quel processus de géométrie* appliquer (`portee_geometrique`, valeur contrôlée, exploitée directement par le code de l'étape 4) ;
 - la **citation la plus pertinente** pour illustrer la règle repérée : le passage retenu est transmis avec son contexte immédiat (le texte qui précède et qui suit dans le document), et c'est le modèle qui choisit lui-même la citation exacte — mot pour mot, sans reformulation — qui isole le mieux la règle, avec un niveau de confiance sur la clarté de cette citation ;
 - le **raisonnement** qui justifie ces choix, notamment laquelle des deux situations explique une confiance réduite (citation peu claire et fragmentée, ou règle limitée à l'infrastructure de transport).
 
@@ -61,7 +61,7 @@ Chaque passage retenu en phase 3 est analysé pour déterminer :
 | `reference_type` | `alinea` ou `page` |
 | `reference_precise` | ex. "Article 11, alinéa 3" ou "page 24" |
 | `zone_reglementaire_mentionnee` | ex. "UA", "ensemble du zonage", "non précisé" |
-| `portee_geometrique` | **(ajouté le 17/08/2026)** `administrative` ou `zone_specifique` — détermine à l'étape 4 si une géométrie automatique (contour administratif) suffit, ou si un tracé manuel est nécessaire |
+| `portee_geometrique` | `administrative` ou `zone_specifique` — détermine à l'étape 4 si une géométrie automatique (contour administratif) suffit, ou si un tracé manuel est nécessaire |
 | `extrait_significatif` | citation verbatim choisie par le modèle, sans son contexte — pour un survol rapide |
 | `contexte_documentaire` | la même citation, entourée cette fois de son contexte immédiat (juste avant / juste après), concaténés dans l'ordre de lecture du document — pour vérifier en contexte sans ouvrir le PDF source |
 | `confiance_extrait` | faible / moyenne / forte / totale — confiance du modèle dans la clarté de la citation retenue ; peut aussi signaler une règle hors périmètre diagBruit (limitée à l'infrastructure de transport) — la raison précise est à lire dans `justification` |
@@ -82,4 +82,4 @@ Comme à l'étape 1, aucun échec isolé (résolution d'une pièce, extraction d
 
 ## Prochaine étape
 
-Validation manuelle des occurrences (étape 3), qui réintègre aussi désormais les communes RNU et les trous de couverture, puis délimitation géométrique des zones (étape 4) à partir du CSV produit par l'étape 3.
+Validation manuelle des occurrences (étape 3), qui réintègre également les communes RNU et les trous de couverture, puis délimitation géométrique des zones (étape 4) à partir du CSV produit par l'étape 3.

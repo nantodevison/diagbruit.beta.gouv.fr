@@ -37,7 +37,7 @@ d'ouvrir le PDF source pour la plupart des vérifications. Les deux colonnes
 sont exposées côte à côte : `extrait_significatif` pour un survol rapide,
 `contexte_documentaire` pour vérifier en contexte (au prix d'une répétition
 possible de la citation dans ce dernier, voir
-`etape-2-ameliorations-possibles.md`).
+`docs/ameliorations-identifiees.md`).
 
 `justification` (ajouté le 13/08/2026, retour utilisateur) : le raisonnement
 du modèle derrière `retenu` et `confiance_extrait` — en particulier laquelle

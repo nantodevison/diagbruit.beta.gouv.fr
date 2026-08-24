@@ -11,8 +11,7 @@ Toute entrée créée reste en brouillon (`draftAndPublish` actif sur ce
 content-type) : ce module ne publie jamais — l'opérateur relit et publie
 manuellement dans Strapi.
 
-`title` (ajouté le 24/08/2026, voir `docs/etape-5-ameliorations-possibles.md`,
-"Génération LLM d'un titre court") est désormais renseigné à partir de
+`title` est renseigné à partir de
 `titre_propose`, généré par LLM à l'étape 5 et validé par l'opérateur —
 `alert_slug` (champ `uid`, `targetField: title` côté schéma Strapi) continue
 d'être fourni explicitement dans le payload plutôt que dérivé de `title`.
@@ -120,10 +119,10 @@ def _put(url: str, payload: dict) -> dict:
 
 def convertir_content_html(message_content: str) -> str:
     """`message_content` (texte brut, `\\n`) → `content` (HTML, CKEditor) :
-    un unique `<p>`, chaque retour à la ligne remplacé par `<br>` — validé
-    le 24/08/2026, voir `docs/etape-7-conception-technique.md`, "Conversion
+    un unique `<p>`, chaque retour à la ligne remplacé par `<br>` — voir
+    `docs/etape-7-conception-technique.md`, "Conversion
     content". Ni gras ni listes structurées, voir
-    `docs/etape-5-ameliorations-possibles.md`."""
+    `docs/ameliorations-identifiees.md`."""
     corps = message_content.replace("\n", "<br>")
     return f"<p>{corps}</p>"
 

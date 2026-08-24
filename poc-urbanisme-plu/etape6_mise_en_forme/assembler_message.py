@@ -21,8 +21,7 @@ avant de les joindre. Ce n'est PAS un oubli ni un raccourci risqué : c'est la
 conséquence directe d'une décision humaine déjà prise et validée en amont, à
 l'étape 5.
 
-**Mise à jour du 24/08/2026** (voir `docs/etape-5-ameliorations-possibles.md`,
-"Génération LLM d'un titre court") : `notion_description` n'est plus calculé
+`notion_description` n'est plus calculé
 ici par déduplication de citations — le champ `Description` de Notion (comme
 `title` de Strapi) est désormais alimenté par `titre_propose`, un titre court
 généré par LLM à l'étape 5 et transmis tel quel par `generer_export.py`. Le
