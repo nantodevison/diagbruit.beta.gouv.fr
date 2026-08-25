@@ -29,6 +29,11 @@ class ReferentielCommunesIndisponible(Exception):
     """Le référentiel des communes du département n'a pas pu être récupéré."""
 
 
+class FiltreCommunesInvalide(Exception):
+    """`code_insee_garder` et `code_insee_exclure` ont été fournis en même
+    temps à `filtrer_communes`."""
+
+
 @dataclass
 class Commune:
     nom: str
@@ -123,3 +128,45 @@ def get_communes_departement(code_departement: str) -> list[Commune]:
         )
         for c in communes_brutes
     ]
+
+
+def filtrer_communes(
+    communes: list[Commune],
+    code_insee_garder: list[str] | None = None,
+    code_insee_exclure: list[str] | None = None,
+) -> list[Commune]:
+    """Restreint le référentiel des communes à une liste explicite de codes
+    INSEE (`code_insee_garder`), ou à l'inverse écarte une liste explicite de
+    codes INSEE (`code_insee_exclure`) — jamais les deux à la fois. Les deux
+    paramètres sont vides par défaut (aucun filtre appliqué).
+
+    Sert par exemple à traiter le reste d'un département après qu'un
+    territoire (ex. une métropole) en a déjà été extrait et traité
+    séparément, sans redemander de document pour ses communes une seconde
+    fois — filtrer ici, avant la phase 2, évite aussi les appels réseau
+    inutiles vers l'EPCI/les communes déjà traités.
+
+    Le filtre ne porte que sur le code INSEE actuel de la commune
+    (`Commune.code_insee`), pas sur ses anciens codes ni sur les codes de ses
+    communes déléguées (`codes_insee_a_tester`) : la liste des communes d'un
+    territoire (ex. une métropole) se récupère normalement avec les codes
+    INSEE actuels.
+
+    Lève `FiltreCommunesInvalide` si les deux listes sont fournies en même
+    temps.
+    """
+    if code_insee_garder and code_insee_exclure:
+        raise FiltreCommunesInvalide(
+            "code_insee_garder et code_insee_exclure ne peuvent pas être "
+            "fournis en même temps : choisissez l'un ou l'autre."
+        )
+
+    if code_insee_garder:
+        codes = set(code_insee_garder)
+        return [c for c in communes if c.code_insee in codes]
+
+    if code_insee_exclure:
+        codes = set(code_insee_exclure)
+        return [c for c in communes if c.code_insee not in codes]
+
+    return communes

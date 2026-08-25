@@ -9,6 +9,11 @@ Enchaîne les trois phases (voir `etape-1-conception-technique.md`) :
 2. `documents_urbanisme.py` — recherche des documents en vigueur.
 3. `synthese.py` — écriture du CSV de synthèse et du fichier d'erreurs.
 
+Entre la phase 1 et la phase 2, `--code-insee-garder`/`--code-insee-exclure`
+permettent de restreindre le référentiel des communes du département — utile
+pour traiter le reste d'un département sans retraiter un territoire (ex. une
+métropole) déjà identifié séparément (voir `communes.filtrer_communes`).
+
 Seul l'échec de la phase 1 arrête le traitement du département (pas de
 référentiel commune = rien d'exploitable en aval). Les erreurs de la phase 2
 sont toujours isolées à une commune ou un EPCI et n'empêchent jamais la
@@ -20,7 +25,12 @@ from __future__ import annotations
 import argparse
 import sys
 
-from .communes import ReferentielCommunesIndisponible, get_communes_departement
+from .communes import (
+    FiltreCommunesInvalide,
+    ReferentielCommunesIndisponible,
+    filtrer_communes,
+    get_communes_departement,
+)
 from .documents_urbanisme import rechercher_documents_departement
 from .synthese import ecrire_synthese
 
@@ -39,6 +49,27 @@ def _parser() -> argparse.ArgumentParser:
         default="output",
         help="Dossier de sortie pour les CSV (défaut : output/).",
     )
+    parser.add_argument(
+        "--code-insee-garder",
+        nargs="+",
+        default=None,
+        metavar="CODE_INSEE",
+        help=(
+            "Restreint le traitement à ces codes INSEE de commune "
+            "uniquement (incompatible avec --code-insee-exclure)."
+        ),
+    )
+    parser.add_argument(
+        "--code-insee-exclure",
+        nargs="+",
+        default=None,
+        metavar="CODE_INSEE",
+        help=(
+            "Écarte ces codes INSEE de commune du traitement, ex. un "
+            "territoire déjà traité séparément (incompatible avec "
+            "--code-insee-garder)."
+        ),
+    )
     return parser
 
 
@@ -54,6 +85,18 @@ def main(argv: list[str] | None = None) -> int:
         print(f"Arrêt : {exc}", file=sys.stderr)
         return 1
     print(f"  {len(communes)} commune(s) trouvée(s).")
+
+    try:
+        communes = filtrer_communes(
+            communes,
+            code_insee_garder=args.code_insee_garder,
+            code_insee_exclure=args.code_insee_exclure,
+        )
+    except FiltreCommunesInvalide as exc:
+        print(f"Arrêt : {exc}", file=sys.stderr)
+        return 1
+    if args.code_insee_garder or args.code_insee_exclure:
+        print(f"  {len(communes)} commune(s) après filtre.")
 
     print("Phase 2 — recherche des documents d'urbanisme en vigueur...")
     resultats, erreurs = rechercher_documents_departement(communes)

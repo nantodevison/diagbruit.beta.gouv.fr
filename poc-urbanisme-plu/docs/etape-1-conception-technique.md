@@ -62,6 +62,33 @@ Contrairement au reste du produit (qui stocke tout en PostGIS via Dagster/dbt), 
  
 Aucune fonction d'appel API ne doit lever d'exception qui interrompt tout le traitement. En cas d'échec (après quelques tentatives avec délai progressif), la fonction retourne un résultat "erreur" structuré. `main.py` empile ces erreurs et poursuit le traitement du reste du département, plutôt que de s'arrêter. Les erreurs accumulées sont écrites dans un fichier séparé (`etape1_{dept}_erreurs.csv`), consultable indépendamment.
 
+## Décision 5 — Filtrage optionnel du référentiel de communes
+
+Besoin apparu à l'usage : un territoire (ex. l'Eurométropole de Strasbourg,
+département 067) peut avoir été traité en urgence avant le reste de son
+département. Relancer l'étape 1 sur le département entier retraiterait alors
+inutilement ces communes déjà identifiées — et, plus loin dans le pipeline,
+risquerait de faire coexister deux jeux d'occurrences pour le même
+territoire.
+
+`communes.filtrer_communes(communes, code_insee_garder=None,
+code_insee_exclure=None)` restreint le référentiel produit par la phase 1
+(`communes.py`) à une liste explicite de codes INSEE à garder, ou à l'inverse
+écarte une liste explicite de codes INSEE à exclure — jamais les deux à la
+fois (`FiltreCommunesInvalide` sinon, interceptée dans `main.py` comme
+`ReferentielCommunesIndisponible`, message explicite sur `stderr`, arrêt).
+Exposé en ligne de commande via `--code-insee-garder`/`--code-insee-exclure`
+(`nargs="+"`, un code par argument).
+
+Le filtre s'applique **entre la phase 1 et la phase 2**, jamais après coup
+sur le CSV final : filtrer la liste de communes avant la recherche des
+documents évite aussi les appels réseau inutiles vers l'EPCI et les communes
+déjà traités, pas seulement leur écriture dans `etape1_{dept}.csv`. Le filtre
+ne porte que sur le code INSEE actuel de la commune (`Commune.code_insee`),
+pas sur `codes_insee_a_tester` (anciens codes, communes déléguées) : la liste
+des communes d'un territoire à garder/exclure se récupère normalement avec
+les codes INSEE actuels (ex. liste des communes d'une métropole).
+
 ## Contrat de données — fichiers de sortie de l'étape 1
 
 Les deux fichiers sont encodés en UTF-8 avec BOM (`utf-8-sig`, pour un affichage correct des accents dans Excel), séparateur `,`, avec un en-tête en première ligne.

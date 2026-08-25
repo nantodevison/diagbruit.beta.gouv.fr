@@ -125,6 +125,17 @@ l'urbanisme.
 python -m etape1_identification.main --dept 067
 ```
 
+`--code-insee-garder`/`--code-insee-exclure` (mutuellement exclusifs)
+restreignent le référentiel des communes du département avant la recherche
+des documents — utile pour traiter le reste d'un département sans retraiter
+un territoire (ex. une métropole) déjà identifié séparément :
+
+```bash
+# le reste du 067, sans redoublonner sur les communes de l'Eurométropole de
+# Strasbourg déjà traitées séparément
+python -m etape1_identification.main --dept 067 --code-insee-exclure 67482 67447 67370
+```
+
 ### Étape 2 — Analyse des règlements
 
 Analyse les règlements écrits des documents identifiés à l'étape 1 (un
