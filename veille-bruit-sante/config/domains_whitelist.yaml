@@ -1,0 +1,56 @@
+# ============================================================================
+# diagBruit — Liste des domaines autorisés pour la recherche web
+# ============================================================================
+#
+# À QUOI SERT CE FICHIER
+# Cette liste alimente le paramètre "allowed_domains" de l'outil web_search
+# de l'API Anthropic. Elle restreint techniquement la recherche aux sites
+# listés ici — ce n'est pas une simple préférence donnée au modèle, c'est
+# une contrainte stricte appliquée par l'outil lui-même.
+#
+# COMMENT LA MODIFIER
+# - Un domaine par ligne, précédé d'un tiret.
+# - Pas de "https://", pas de "www." (juste le nom de domaine, ex: who.int)
+# - Les catégories (institutions_sante_publique, etc.) sont là uniquement
+#   pour la lisibilité humaine : le script les rassemble ensuite en une
+#   seule liste avant de les transmettre à l'API. Vous pouvez ajouter une
+#   nouvelle catégorie librement, ou ajouter/retirer une ligne dans une
+#   catégorie existante, sans casser le script.
+# - Le symbole # démarre un commentaire : utilisez-le pour noter pourquoi
+#   un domaine a été ajouté (utile pour se souvenir dans 6 mois).
+#
+# QUAND L'ENRICHIR
+# Concrètement, pendant les tests en Phase 2 : si une étude pertinente est
+# passée à côté du filtre (ex. une agence nationale non listée ici), c'est
+# le signal pour ajouter son domaine à la bonne catégorie.
+# ============================================================================
+
+institutions_sante_publique:
+  - who.int              # Organisation mondiale de la santé
+  - ecdc.europa.eu        # Centre européen de prévention et de contrôle des maladies
+
+agences_environnement:
+  - eea.europa.eu          # Agence européenne pour l'environnement (rapports bruit)
+  - anses.fr               # Agence nationale de sécurité sanitaire (France)
+  - ademe.fr               # Agence de la transition écologique (France)
+
+instituts_recherche:
+  - inserm.fr
+  - presse.inserm.fr       # communiqués de presse Inserm (source de l'étude Chazelas et al.)
+  - santepubliquefrance.fr
+
+revues_editeurs_scientifiques:
+  - thelancet.com          # ex: The Lancet Public Health
+  - bmj.com                # ex: étude Cantuaria et al. (démence)
+  - nature.com
+  - academic.oup.com       # Oxford University Press — héberge l'European Heart Journal
+  - sciencedirect.com      # Elsevier
+  - springer.com
+  - tandfonline.com
+  - mdpi.com               # héberge notamment IJERPH
+
+bases_bibliographiques:
+  - pubmed.ncbi.nlm.nih.gov
+  - ncbi.nlm.nih.gov        # inclut PubMed Central (PMC)
+  - europepmc.org
+  - doi.org                 # résolveur de DOI, utile en complément de l'API
