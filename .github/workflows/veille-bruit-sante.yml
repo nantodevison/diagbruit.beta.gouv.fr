@@ -1,0 +1,32 @@
+name: Veille bruit & santé
+
+on:
+  schedule:
+    - cron: "0 6 * * 1" # lundi 6h UTC (8h/7h heure de Paris selon l'été/hiver)
+  workflow_dispatch: {}
+  push:
+    branches: [main]
+    paths:
+      - "veille-bruit-sante/**"
+      - ".github/workflows/veille-bruit-sante.yml"
+
+jobs:
+  veille:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: veille-bruit-sante
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - run: pip install -r requirements.txt
+
+      - run: python main.py
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          NOTION_API_KEY: ${{ secrets.NOTION_API_KEY }}
+          NOTION_DATABASE_ID: ${{ secrets.NOTION_DATABASE_ID }}
