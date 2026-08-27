@@ -18,6 +18,8 @@ poc-urbanisme-plu/
 │   ├── filtrage_lexical.py              # Phase 3 — inclusion + tag d'exclusion
 │   ├── classification.py                # Phase 4 — appel API par passage retenu
 │   └── synthese.py                      # Phase 5 — écriture etape2_{dept}.csv + fichier d'erreurs
+├── download/                             # pièces extraites du repli archiveUrl (gitignoré, voir "Résolution des pièces")
+│   └── {id_gpu}/{nom_fichier}.pdf
 └── output/
     ├── etape1_{dept}.csv
     ├── etape1_{dept}_erreurs.csv
@@ -55,6 +57,16 @@ Pour un document dont la `nature_document` (colonne de l'étape 1) vaut `PSMV`, 
 Un même `id_gpu` (typiquement un PLUi intercommunal) apparaît sur autant de lignes du CSV d'entrée que de communes couvertes : il est dédoublonné avant tout appel réseau, dans le même esprit que le dédoublonnage des EPCI à l'étape 1 — sans cela, un même document serait interrogé et téléchargé des centaines de fois pour un seul département.
 
 Un `etape1_{dept}.csv` introuvable est une erreur irrécupérable pour l'étape 2 entière (rien d'exploitable en aval) ; l'échec de résolution d'un `id_gpu` individuel, lui, est isolé (voir "Gestion des erreurs").
+
+### Repli sur l'archive complète (`archiveUrl`)
+
+Ajouté le 26/08/2026, suite à un constat sur le 067 hors Eurométropole : pour environ 30% des documents, `writingMaterials` revient vide alors que le document a bien des pièces écrites — elles ne sont accessibles que dans l'archive ZIP complète du document, exposée par le champ `archiveUrl` de `document-details`.
+
+Dans ce cas, `resolution_pieces.py` télécharge l'archive une seule fois, puis n'extrait sur disque que les fichiers du dossier `Pieces_ecrites/` correspondant à un `type_piece_source` retenu (même logique de motifs que pour `writingMaterials`) — le reste de l'archive (géodonnées, rapport de présentation) n'est jamais persisté : hors périmètre, et une archive pèse couramment plusieurs centaines de Mo pour une seule commune.
+
+Les fichiers extraits sont écrits sous `poc-urbanisme-plu/download/{id_gpu}/{nom_fichier}` (dossier gitignoré, jamais commité). `lien_web_document` porte alors une URI locale `file://...` plutôt que l'URL GPU habituelle : `extraction_texte.py` lit directement ce fichier sur disque au lieu de le retélécharger, et les outils de relecture manuelle (`outil_validation.html`) ouvrent nativement un lien `file://` dans un nouvel onglet — aucune adaptation nécessaire côté outils en aval. Limite assumée pour ce POC : ce lien ne fonctionne que sur la machine qui a produit `download/`. Comme pour les pièces `writingMaterials`, aucun cache : une relance de l'étape 2 retélécharge et écrase.
+
+Quand ni `writingMaterials` ni l'archive de repli ne produisent de pièce exploitable (ex. une carte communale qui n'a qu'un règlement graphique, hors périmètre — voir "Gestion des erreurs"), le document part en erreur `aucun_fichier`, réintégré plus tard à l'étape 3 (voir `etape-3-validation-manuelle.md`, "Document non exploitable").
 
 ## Extraction de texte (Phase 2)
 
@@ -246,6 +258,8 @@ Une clé API Anthropic (`ANTHROPIC_API_KEY`) est nécessaire, à créer sur la C
 ## Gestion des erreurs
 
 Reprise à l'identique du pattern de l'étape 1 : `tenacity` enveloppe chaque appel externe (résolution de pièce, téléchargement/extraction, appel de classification) avec tentatives et délai progressif. Un échec persistant ne bloque pas le traitement — la ligne concernée part dans `etape2_{dept}_erreurs.csv` (phase concernée, type d'erreur, contenu brut disponible pour investigation) et le reste du département continue d'être traité. L'usage des structured outputs en phase 4 limite le risque de réponse JSON mal formée aux cas de refus de sécurité du modèle ou de troncature `max_tokens` — les deux sont détectés explicitement et traités comme un échec isolé, au même titre que les autres.
+
+`type_erreur` possibles en phase 1 (`1-resolution`) : `aucun_fichier` (ni `writingMaterials` ni l'archive de repli ne produisent de pièce exploitable — voir "Repli sur l'archive complète"), `appel_gpu` (échec de `document-details` après tentatives) et `archive_indisponible` (échec de téléchargement de l'archive de repli après tentatives). Les trois sont réintégrés à l'étape 3 sous `nature_zone = "document_non_exploitable"` (voir `etape-3-validation-manuelle.md`) — un échec technique transitoire (`appel_gpu`/`archive_indisponible`) peut donc devenir une ligne définitive si l'étape 3 est lancée sans avoir relancé l'étape 2 entre-temps ; comme il n'y a pas de cache, une simple relance de l'étape 2 suffit à lui redonner sa chance.
 
 ## Valeurs des champs du CSV de synthèse (`etape2_{dept}.csv`)
 

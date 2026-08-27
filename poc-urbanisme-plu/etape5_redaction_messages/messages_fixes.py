@@ -1,13 +1,22 @@
 """Étape 5 — aide partagée : messages fixes pour les occurrences qui ne
 portent pas de citation d'un document à reformuler (`rnu`,
-`document_non_significatif`, `trou_de_couverture`).
+`document_non_significatif`, `trou_de_couverture`, `document_non_exploitable`).
 
 Textes validés le 19/08/2026 (voir `docs/etape-5-redaction-messages-diagbruit.md`,
 "Messages fixes") — définitifs, ne passent jamais par la génération LLM ni
 par le circuit de validation humaine propre aux messages générés.
 
 `TITRES_FIXES` : même principe que pour le message — un titre
-fixe écrit une fois pour ces 3 cas, jamais régénéré ni soumis à correction.
+fixe écrit une fois pour chacun de ces cas, jamais régénéré ni soumis à
+correction.
+
+`document_non_exploitable` (ajouté le 26/08/2026, voir
+`etape3_validation_manuelle/synthese_finale.py`) : distinct de
+`document_non_significatif` — ici le document n'a jamais pu être lu (aucune
+pièce écrite exploitable résolue en étape 2), alors que
+`document_non_significatif` signifie qu'il a bien été lu mais ne mentionne
+rien sur le bruit. Le texte ne doit donc pas affirmer l'absence de
+prescription, seulement l'impossibilité de l'établir automatiquement.
 """
 
 MESSAGES_FIXES: dict[str, str] = {
@@ -39,10 +48,17 @@ MESSAGES_FIXES: dict[str, str] = {
         "présente un risque sonore fort ou extrême, rapprochez-vous de "
         "l'autorité compétente."
     ),
+    "document_non_exploitable": (
+        "Le document disponible sur le Géoportail de l'Urbanisme (GPU) n'a "
+        "pu être analysé automatiquement. Il peut s'agir de document "
+        "graphique uniquement par exemple. Rendez-vous sur le GPU pour le "
+        "consulter."
+    ),
 }
 
 TITRES_FIXES: dict[str, str] = {
     "trou_de_couverture": "Absence de document d'urbanisme référencé",
     "rnu": "Règlement National de l'Urbanisme applicable",
     "document_non_significatif": "Aucune prescription bruit spécifique",
+    "document_non_exploitable": "Document non analysable automatiquement",
 }

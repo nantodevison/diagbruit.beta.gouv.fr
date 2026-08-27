@@ -45,7 +45,7 @@ python -m etape4_geometries.synthese_geometries --dept 033
 Lit `etape3_{dept}.csv` (module `csv` de la bibliothèque standard, `encoding="utf-8-sig"`, cohérent avec le reste du pipeline). Pour chaque ligne, deux chemins possibles :
 
 - **`portee_geometrique == "zone_specifique"`** → la ligne part telle quelle (tous ses attributs, géométrie laissée vide) dans la couche `occurrences_a_georeferencer`, sans aucun appel réseau.
-- **Tous les autres cas** (`portee_geometrique == "administrative"`, ou `nature_zone` en `document_non_significatif` / `rnu` / `trou_de_couverture`) → une géométrie est récupérée automatiquement, via `sources_gpu.py` :
+- **Tous les autres cas** (`portee_geometrique == "administrative"`, ou `nature_zone` en `document_non_significatif` / `document_non_exploitable` / `rnu` / `trou_de_couverture`) → une géométrie est récupérée automatiquement, via `sources_gpu.py` :
   - si `partition_gpu` est renseigné → appel à la couche `document` de l'API Carto GPU, filtrée sur cette valeur (déjà précalculée à l'étape 3, voir `etape-3-conception-technique.md`, "Calcul de `partition_gpu`"), pour récupérer le périmètre exact du document ;
   - sinon (RNU, trou de couverture — `id_gpu`/`partition_gpu` vides) → appel à la couche `municipality`, déjà utilisée à l'étape 1 pour détecter le RNU, avec `code_insee_commune` en paramètre.
 
@@ -208,7 +208,7 @@ Une occurrence membre (`fusionne_avec_id_occurrence` renseigné) n'a pas besoin 
 **Vérification automatique (Phase 3, `synthese_geometries.py`)** : toute fusion déclarée est revérifiée avant d'être acceptée, jamais prise sur la seule foi de l'opérateur pour les critères vérifiables automatiquement. Une fusion est valide si, et seulement si :
 - le meneur référencé existe (recherché dans les deux couches par `id_gpu` + `id_occurrence`) ;
 - le meneur n'est lui-même membre d'aucun autre groupe — **pas de chaînage**, une seule profondeur de référence autorisée ;
-- membre et meneur ont tous deux `nature_zone == "occurrence_locale"` — la fusion est réservée aux occurrences porteuses d'une vraie règle, pas aux lignes de synthèse (`document_non_significatif` / `rnu` / `trou_de_couverture`), qui n'ont pas de contenu de règle distinct à combiner et partagent souvent un `lien_web_document` identique sans rapport géographique (ex. toutes les communes RNU du département pointent vers la même fiche Légifrance) — cette restriction est d'autant plus nécessaire que `lien_web_document` lui-même n'est pas un critère vérifié (voir ci-dessous) ;
+- membre et meneur ont tous deux `nature_zone == "occurrence_locale"` — la fusion est réservée aux occurrences porteuses d'une vraie règle, pas aux lignes de synthèse (`document_non_significatif` / `document_non_exploitable` / `rnu` / `trou_de_couverture`), qui n'ont pas de contenu de règle distinct à combiner ;
 - `nature_sonore_zone` est identique entre membre et meneur, et non vide — valeur lue dans le gpkg, donc l'éventuelle correction faite par l'opérateur (voir "Contrat de données") est bien celle prise en compte ;
 - le meneur a lui-même une géométrie (non vide) — un groupe ne peut pas être privé de localisation.
 
@@ -225,13 +225,13 @@ Une fusion invalide part dans `etape4_{dept}_erreurs.csv` (source `"fusion"`). S
 | Colonne | Détail |
 |---|---|
 | `id_geometrie` | entier auto-incrémenté, généré par `preparer_geometries.py` — unique sur l'ensemble du fichier `etape4_{dept}_a_completer.gpkg` (un seul compteur partagé entre les deux couches, pas un compteur par couche), pour qu'un opérateur QGIS puisse référencer une géométrie précise sans manipuler `id_gpu`/`id_occurrence`, y compris après la fusion des deux couches en une seule à la Phase 3. |
-| `id_gpu`, `id_occurrence` | reprises de `etape3_{dept}.csv` telles quelles, vides dans les mêmes conditions (RNU, trou de couverture, lignes de synthèse). |
+| `id_gpu`, `id_occurrence` | reprises de `etape3_{dept}.csv` telles quelles, vides dans les mêmes conditions (RNU, trou de couverture, lignes de synthèse). `id_gpu` est en revanche renseigné pour `document_non_exploitable`, comme pour `document_non_significatif`. |
 | `code_insee_commune` | reprise de `etape3_{dept}.csv` — renseignée uniquement pour RNU et trou de couverture. |
-| `nature_zone` | reprise de `etape3_{dept}.csv` — `occurrence_locale` / `rnu` / `document_non_significatif` / `trou_de_couverture`. |
+| `nature_zone` | reprise de `etape3_{dept}.csv` — `occurrence_locale` / `rnu` / `document_non_significatif` / `document_non_exploitable` / `trou_de_couverture`. |
 | `portee_geometrique` | reprise de `etape3_{dept}.csv`. |
 | `nom_document`, `communes` | reprises de `etape3_{dept}.csv`, pour qu'un opérateur SIG identifie une géométrie sans rouvrir le CSV. |
 | `type_piece_source`, `reference_type`, `reference_precise` | reprises de `etape3_{dept}.csv`, vides sauf `occurrence_locale`. |
-| `lien_web_document` | reprise de `etape3_{dept}.csv` pour `occurrence_locale` et `document_non_significatif` ; vide pour `trou_de_couverture` ; pointe vers la fiche Légifrance de l'article R.111-2 pour `rnu` (`https://www.legifrance.gouv.fr/codes/article_lc/LEGIARTI000031721316`), plutôt que vers un document qui n'existe pas. |
+| `lien_web_document` | reprise de `etape3_{dept}.csv` pour `occurrence_locale` ; vide pour `document_non_significatif`, `document_non_exploitable` et `trou_de_couverture`. **Exception : `rnu`**, qui pointe vers la fiche Légifrance de la section du code de l'urbanisme portant le RNU (`https://www.legifrance.gouv.fr/codes/id/LEGISCTA000031721322`, constante `LIEN_LEGIFRANCE_RNU` de `synthese_finale.py`, ajoutée le 26/08/2026), plutôt que vers un document GPU qui n'existe pas. |
 | `zone_reglementaire_mentionnee` | reprise de `etape3_{dept}.csv`, vide sauf `occurrence_locale`. |
 | `nature_sonore_zone` | reprise de `etape3_{dept}.csv` — `lutte_bruit_existant` / `preservation_zone_calme` / `autre` (voir `etape-2-analyse-documents-urbanisme-diagbruit.md`). Critère central du mécanisme de fusion, voir "Mécanisme de fusion" ci-dessus. **Corrigible par l'opérateur en Phase 2** (contrairement aux autres colonnes reprises telles quelles) si la classification automatique de l'étape 2 s'avère erronée à l'usage — par exemple deux occurrences qu'un opérateur sait devoir fusionner mais dont l'une porte une valeur visiblement fausse. Une fois corrigée dans le gpkg, c'est cette valeur qui fait référence pour la suite du pipeline (vérification de fusion en Phase 3, puis étape 5) : `synthese_geometries.py` ne relit jamais `etape3_{dept}.csv` pour ce champ, seulement le gpkg — la correction n'est donc jamais écrasée par une relecture de la source d'origine. Aucune trace séparée de la correction n'est conservée (pas de colonne "valeur d'origine") ; discipline opérationnelle jugée suffisante pour ce POC. |
 | `justification` | reprise de `etape3_{dept}.csv`. |

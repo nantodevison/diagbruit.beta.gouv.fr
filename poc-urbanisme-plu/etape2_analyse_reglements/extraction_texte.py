@@ -20,6 +20,9 @@ from __future__ import annotations
 
 import io
 from dataclasses import dataclass
+from pathlib import Path
+from urllib.parse import urlparse
+from urllib.request import url2pathname
 
 import pdf2image
 import pdfplumber
@@ -58,6 +61,17 @@ class _ErreurExtraction(Exception):
     """Échec de téléchargement, de lecture PDF ou d'OCR pour une pièce."""
 
 
+def _lire_fichier_local(url: str) -> bytes:
+    # Pièces de repli résolues via archiveUrl (voir `resolution_pieces.py`) :
+    # déjà extraites sur disque, `lien_web_document` porte une URI `file://`
+    # plutôt qu'une URL GPU à retélécharger.
+    chemin = Path(url2pathname(urlparse(url).path))
+    try:
+        return chemin.read_bytes()
+    except OSError as exc:
+        raise _ErreurExtraction(f"lecture du fichier local impossible ({chemin}) : {exc}") from exc
+
+
 @retry(
     retry=retry_if_exception_type(requests.exceptions.RequestException),
     stop=stop_after_attempt(4),
@@ -65,6 +79,8 @@ class _ErreurExtraction(Exception):
     reraise=True,
 )
 def _telecharger(url: str) -> bytes:
+    if url.startswith("file://"):
+        return _lire_fichier_local(url)
     response = requests.get(url, timeout=60)
     response.raise_for_status()
     return response.content

@@ -152,8 +152,10 @@ python -m etape2_analyse_reglements.main --dept 067 --limit 5
 ### Étape 3 — Validation manuelle des occurrences
 
 Un opérateur relit les occurrences produites à l'étape 2 dans un outil HTML
-autonome, et l'étape réintègre aussi les communes RNU et les trous de
-couverture. Nécessite un `etape2_{dept}.csv` existant.
+autonome, et l'étape réintègre aussi les communes RNU, les trous de
+couverture et les documents non exploitables (résolution en pièces échouée
+à l'étape 2). Nécessite un `etape2_{dept}.csv` et un
+`etape2_{dept}_erreurs.csv` existants.
 
 ```bash
 python -m etape3_validation_manuelle.preparer_revue --dept 067
@@ -180,9 +182,9 @@ python -m etape4_geometries.synthese_geometries --dept 067
 
 Rédige, par appel LLM, le message et le titre associés à chaque occurrence
 validée des documents significatifs (messages fixes pour les documents non
-significatifs, les communes RNU et les trous de couverture), avec relecture
-humaine et vérification orthographique. Nécessite un `etape4_{dept}.gpkg`
-existant et la clé API Anthropic.
+significatifs, les documents non exploitables, les communes RNU et les
+trous de couverture), avec relecture humaine et vérification orthographique.
+Nécessite un `etape4_{dept}.gpkg` existant et la clé API Anthropic.
 
 ```bash
 python -m etape5_redaction_messages.controle_similarite --dept 067

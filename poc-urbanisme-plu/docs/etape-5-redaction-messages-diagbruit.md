@@ -2,14 +2,14 @@
 
 *Document de cadrage détaillé de l'étape 5 du plan d'automatisation des règles PLU de diagBruit (voir `plan-automatisation-regles-plu-diagbruit.md`). Suite de `etape-4-construction-geometries-diagbruit.md` et `etape-4-conception-technique.md`.*
 
-**Entrée** : `etape4_{dept}.gpkg` (couche unique `geometries`, une ligne par occurrence — voir `etape-4-conception-technique.md`, "Contrat de données"), complété par une jointure vers `etape3_{dept}.csv` sur le couple `id_gpu` + `id_occurrence`, pour retrouver le contenu textuel qui n'est pas dupliqué dans le gpkg (`extrait_significatif`, `contexte_documentaire`, `nature_occurrence`). Cette jointure ne concerne que les occurrences `nature_zone == "occurrence_locale"` : les trois autres cas (`rnu`, `document_non_significatif`, `trou_de_couverture`) n'ont pas d'`id_occurrence` et utilisent des messages fixes, voir plus bas.
+**Entrée** : `etape4_{dept}.gpkg` (couche unique `geometries`, une ligne par occurrence — voir `etape-4-conception-technique.md`, "Contrat de données"), complété par une jointure vers `etape3_{dept}.csv` sur le couple `id_gpu` + `id_occurrence`, pour retrouver le contenu textuel qui n'est pas dupliqué dans le gpkg (`extrait_significatif`, `contexte_documentaire`, `nature_occurrence`). Cette jointure ne concerne que les occurrences `nature_zone == "occurrence_locale"` : les quatre autres cas (`rnu`, `document_non_significatif`, `document_non_exploitable`, `trou_de_couverture`) n'ont pas d'`id_occurrence` et utilisent des messages fixes, voir plus bas.
 
 ## Principe
 
 Deux objectifs indépendants, dans l'ordre où ils s'exécutent :
 
 1. **Un garde-fou de cohérence géométrique**, en tout début d'étape : un contrôle a posteriori des décisions de fusion prises à l'étape 4, pour repérer les occurrences qui *auraient dû* être fusionnées mais ne le sont pas — jamais bloquant, à charge de l'opérateur d'en tenir compte ou de l'ignorer.
-2. **La rédaction d'un message par géométrie finale**, à l'intention de l'utilisateur de diagBruit, respectant le ton de voix défini par le design de diagBruit (voir "Ton de voix" plus bas) — générée par LLM pour les occurrences réelles, fixe pour les trois cas qui n'en portent pas. Un titre court est associé à chaque message, destiné à `title` (Strapi) et `Description` (Notion) — même distinction généré/fixe que pour le message lui-même.
+2. **La rédaction d'un message par géométrie finale**, à l'intention de l'utilisateur de diagBruit, respectant le ton de voix défini par le design de diagBruit (voir "Ton de voix" plus bas) — générée par LLM pour les occurrences réelles, fixe pour les quatre cas qui n'en portent pas. Un titre court est associé à chaque message, destiné à `title` (Strapi) et `Description` (Notion) — même distinction généré/fixe que pour le message lui-même.
 
 ## Garde-fou de cohérence géométrique
 
@@ -25,9 +25,9 @@ Ce contrôle ne porte que sur les paires déjà éligibles à une fusion selon l
 
 Le contenu et la forme du message dépendent de `nature_zone`, repris de l'étape 4.
 
-### `rnu`, `document_non_significatif`, `trou_de_couverture` — messages fixes
+### `rnu`, `document_non_significatif`, `document_non_exploitable`, `trou_de_couverture` — messages fixes
 
-Ces trois cas ne portent pas de citation d'un document à reformuler : le message est un texte fixe, indépendant de toute génération :
+Ces quatre cas ne portent pas de citation d'un document à reformuler : le message est un texte fixe, indépendant de toute génération :
 
 **`trou_de_couverture`** :
 > Aucun document d'urbanisme n'est référencé dans le Géoportail de l'urbanisme pour cette commune. diagBruit ne peut pas déterminer si cette absence provient du Géoportail ou de la commune elle-même. Visitez le site de celle-ci pour plus de détails.
@@ -38,9 +38,14 @@ Ces trois cas ne portent pas de citation d'un document à reformuler : le messag
 **`document_non_significatif`** :
 > Les documents d'urbanisme présents sur le territoire ne mentionnent pas de recommandations ou de prescriptions particulières relatives au bruit. Seul le plan d'exposition au bruit limite la constructibilité, et seul le classement sonore protège les habitants. Toutefois, l'autorité compétente en matière de permis de construire peut toujours s'appuyer sur l'article R.111-2 du code de l'urbanisme, qui stipule qu'un « projet peut être refusé ou n'être accepté que sous réserve (…) s'il est de nature à porter atteinte à la salubrité ou à la sécurité publique (…) ». Si votre projet présente un risque sonore fort ou extrême, rapprochez-vous de l'autorité compétente.
 
-Ces trois textes sont considérés définitifs : ils ne passent pas par le circuit de validation humaine décrit plus bas, propre aux messages générés.
+**`document_non_exploitable`** (ajouté le 26/08/2026) :
+> Le document disponible sur le Géoportail de l'Urbanisme (GPU) n'a pu être analysé automatiquement. Il peut s'agir de document graphique uniquement par exemple. Rendez-vous sur le GPU pour le consulter.
 
-**Titres fixes** : ces trois cas ont de même un titre court fixe (`TITRES_FIXES` dans `messages_fixes.py`), jamais soumis au circuit de correction — même principe que leur message.
+Distinct de `document_non_significatif` : le message ne doit pas affirmer une absence de prescription (on ne le sait pas, faute d'avoir pu lire le document), seulement l'impossibilité de l'établir automatiquement — voir `etape-3-validation-manuelle.md`, "Document non exploitable : réintégration dans le pipeline", pour l'origine de ce cas.
+
+Ces quatre textes sont considérés définitifs : ils ne passent pas par le circuit de validation humaine décrit plus bas, propre aux messages générés.
+
+**Titres fixes** : ces quatre cas ont de même un titre court fixe (`TITRES_FIXES` dans `messages_fixes.py`), jamais soumis au circuit de correction — même principe que leur message.
 
 ### `occurrence_locale` — message généré
 
@@ -136,7 +141,7 @@ Le projet dispose déjà d'une dépendance `anthropic`, utilisée à l'étape 2 
 Trois textes distincts sont demandés au LLM, par géométrie finale :
 - un **message par occurrence** — un texte par occurrence individuelle, jamais montré à l'utilisateur final de diagBruit, purement interne ;
 - un **message de synthèse** — pour un groupe fusionné, une reformulation unique qui combine les occurrences du groupe en un seul message cohérent (pas une simple concaténation des messages individuels — le pilier "vous dites une fois, mais bien" l'exclut). Pour une occurrence non fusionnée (groupe d'une seule occurrence), le message individuel tient lieu de message final — pas de génération de synthèse redondante dans ce cas ;
-- un **titre court** — quelques mots, généré à partir du message de synthèse une fois celui-ci obtenu, destiné à `title` (Strapi) et `Description` (Notion). Pour les trois cas à message fixe, un titre fixe est utilisé à la place (voir "Messages fixes" ci-dessus), sur le même principe que leur message.
+- un **titre court** — quelques mots, généré à partir du message de synthèse une fois celui-ci obtenu, destiné à `title` (Strapi) et `Description` (Notion). Pour les quatre cas à message fixe, un titre fixe est utilisé à la place (voir "Messages fixes" ci-dessus), sur le même principe que leur message.
 
 C'est le message de synthèse (ou le message individuel pour une occurrence isolée) qui constitue le livrable final de cette étape, après validation humaine.
 

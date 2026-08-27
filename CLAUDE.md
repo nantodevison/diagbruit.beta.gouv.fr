@@ -64,3 +64,4 @@ Each component has its own `CLAUDE.md` with commands and architecture details:
 - `fastapi/CLAUDE.md`
 - `dagster/CLAUDE.md`
 - `dagster/dbt/CLAUDE.md`
+- `poc-urbanisme-plu/CLAUDE.md` (branche `poc-urbanisme-plu` uniquement)

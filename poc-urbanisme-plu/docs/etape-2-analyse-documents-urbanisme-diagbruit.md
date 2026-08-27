@@ -8,6 +8,8 @@ Les lignes `RNU confirmé` et `trou de couverture` ne passent pas par les phases
 
 Cela ne signifie pas que ces lignes restent en dehors du pipeline jusqu'à l'étape 6 : c'est l'étape 3 (`synthese_finale.py`) qui les réintègre directement dans `etape3_{dept}.csv`, sous forme de lignes de synthèse construites depuis `etape1_{dept}.csv` — au même titre que les documents non significatifs — pour qu'elles bénéficient d'une géométrie dès l'étape 4 (voir `etape-3-validation-manuelle.md`, section "RNU et trou de couverture : réintégration dans le pipeline"). Le RNU en particulier porte une règle de fond bien réelle, ce n'est pas une absence de donnée : l'article R.111-2 du code de l'urbanisme permet à l'autorité compétente de refuser un permis de construire, ou de le conditionner à des prescriptions spéciales, si le projet porte atteinte à la salubrité ou à la sécurité publique — la jurisprudence y range explicitement les nuisances sonores. Une commune au RNU n'est donc pas "sans règle" : elle est sous un régime déjà écrit une fois pour toutes au niveau national, plutôt que dans un document local à aller lire.
 
+Un quatrième cas, distinct de ces deux-là, apparaît en Phase 1 (ajouté le 26/08/2026) : un `id_gpu` au statut `document trouvé` mais dont la résolution en pièces exploitables échoue totalement (voir "Phase 1" ci-dessous) — le document existe et est identifié, mais rien n'a pu en être lu. Il est lui aussi réintégré à l'étape 3, sous `nature_zone = "document_non_exploitable"`, distinct de `document_non_significatif` (document lu mais ne mentionnant rien sur le bruit) — voir `etape-3-validation-manuelle.md`, section "Document non exploitable : réintégration dans le pipeline".
+
 ## Sources écartées de l'analyse
 
 La couche structurée "prescriptions" du GPU (`prescription-surf/lin/pct`) a été envisagée en complément de la lecture des règlements (amélioration A du plan global). Les tables de codes du Géoportail de l'urbanisme (nomenclatures `PrescriptionSUrbaType` et `PrescriptionLUrbaType`, standards `cnig_PLU_2025`, `cnig_PLUi_2025`, `cnig_PSMV_2025`) ne comportent aucune catégorie liée au bruit, au son ou à l'acoustique, pour aucune des familles de document (PLU, PLUi, PSMV). Cette source est donc **écartée du pipeline d'analyse** — chaque document d'urbanisme, quel que soit son type (règlement écrit, OAP, PADD, PSMV), s'analyse uniquement à partir de son texte.
@@ -17,6 +19,8 @@ La couche structurée "prescriptions" du GPU (`prescription-surf/lin/pct`) a ét
 À partir de l'`id_gpu`, l'API `document-details` du Géoportail de l'urbanisme (GPU) est interrogée pour obtenir la liste des pièces qui composent le document et l'URL de chaque pièce. Un même document (par exemple un PLUi intercommunal) n'est résolu qu'une seule fois, quel que soit le nombre de communes qu'il couvre dans `etape1_{dept}.csv`.
 
 Seules les pièces à vocation réglementaire sont retenues pour l'analyse — règlement écrit, orientations d'aménagement et de programmation (OAP), projet d'aménagement et de développement durables (PADD), et le règlement d'un PSMV le cas échéant. Les autres pièces d'un document (rapport de présentation, plans graphiques, annexes de servitudes, pièces de procédure) sont hors périmètre de cette analyse.
+
+Constaté sur le 067 (ajouté le 26/08/2026) : pour environ 30% des documents, `document-details` renvoie un `writingMaterials` vide alors que le document a bien un règlement/PADD/OAP — ces fichiers ne sont accessibles que dans l'archive ZIP complète du document (`archiveUrl`), sans indexation fichier par fichier côté GPU. Dans ce cas, l'archive est téléchargée une fois et seules les pièces exploitables qu'elle contient sont extraites sur disque (voir `etape-2-conception-technique.md`, "Repli sur l'archive complète"). Quand même ce repli ne produit aucune pièce exploitable (ex. une carte communale qui n'a qu'un règlement graphique, hors périmètre), le document part en erreur documentée plutôt que de disparaître silencieusement — voir "Gestion des erreurs" plus bas.
 
 ## Phase 2 — Extraction du texte
 
@@ -79,6 +83,8 @@ Quand une pièce n'a produit aucune occurrence, une ligne est tout de même écr
 ## Gestion des erreurs
 
 Comme à l'étape 1, aucun échec isolé (résolution d'une pièce, extraction d'un PDF, appel de classification) n'interrompt le traitement du reste du département. Chaque erreur est empilée dans `etape2_{dept}_erreurs.csv`, avec la phase concernée et le type d'erreur, après quelques tentatives avec délai progressif.
+
+Les erreurs de phase 1 (`type_erreur` = `aucun_fichier`, `appel_gpu` ou `archive_indisponible`) ne sont pas de simples erreurs à corriger et oublier : l'étape 3 les relit pour réintégrer chaque `id_gpu` concerné dans `etape3_{dept}.csv` sous `nature_zone = "document_non_exploitable"` (voir plus haut et `etape-3-validation-manuelle.md`). `etape2_{dept}_erreurs.csv` est donc, depuis le 26/08/2026, une entrée directe de l'étape 3, pas seulement un fichier d'audit.
 
 ## Prochaine étape
 

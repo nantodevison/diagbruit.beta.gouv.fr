@@ -17,7 +17,7 @@ poc-urbanisme-plu/
 │   ├── __init__.py                        # vide, comme les modules précédents
 │   ├── controle_similarite.py             # Phase 1 — auto : garde-fou de cohérence géométrique
 │   ├── ton_de_voix.py                     # aide partagée : texte des 5 piliers, à joindre aux prompts LLM
-│   ├── messages_fixes.py                  # aide partagée : les 3 textes fixes (rnu / document_non_significatif / trou_de_couverture)
+│   ├── messages_fixes.py                  # aide partagée : les 4 textes fixes (rnu / document_non_significatif / document_non_exploitable / trou_de_couverture)
 │   ├── preparer_messages.py               # Phase 2 — auto (LLM) : génère message_occurrence, message_synthese_llm et titre_propose_llm
 │   ├── outil_validation.html              # Phase 3 — manuel : relecture/correction, sur le modèle de l'étape 3
 │   ├── synthese_messages.py               # Phase 4 — auto : reprend l'export de la Phase 3, écrit etape5_{dept}.gpkg
@@ -104,7 +104,7 @@ Page HTML autonome, sur le modèle de l'étape 3 (`etape3_validation_manuelle/ou
 
 Deux modes indépendants, chacun avec son propre fichier d'entrée et son propre export :
 - **Message par occurrence** — charge `etape5_{dept}_occurrences.csv`. Citation source et contexte en lecture seule, citation surlignée au sein du contexte (identique à l'étape 3, `apercuAvecCitationSurlignee`) ; `message_occurrence` natif affiché en lecture seule ; case à cocher + champ de reformulation + commentaire, voir "Correction humaine" ci-dessus.
-- **Message fusion** — charge `etape5_{dept}_syntheses.csv`, et éventuellement aussi `etape5_{dept}_occurrences.csv` (facultatif mais recommandé) pour rappeler, en lecture seule, les messages d'occurrence du groupe au-dessus du message de synthèse — permet de suivre le raisonnement du LLM avant de juger la synthèse. Affiche aussi le titre proposé (`titre_propose_llm`) en lecture seule avec son propre bloc de correction (case à cocher + reformulation, sans commentaire dédié — voir "Correction humaine" ci-dessus), indépendant de celui du message. **Exclut automatiquement les lignes sans `id_occurrence`** (les trois cas à message fixe), qui ne passent jamais par ce circuit de correction (voir Phase 2 ci-dessus et `etape-5-redaction-messages-diagbruit.md`, "Messages fixes").
+- **Message fusion** — charge `etape5_{dept}_syntheses.csv`, et éventuellement aussi `etape5_{dept}_occurrences.csv` (facultatif mais recommandé) pour rappeler, en lecture seule, les messages d'occurrence du groupe au-dessus du message de synthèse — permet de suivre le raisonnement du LLM avant de juger la synthèse. Affiche aussi le titre proposé (`titre_propose_llm`) en lecture seule avec son propre bloc de correction (case à cocher + reformulation, sans commentaire dédié — voir "Correction humaine" ci-dessus), indépendant de celui du message. **Exclut automatiquement les lignes sans `id_occurrence`** (les quatre cas à message fixe), qui ne passent jamais par ce circuit de correction (voir Phase 2 ci-dessus et `etape-5-redaction-messages-diagbruit.md`, "Messages fixes").
 
 Chaque mode exporte séparément : `etape5_export_occurrences_{horodatage}.csv` et `etape5_export_syntheses_{horodatage}.csv` — mêmes colonnes que les fichiers chargés, sans géométrie (jamais chargée par cet outil, qui ne travaille que sur les CSV miroirs).
 
@@ -152,10 +152,10 @@ Comme `synthese_messages.py` réécrit `etape5_{dept}.gpkg` en entier sans conna
 
 | Colonne | Détail |
 |---|---|
-| `id_geometrie`, `id_gpu`, `id_occurrence` | identifiants — `id_occurrence` vide pour les trois cas à message fixe (voir Phase 2). |
-| `message_synthese_llm` | rédigé par le LLM en Phase 2 (ou message fixe pour `rnu`/`document_non_significatif`/`trou_de_couverture`). Immuable. |
+| `id_geometrie`, `id_gpu`, `id_occurrence` | identifiants — `id_occurrence` vide pour les quatre cas à message fixe (voir Phase 2). |
+| `message_synthese_llm` | rédigé par le LLM en Phase 2 (ou message fixe pour `rnu`/`document_non_significatif`/`document_non_exploitable`/`trou_de_couverture`). Immuable. |
 | `synthese_corrigee`, `message_synthese_corrige` | même principe que pour les occurrences ci-dessus. |
-| `titre_propose_llm` | voir "Phase 2" ci-dessus — rédigé par le LLM à partir de `message_synthese_llm` (ou titre fixe pour `rnu`/`document_non_significatif`/`trou_de_couverture`). Immuable. |
+| `titre_propose_llm` | voir "Phase 2" ci-dessus — rédigé par le LLM à partir de `message_synthese_llm` (ou titre fixe pour `rnu`/`document_non_significatif`/`document_non_exploitable`/`trou_de_couverture`). Immuable. |
 | `titre_corrigee`, `titre_propose_corrige` | même principe que `synthese_corrigee`/`message_synthese_corrige`, appliqué au titre — correction indépendante de celle du message. |
 | `validation_message_commentaire` | libre, facultatif, partagé entre la correction du message et celle du titre (un commentaire sur la ligne, pas sur un champ en particulier). |
 

@@ -11,6 +11,12 @@ désormais la source directe des lignes de synthèse RNU et trou de couverture
 `etape-3-validation-manuelle.md`) — ces communes n'apparaissent jamais dans
 `etape2_{dept}.csv`, il n'y a donc rien à y lire pour elles.
 
+Révisé le 26/08/2026 : `etape2_{dept}_erreurs.csv` devient lui aussi une
+entrée obligatoire, source directe des lignes `document_non_exploitable`
+(voir `_lignes_document_non_exploitable`) — les documents dont la
+résolution en pièces a totalement échoué en étape 2 n'apparaissent jamais
+dans `etape2_{dept}.csv` non plus, pour la même raison.
+
 Usage :
     python -m etape3_validation_manuelle.synthese_finale --dept 033
 
@@ -19,6 +25,8 @@ Entrée (dans `output/`, voir `--output-dir`) :
                                              ET source directe des lignes RNU
                                              / trou de couverture
     etape2_{dept}.csv                     — référence complète (tous les id_gpu traités)
+    etape2_{dept}_erreurs.csv             — source directe des lignes
+                                             document_non_exploitable
     etape3_export_outil_{horodatage}.csv  — export(s) de l'outil ; le plus
                                              récent (horodatage le plus
                                              grand) est détecté automatiquement
@@ -80,6 +88,18 @@ NATURE_OCCURRENCE_LOCALE = "occurrence_locale"
 NATURE_RNU = "rnu"
 NATURE_DOCUMENT_NON_SIGNIFICATIF = "document_non_significatif"
 NATURE_TROU_DE_COUVERTURE = "trou_de_couverture"
+# Ajouté le 26/08/2026 : distinct de document_non_significatif — ici le
+# document n'a jamais pu être lu (échec de résolution en pièces exploitables,
+# phase 1 de l'étape 2 : writingMaterials vide, archive de repli
+# indisponible, ou aucun fichier ne correspondant à une pièce attendue),
+# alors que document_non_significatif signifie qu'il a bien été lu mais ne
+# mentionne rien sur le bruit. Voir "Document non exploitable" dans
+# etape-3-validation-manuelle.md.
+NATURE_DOCUMENT_NON_EXPLOITABLE = "document_non_exploitable"
+
+# Phase de etape2_{dept}_erreurs.csv identifiant un échec de résolution en
+# pièces exploitables (voir etape2_analyse_reglements/resolution_pieces.py).
+PHASE_ETAPE2_RESOLUTION = "1-resolution"
 
 # Justification pré-remplie pour chaque ligne RNU (le régime national ne
 # vient pas d'un document à citer, contrairement aux occurrences locales) —
@@ -92,6 +112,14 @@ JUSTIFICATION_RNU = (
     "porte atteinte à la salubrité ou à la sécurité publique — la "
     "jurisprudence y range les nuisances sonores."
 )
+
+# Fiche Légifrance de la section du code de l'urbanisme portant le RNU
+# (articles R.111-1 et suivants) — pas de document GPU à citer pour une
+# ligne RNU, ce lien en tient lieu (ajouté le 26/08/2026, corrige un écart
+# entre la doc et le code : lien_web_document n'était jamais renseigné pour
+# ces lignes malgré la documentation, voir etape-3-conception-technique.md,
+# "Contrat de données").
+LIEN_LEGIFRANCE_RNU = "https://www.legifrance.gouv.fr/codes/id/LEGISCTA000031721322"
 
 COLONNES_FINALES = [
     "id_gpu",
@@ -198,6 +226,7 @@ def _ligne_rnu(ligne_etape1: dict[str, str]) -> dict[str, str]:
         statut_verification_finale=STATUT_VALIDE_AUTOMATIQUE,
         communes=ligne_etape1["nom_commune"],
         justification=JUSTIFICATION_RNU,
+        lien_web_document=LIEN_LEGIFRANCE_RNU,
     )
     return nouvelle
 
@@ -211,6 +240,43 @@ def _ligne_trou_de_couverture(ligne_etape1: dict[str, str]) -> dict[str, str]:
         communes=ligne_etape1["nom_commune"],
     )
     return nouvelle
+
+
+def _lignes_document_non_exploitable(
+    lignes_etape2_erreurs: list[dict[str, str]],
+    partitions_gpu: dict[str, str],
+    contexte_documents: dict[str, dict[str, str]],
+) -> list[dict[str, str]]:
+    """Documents dont la résolution en pièces exploitables a totalement
+    échoué en phase 1 de l'étape 2 (voir etape2_analyse_reglements/
+    resolution_pieces.py). N'apparaissent jamais dans etape2_{dept}.csv —
+    rien n'a pu en être extrait — donc jamais parmi `id_gpu_non_significatifs`
+    ci-dessous non plus : sans cette réintégration depuis
+    etape2_{dept}_erreurs.csv, ils disparaîtraient silencieusement de la
+    synthèse finale (voir "Document non exploitable" dans
+    etape-3-validation-manuelle.md).
+    """
+    ids_gpu = sorted(
+        {
+            ligne["id_gpu"]
+            for ligne in lignes_etape2_erreurs
+            if ligne.get("phase") == PHASE_ETAPE2_RESOLUTION and ligne.get("id_gpu")
+        }
+    )
+    lignes: list[dict[str, str]] = []
+    for id_gpu in ids_gpu:
+        contexte = contexte_documents.get(id_gpu, {})
+        nouvelle = {colonne: "" for colonne in COLONNES_FINALES}
+        nouvelle.update(
+            id_gpu=id_gpu,
+            partition_gpu=partitions_gpu.get(id_gpu, ""),
+            nature_zone=NATURE_DOCUMENT_NON_EXPLOITABLE,
+            statut_verification_finale=STATUT_AUCUNE_OCCURRENCE,
+            nom_document=contexte.get("nom_document", "(document non identifié)"),
+            communes=contexte.get("communes", ""),
+        )
+        lignes.append(nouvelle)
+    return lignes
 
 
 def _lignes_rnu_et_trous(lignes_etape1: list[dict[str, str]]) -> tuple[list[dict[str, str]], list[dict[str, str]]]:
@@ -246,8 +312,9 @@ def synthetiser(code_departement: str, dossier_sortie: str | Path = "output") ->
     dossier = Path(dossier_sortie)
     chemin_etape1 = dossier / f"etape1_{code_departement}.csv"
     chemin_etape2 = dossier / f"etape2_{code_departement}.csv"
+    chemin_etape2_erreurs = dossier / f"etape2_{code_departement}_erreurs.csv"
 
-    manquants = [str(c) for c in (chemin_etape1, chemin_etape2) if not c.exists()]
+    manquants = [str(c) for c in (chemin_etape1, chemin_etape2, chemin_etape2_erreurs) if not c.exists()]
     if manquants:
         raise FichiersEntreeIntrouvables(", ".join(manquants))
 
@@ -257,6 +324,7 @@ def synthetiser(code_departement: str, dossier_sortie: str | Path = "output") ->
     contexte_documents = charger_contexte_documents(chemin_etape1)
     lignes_etape1 = _lire_csv(chemin_etape1)
     lignes_etape2 = _lire_csv(chemin_etape2)
+    lignes_etape2_erreurs = _lire_csv(chemin_etape2_erreurs)
     lignes_export = _lire_csv(chemin_export)
     partitions_gpu = _partitions_gpu_par_id_gpu(lignes_etape1)
 
@@ -329,6 +397,15 @@ def synthetiser(code_departement: str, dossier_sortie: str | Path = "output") ->
     lignes_sortie.extend(lignes_rnu)
     lignes_sortie.extend(lignes_trou_de_couverture)
 
+    # Réintégration des documents non exploitables (ajouté le 26/08/2026) :
+    # comme RNU et trou de couverture ci-dessus, construite depuis une source
+    # qui ne passe jamais par l'outil de relecture — voir "Document non
+    # exploitable" dans etape-3-validation-manuelle.md.
+    lignes_non_exploitables = _lignes_document_non_exploitable(
+        lignes_etape2_erreurs, partitions_gpu, contexte_documents
+    )
+    lignes_sortie.extend(lignes_non_exploitables)
+
     lignes_sortie.sort(key=lambda l: (l["nom_document"], l["communes"], l["id_occurrence"]))
 
     chemin_sortie = dossier / f"etape3_{code_departement}.csv"
@@ -338,7 +415,8 @@ def synthetiser(code_departement: str, dossier_sortie: str | Path = "output") ->
         f"({len(retenues)} occurrence(s) significative(s), "
         f"{len(id_gpu_non_significatifs)} document(s) non significatif(s), "
         f"{len(lignes_rnu)} commune(s) RNU, "
-        f"{len(lignes_trou_de_couverture)} trou(s) de couverture)."
+        f"{len(lignes_trou_de_couverture)} trou(s) de couverture, "
+        f"{len(lignes_non_exploitables)} document(s) non exploitable(s))."
     )
     return chemin_sortie
 
