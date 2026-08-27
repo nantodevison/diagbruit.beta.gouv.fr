@@ -1,7 +1,8 @@
 """Phase 1 (etape 3) — récupération de l'état actuel de la base Notion.
 
 Un seul appel paginé, en début de run, plutôt qu'une requête par étude — voir
-etape-3-conception-technique.md, Décision 1.
+etape-3-conception-technique.md, Décision 1. Interroge le data source de la base (voir
+notion_utils.py pour la résolution database_id -> data_source_id).
 """
 from notion_client import Client
 
@@ -10,15 +11,15 @@ from etape2_recherche_extraction.dedoublonnage import normaliser_doi, normaliser
 TAILLE_PAGE = 100
 
 
-def recuperer_etat_existant(notion: Client, database_id: str) -> tuple[set[str], list[str]]:
+def recuperer_etat_existant(notion: Client, data_source_id: str) -> tuple[set[str], list[str]]:
     """Retourne (doi_normalises_existants, titres_normalises_existants)."""
     doi_existants: set[str] = set()
     titres_existants: list[str] = []
     curseur = None
 
     while True:
-        reponse = notion.databases.query(
-            database_id=database_id,
+        reponse = notion.data_sources.query(
+            data_source_id=data_source_id,
             start_cursor=curseur,
             page_size=TAILLE_PAGE,
         )

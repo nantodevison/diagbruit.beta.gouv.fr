@@ -9,6 +9,16 @@ import os
 from dotenv import load_dotenv
 from notion_client import Client
 
+# Options fermées, réutilisées telles quelles par etape2_recherche_extraction/extraction.py
+# (Literal du modèle Pydantic) pour garantir que le modèle ne produit jamais une valeur hors
+# de cette liste — voir etape-2-conception-technique.md, corrigé après le premier essai réel
+# (le modèle produisait des valeurs libres avec virgules, rejetées par Notion : un
+# multi_select/select ne peut pas contenir de virgule dans le nom d'une option).
+OPTIONS_DOMAINE_SANTE = (
+    "Cardiovasculaire", "Sante mentale", "Cognition", "Metabolique", "Sommeil", "Enfant",
+)
+OPTIONS_SOURCE_BRUIT = ("Routier", "Aerien", "Ferroviaire", "Industriel")
+
 PROPRIETES = {
     "titre": {"title": {}},
     "auteurs": {"rich_text": {}},
@@ -16,15 +26,8 @@ PROPRIETES = {
     "revue": {"select": {}},
     "organisme": {"rich_text": {}},
     "doi_url": {"url": {}},
-    "domaine_sante": {"multi_select": {"options": [
-        {"name": "Cardiovasculaire"}, {"name": "Sante mentale"},
-        {"name": "Cognition"}, {"name": "Metabolique"},
-        {"name": "Sommeil"}, {"name": "Enfant"},
-    ]}},
-    "source_bruit": {"multi_select": {"options": [
-        {"name": "Routier"}, {"name": "Aerien"},
-        {"name": "Ferroviaire"}, {"name": "Industriel"},
-    ]}},
+    "domaine_sante": {"multi_select": {"options": [{"name": o} for o in OPTIONS_DOMAINE_SANTE]}},
+    "source_bruit": {"multi_select": {"options": [{"name": o} for o in OPTIONS_SOURCE_BRUIT]}},
     "resume": {"rich_text": {}},
     "resultat_cle": {"rich_text": {}},
     "date_ajout": {"created_time": {}},
@@ -36,10 +39,14 @@ PROPRIETES = {
 
 
 def creer_base(notion: Client, page_parent_id: str) -> str:
+    """Retourne l'ID de la base créée. Depuis l'API Notion 2025-09-03, les propriétés
+    sont portées par le "data source" de la base, pas par la base elle-même — voir
+    notion_utils.py pour la résolution database_id -> data_source_id, utilisée ensuite
+    par le reste du projet."""
     base = notion.databases.create(
         parent={"type": "page_id", "page_id": page_parent_id},
         title=[{"type": "text", "text": {"content": "Études"}}],
-        properties=PROPRIETES,
+        initial_data_source={"properties": PROPRIETES},
     )
     return base["id"]
 

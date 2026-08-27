@@ -7,6 +7,7 @@ sources candidates (URL + contexte) : l'extraction structurée proprement dite e
 """
 from datetime import date
 from pathlib import Path
+from typing import Optional
 
 import yaml
 from anthropic import Anthropic
@@ -25,7 +26,7 @@ def _charger_domaines_autorises() -> list[str]:
 
 
 @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=2, min=2, max=20))
-def executer(date_depuis: date, date_jusqu_a: date | None = None) -> list[dict]:
+def executer(date_depuis: date, date_jusqu_a: Optional[date] = None) -> list[dict]:
     """Retourne une liste de sources candidates brutes (canal="web"), pas encore
     structurées. La date de recherche est toujours injectée en toutes lettres dans le
     prompt (jamais une formulation relative), conformément au plan de veille."""

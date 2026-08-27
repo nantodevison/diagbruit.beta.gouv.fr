@@ -10,15 +10,16 @@ from notion_client import Client
 
 from etape2_recherche_extraction.main import executer as executer_etape2
 from etape3_integration_notion.main import executer as executer_etape3
+from notion_utils import resoudre_data_source_id
 
 DUREE_PREMIER_RUN_ANNEES = 10
 
 
-def _calculer_date_depuis(notion: Client, database_id: str) -> date:
+def _calculer_date_depuis(notion: Client, data_source_id: str) -> date:
     """Date `date_ajout` la plus récente présente dans la base "Études", ou aujourd'hui
     moins 10 ans si la base est vide (premier run) — voir Décision 3."""
-    reponse = notion.databases.query(
-        database_id=database_id,
+    reponse = notion.data_sources.query(
+        data_source_id=data_source_id,
         sorts=[{"property": "date_ajout", "direction": "descending"}],
         page_size=1,
     )
@@ -35,14 +36,15 @@ def main() -> None:
     load_dotenv()
     database_id = os.environ["NOTION_DATABASE_ID"]
     notion = Client(auth=os.environ["NOTION_API_KEY"])
+    data_source_id = resoudre_data_source_id(notion, database_id)
 
-    date_depuis = _calculer_date_depuis(notion, database_id)
+    date_depuis = _calculer_date_depuis(notion, data_source_id)
     print(f"[main] recherche depuis le {date_depuis.isoformat()}")
 
     etudes = executer_etape2(date_depuis)
     print(f"[main] {len(etudes)} etude(s) retenue(s) apres extraction et dedoublonnage interne")
 
-    executer_etape3(etudes)
+    executer_etape3(etudes, notion, data_source_id)
 
 
 if __name__ == "__main__":

@@ -4,23 +4,30 @@ Voir etape-2-conception-technique.md, Décision 4. Utilise `client.messages.pars
 structurées via Pydantic) : la réponse est garantie conforme au schéma par construction,
 sans prompt "réponds en JSON" ni parsing défensif.
 """
+from typing import List, Literal, Optional
+
 from anthropic import Anthropic
 from pydantic import BaseModel
 from tenacity import retry, stop_after_attempt, wait_exponential
 
+from etape1_base_notion.creer_base_notion import OPTIONS_DOMAINE_SANTE, OPTIONS_SOURCE_BRUIT
+
 MODELE = "claude-sonnet-5"
+
+DomaineSante = Literal[OPTIONS_DOMAINE_SANTE]  # type: ignore[valid-type]
+SourceBruit = Literal[OPTIONS_SOURCE_BRUIT]  # type: ignore[valid-type]
 
 
 class EtudeExtraite(BaseModel):
     hors_perimetre: bool
     titre: str
     auteurs: str = ""
-    annee: int | None = None
+    annee: Optional[int] = None
     revue: str = ""
     organisme: str = ""
     doi_url: str = ""
-    domaine_sante: list[str] = []
-    source_bruit: list[str] = []
+    domaine_sante: List[DomaineSante] = []
+    source_bruit: List[SourceBruit] = []
     resume: str = ""
     resultat_cle: str = ""
 
@@ -39,8 +46,11 @@ def _construire_prompt(source: dict) -> str:
         "Mets hors_perimetre a true si cette etude ne porte pas sur l'Europe ou des "
         "populations europeennes, ou si elle n'a pas de lien direct entre bruit et sante "
         "(dans ce cas les autres champs peuvent rester vides). Sinon, complete tous les "
-        "champs demandes a partir du contenu disponible. Le resume (2-3 phrases) et le "
-        "resultat_cle doivent etre rediges par toi, jamais recopies tels quels d'une source."
+        "champs demandes a partir du contenu disponible. domaine_sante et source_bruit "
+        "doivent etre choisis uniquement parmi les valeurs autorisees du schema (ne rien "
+        "inventer), en retenant celles qui s'appliquent meme partiellement. Le resume "
+        "(2-3 phrases) et le resultat_cle doivent etre rediges par toi, jamais recopies "
+        "tels quels d'une source."
     )
 
 
@@ -53,6 +63,8 @@ def extraire(source: dict) -> EtudeExtraite:
         messages=[{"role": "user", "content": _construire_prompt(source)}],
         output_format=EtudeExtraite,
     )
+    if reponse.parsed_output is None:
+        raise ValueError(f"parsed_output vide (stop_reason={reponse.stop_reason})")
     return reponse.parsed_output
 
 

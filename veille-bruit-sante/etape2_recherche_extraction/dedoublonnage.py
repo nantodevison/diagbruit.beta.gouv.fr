@@ -5,13 +5,14 @@ Les fonctions de normalisation d'ici sont réutilisées telles quelles par l'ét
 qu'une même étude produit toujours la même clé de comparaison des deux côtés.
 """
 import re
+from typing import Optional
 
 from rapidfuzz import fuzz
 
 SEUIL_SIMILARITE_TITRE = 90
 
 
-def normaliser_doi(doi_url: str | None) -> str:
+def normaliser_doi(doi_url: Optional[str]) -> str:
     if not doi_url:
         return ""
     return (
@@ -22,7 +23,7 @@ def normaliser_doi(doi_url: str | None) -> str:
     )
 
 
-def normaliser_titre(titre: str | None) -> str:
+def normaliser_titre(titre: Optional[str]) -> str:
     if not titre:
         return ""
     return re.sub(r"[^\w\s]", "", titre.lower()).strip()

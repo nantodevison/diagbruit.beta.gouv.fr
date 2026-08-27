@@ -85,7 +85,20 @@ proprietes = {
     ]}},
     "favori": {"checkbox": {}},
 }
+
+notion.databases.create(
+    parent={"type": "page_id", "page_id": page_parent_id},
+    title=[{"type": "text", "text": {"content": "Études"}}],
+    initial_data_source={"properties": proprietes},
+)
 ```
+
+**Correctif (constaté au premier test, hors cadrage initial) — modèle "data source" de l'API Notion :** depuis la mise à jour Notion du 2025-09-03, une base ("database") peut contenir plusieurs "data sources" ; le schéma de colonnes et les pages vivent sur le data source, pas directement sur la base. Conséquences concrètes sur ce projet :
+- `databases.create` attend les propriétés sous `initial_data_source={"properties": ...}`, pas sous un paramètre `properties` de premier niveau (corrigé ci-dessus).
+- `databases.query` n'existe plus dans `notion-client` — remplacé par `data_sources.query(data_source_id=...)`.
+- Créer une page attend un parent `{"type": "data_source_id", "data_source_id": ...}`, pas `{"database_id": ...}`.
+
+Ce projet ne crée jamais qu'un seul data source par base : `notion_utils.resoudre_data_source_id(notion, database_id)` retrouve son ID via `databases.retrieve(database_id).get("data_sources")[0]["id"]`, résolu une fois en tout début de run par `main.py` puis transmis aux étapes 2 et 3 — voir `etape-3-conception-technique.md`. **`NOTION_DATABASE_ID` reste inchangé pour l'utilisateur** : c'est toujours l'identifiant de la base copié depuis l'URL Notion, la résolution vers le data source étant interne au code.
 
 **Point d'attention :** `date_ajout` en `created_time` est une propriété calculée automatiquement par Notion (jamais transmise à la création d'une page, voir `etape-3-conception-technique.md`) — cohérent avec `etape-1-base-notion-diagbruit.md` ("Remplie automatiquement à la création de la fiche"). La base doit ensuite être partagée manuellement avec l'intégration Notion (l'API ne peut pas s'accorder ce droit elle-même) : dans Notion, ouvrir la page parente choisie pour héberger la base, `···` → `Connexions` → sélectionner l'intégration. L'identifiant de la base (`NOTION_DATABASE_ID`), affiché dans l'URL de la base une fois créée, est à reporter dans les secrets (voir `etape-4-conception-technique.md`).
 

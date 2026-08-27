@@ -5,6 +5,7 @@ ni Europe PMC ; un `User-Agent` identifiant le projet est envoyé (bonne pratiqu
 par les deux API, notamment pour la "pool polie" d'OpenAlex).
 """
 from datetime import date
+from typing import Optional
 
 import requests
 from tenacity import retry, stop_after_attempt, wait_exponential
@@ -98,7 +99,7 @@ def _rechercher_europe_pmc(date_depuis: date, date_jusqu_a: date) -> list[dict]:
     return resultats
 
 
-def executer(date_depuis: date, date_jusqu_a: date | None = None) -> list[dict]:
+def executer(date_depuis: date, date_jusqu_a: Optional[date] = None) -> list[dict]:
     """Retourne la liste brute des études trouvées sur les deux API. Un canal en échec
     total (après ses tentatives) n'empêche pas l'autre de produire des résultats — voir
     etape-2-conception-technique.md, Décision 6."""
