@@ -105,6 +105,7 @@ class PassageRetenu:
     piece: Piece
     reference_type: str  # "alinea" ou "page"
     reference_precise: str
+    numero_page: int
     passage_texte: str
     extrait_repli: str  # citation mécanique de repli, voir docstring du module
     contexte_avant: str
@@ -230,6 +231,7 @@ def _filtrer_piece(extraction: ExtractionPiece) -> list[PassageRetenu]:
                 piece=extraction.piece,
                 reference_type=paragraphe.reference_type,
                 reference_precise=paragraphe.reference_precise,
+                numero_page=paragraphe.numero_page,
                 passage_texte=paragraphe.texte,
                 extrait_repli=_tronquer(paragraphe.texte, LONGUEUR_MAX_EXTRAIT),
                 contexte_avant=_tronquer_debut(contexte_avant, LONGUEUR_MAX_CONTEXTE),

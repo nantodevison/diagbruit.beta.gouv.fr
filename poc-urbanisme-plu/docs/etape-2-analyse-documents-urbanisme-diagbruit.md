@@ -64,6 +64,7 @@ Chaque passage retenu en phase 3 est analysé pour déterminer :
 | `lien_web_document` | URL du PDF source |
 | `reference_type` | `alinea` ou `page` |
 | `reference_precise` | ex. "Article 11, alinéa 3" ou "page 24" |
+| `numero_page` | numéro de page du passage, toujours renseigné (y compris quand `reference_type = "alinea"`) — repère de recherche dans le PDF source pour la relecture (étape 3) |
 | `zone_reglementaire_mentionnee` | ex. "UA", "ensemble du zonage", "non précisé" |
 | `portee_geometrique` | `administrative` ou `zone_specifique` — détermine à l'étape 4 si une géométrie automatique (contour administratif) suffit, ou si un tracé manuel est nécessaire |
 | `extrait_significatif` | citation verbatim choisie par le modèle, sans son contexte — pour un survol rapide |

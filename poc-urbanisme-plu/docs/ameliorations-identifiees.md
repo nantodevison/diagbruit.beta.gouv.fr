@@ -45,18 +45,6 @@ fonctionnement retenu plutôt que ses limites.*
 
 **Piste de correction** : élargir la liste de motifs de `resolution_pieces.py` (par exemple au rapport de présentation) si des cas réels montrent des règles liées au bruit absentes du périmètre actuel.
 
-## `reference_precise` ne donne pas toujours le numéro de page
-
-**Étapes concernées : 2 (calcul) et 3 (usage).**
-
-**Contexte** : `reference_precise` (colonne calculée en étape 2, phase 3, voir `filtrage_lexical.py`) vaut soit une référence d'article/alinéa (`reference_type = "alinea"`, ex. "Article 15, alinéa 6"), soit un numéro de page en l'absence de numérotation fiable (`reference_type = "page"`, ex. "page 24") — jamais les deux à la fois. Le numéro de page (`numero_page`) est pourtant déjà connu à l'endroit du code où `reference_precise` est construit : il est simplement écarté dès qu'un article a été repéré, et n'est même pas transporté jusqu'à `PassageRetenu` dans ce cas.
-
-**Problème** : pour retrouver le passage dans le PDF source pendant la relecture (étape 3), l'opérateur qui n'a que "Article 15, alinéa 6" doit chercher cet article dans tout le document, alors qu'un document d'urbanisme peut compter plusieurs centaines de pages. Un numéro de page, même approximatif, réduirait cette recherche à quelques pages — ce qui va directement dans le sens de l'objectif de productivité de l'étape 3.
-
-**Besoin** : disposer systématiquement du numéro de page dans la référence affichée à l'opérateur, y compris quand `reference_type = "alinea"` — pas seulement en repli quand aucune numérotation d'article n'a été trouvée.
-
-**Piste de correction** : la correction se ferait en étape 2 (c'est là que `reference_precise` est calculée), mais le besoin est motivé par l'usage en étape 3. Deux options : soit enrichir `reference_precise` elle-même (ex. "Article 15, alinéa 6, page 24") au prix d'un format de colonne un peu plus chargé ; soit transporter `numero_page` jusqu'à `PassageRetenu`, puis jusqu'au CSV de synthèse, dans une colonne dédiée, ce qui garderait `reference_precise` inchangée et resterait filtrable/triable indépendamment. La seconde option est plus cohérente avec le reste du contrat de données (une information, une colonne), mais demande un ajustement plus large (schéma CSV de l'étape 2, colonnes de l'étape 3, outil de relecture). À reprendre avant un usage réel prolongé de l'outil de relecture sur des documents longs, où l'absence de repère de page se fera probablement sentir.
-
 ## Détection des occurrences "doublons" (même règle repérée par plusieurs citations)
 
 **Étapes concernées : 3 (besoin non couvert) et 4 (mécanisme partiel).**

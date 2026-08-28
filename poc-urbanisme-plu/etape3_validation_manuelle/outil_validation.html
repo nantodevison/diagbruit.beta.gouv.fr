@@ -381,7 +381,7 @@ function construireCSV(lignes, colonnes) {
 
 const COLONNES_ATTENDUES = [
   "id_gpu", "id_occurrence", "nom_document", "communes", "type_piece_source",
-  "lien_web_document", "reference_type", "reference_precise",
+  "lien_web_document", "reference_type", "reference_precise", "numero_page",
   "zone_reglementaire_mentionnee", "portee_geometrique", "extrait_significatif", "contexte_documentaire",
   "confiance_extrait", "justification", "nature_occurrence", "nature_juridique_piece",
   "nature_sonore_zone", "statut_verification", "ocr_utilise", "ocr_confiance", "priorite",
@@ -397,7 +397,7 @@ const CHAMPS_MODIFIABLES = [
   "zone_reglementaire_mentionnee", "portee_geometrique",
   "confiance_extrait", "justification", "nature_occurrence", "nature_juridique_piece",
   "nature_sonore_zone", "statut_verification", "type_piece_source", "reference_type",
-  "reference_precise", "ocr_utilise", "ocr_confiance",
+  "reference_precise", "numero_page", "ocr_utilise", "ocr_confiance",
 ];
 
 const SEUIL_EXPORT_AUTO = 10;
@@ -525,7 +525,7 @@ function rendreOccurrence(occ) {
   <div class="occurrence ${classeStatut}" data-id="${id}">
     <div class="ligne-badges">
       <span class="badge">${echapperHTML(occ.type_piece_source || "pièce inconnue")}</span>
-      <span class="badge">${echapperHTML(occ.reference_precise || occ.reference_type || "référence inconnue")}</span>
+      <span class="badge">${echapperHTML(occ.reference_precise || occ.reference_type || "référence inconnue")}${occ.reference_type === "alinea" && occ.numero_page ? ` (page ${echapperHTML(occ.numero_page)})` : ""}</span>
       <span class="badge ${classeBadgeConfiance(occ.confiance_extrait)}">confiance : ${echapperHTML(occ.confiance_extrait || "non précisée")}</span>
       ${occ.ocr_utilise === "True" || occ.ocr_utilise === "true" ? `<span class="badge ${classeBadgeConfiance(occ.ocr_confiance)}">OCR : ${echapperHTML(occ.ocr_confiance || "?")}</span>` : ""}
       ${occ.lien_web_document ? `<span class="lien-source"><a href="${echapperHTML(occ.lien_web_document)}" target="_blank" rel="noopener">Ouvrir le PDF source ↗</a></span>` : ""}

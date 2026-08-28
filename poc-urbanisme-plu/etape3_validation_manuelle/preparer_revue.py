@@ -57,6 +57,7 @@ COLONNES_SORTIE = [
     "lien_web_document",
     "reference_type",
     "reference_precise",
+    "numero_page",
     "zone_reglementaire_mentionnee",
     "portee_geometrique",
     "extrait_significatif",

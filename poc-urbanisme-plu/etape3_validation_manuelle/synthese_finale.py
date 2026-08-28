@@ -135,6 +135,7 @@ COLONNES_FINALES = [
     "lien_web_document",
     "reference_type",
     "reference_precise",
+    "numero_page",
     "zone_reglementaire_mentionnee",
     "extrait_significatif",
     "contexte_documentaire",
