@@ -1,7 +1,7 @@
 """Point d'entrée de l'étape 3 — voir docs/etape-3-conception-technique.md."""
 from notion_client import Client
 
-from . import dedoublonnage_existant, ecriture, etat_existant
+from . import dedoublonnage_existant, ecriture, etat_existant, verification_url
 
 
 def executer(etudes: list[dict], notion: Client, data_source_id: str) -> None:
@@ -13,6 +13,11 @@ def executer(etudes: list[dict], notion: Client, data_source_id: str) -> None:
     for etude in etudes:
         if dedoublonnage_existant.est_deja_present(etude, doi_existants, titres_existants):
             continue
+
+        # Verifie l'URL seulement ici (pas plus tot dans le pipeline) : inutile de faire
+        # une requete HTTP sur une etude qui sera de toute facon ecartee comme doublon.
+        etude["url_not_real"] = not verification_url.url_pointe_vers_un_document(etude.get("doi_url", ""))
+
         try:
             ecriture.creer_fiche(notion, data_source_id, etude)
             nb_creees += 1

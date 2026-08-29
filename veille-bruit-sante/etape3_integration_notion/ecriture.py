@@ -34,6 +34,10 @@ def _proprietes(etude: dict) -> dict:
         )},
         "organisme": {"rich_text": _texte_riche(etude.get("organisme"))},
         "doi_url": {"url": etude.get("doi_url") or None},
+        "url_source": {"select": (
+            {"name": nom} if (nom := etude.get("url_source")) else None
+        )},
+        "url_not_real": {"checkbox": bool(etude.get("url_not_real"))},
         "domaine_sante": {"multi_select": [{"name": d} for d in etude.get("domaine_sante") or []]},
         "source_bruit": {"multi_select": [{"name": s} for s in etude.get("source_bruit") or []]},
         "resume": {"rich_text": _texte_riche(etude.get("resume"))},
