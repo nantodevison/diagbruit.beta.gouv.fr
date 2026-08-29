@@ -45,20 +45,6 @@ fonctionnement retenu plutôt que ses limites.*
 
 **Piste de correction** : élargir la liste de motifs de `resolution_pieces.py` (par exemple au rapport de présentation) si des cas réels montrent des règles liées au bruit absentes du périmètre actuel.
 
-## Détection des occurrences "doublons" (même règle repérée par plusieurs citations)
-
-**Étapes concernées : 3 (besoin non couvert) et 4 (mécanisme partiel).**
-
-**Contexte** : un même document peut donner lieu, en sortie d'étape 2, à plusieurs occurrences distinctes — extraits de texte différents, éventuellement issus de pièces différentes (ex. le règlement écrit et l'OAP d'un même PLUi) — qui, une fois le document source réellement consulté par l'opérateur en étape 3, s'avèrent en réalité concerner le même territoire, la même portée géométrique et la même prescription ou recommandation. Autrement dit, deux citations différentes qui décrivent la même règle, plutôt que deux règles distinctes.
-
-**Problème** : rien dans l'étape 3 (ni `outil_validation.html`, ni `synthese_finale.py`) ne permet à l'opérateur de signaler ce cas au moment de la relecture, avant même que la géométrie n'existe. Chaque occurrence validée reste une ligne indépendante de `etape3_{dept}.csv`.
-
-**Mécanisme partiel déjà en place** : ce cas s'est effectivement présenté, découvert plus loin dans le pipeline qu'anticipé — non pas à la relecture (étape 3), mais à la localisation (étape 4), en traçant le PLUi de l'Eurométropole de Strasbourg (département 067). Un mécanisme de fusion y a été mis en œuvre à cette occasion (voir `etape-4-conception-technique.md`, "Mécanisme de fusion") : une occurrence membre référence sa meneuse via le couple `id_gpu` + `id_occurrence` (identifiant déjà unique de façon fiable ailleurs dans le pipeline, plutôt qu'un identifiant de groupe inventé), revérifié automatiquement en Phase 3. Le besoin décrit ici reste néanmoins distinct et non couvert : signaler un doublon *au moment de la relecture* (étape 3), ce que le mécanisme de fusion de l'étape 4 ne permet pas de faire plus tôt dans le pipeline.
-
-**Pistes de correction envisageables pour combler ce besoin à l'étape 3, non retenues pour l'instant** :
-- Ajouter un champ dans `outil_validation.html`, par exemple `doublon_de`, où l'opérateur reporte l'identifiant (couple `id_gpu` + `id_occurrence`) de l'occurrence de référence quand il juge qu'une occurrence en cours de relecture fait doublon avec une autre déjà vue. `synthese_finale.py` pourrait alors soit exclure les doublons désignés de `etape3_{dept}.csv` (au même titre qu'un rejet), soit les conserver avec un statut dédié pour qu'ils ne comptent pas deux fois en aval, tout en restant traçables — dans le même esprit que les occurrences rejetées, jamais supprimées silencieusement.
-- Alternative plus ambitieuse, écartée pour l'instant : une détection automatique assistée (similarité textuelle entre les `extrait_significatif` de plusieurs occurrences d'un même `id_gpu`) pour pré-suggérer des doublons à l'opérateur plutôt que de compter uniquement sur sa vigilance de lecture. Écartée : ajouterait une dépendance et une complexité (similarité sémantique) disproportionnées pour un besoin qui reste, par nature, une décision de lecture humaine — deux citations peuvent décrire la même règle sans se ressembler textuellement, et inversement.
-
 ## `preparer_geometries.py` n'est pas sûr à relancer après le début de l'édition manuelle (Phase 2)
 
 **Étape concernée : 4.**

@@ -34,7 +34,21 @@ Entrée (dans `output/`, voir `--output-dir`) :
 Sortie (dans le même dossier) :
     etape3_{dept}.csv                  — contrat pour l'étape 4
     etape3_{dept}_rejetees.csv         — audit : occurrences écartées (si non vide)
+    etape3_{dept}_doublons.csv         — audit : occurrences écartées comme doublons (si non vide)
     etape3_{dept}_non_traitees.csv     — occurrences oubliées par l'opérateur (si non vide)
+
+Révisé le 29/08/2026 : un doublon (erreur de détection — même action, même
+document, même zone, même nature sonore, repérée deux fois par l'étape 2)
+n'est pas un rejet ordinaire. `outil_validation.html` (Phase 2) le distingue
+via `validation_manuelle_statut = "doublon"` plutôt que `"rejeté"` ; ce
+module l'exclut lui aussi de `etape3_{dept}.csv` (une seule des deux
+occurrences doit survivre), mais le trace à part dans
+`etape3_{dept}_doublons.csv` plutôt que de le mélanger aux rejets — la
+distinction compte pour un futur audit ("écarté par erreur de détection" vs
+"écarté car hors périmètre diagBruit"). Voir
+`plan-automatisation-regles-plu-diagbruit.md`, "Doublon vs fusion : deux
+notions à ne pas confondre", et `etape-3-conception-technique.md`,
+"Détection automatique des doublons probables".
 """
 
 from __future__ import annotations
@@ -54,6 +68,13 @@ STATUT_VALIDE = "validé"
 STATUT_CORRIGE = "corrigé"
 STATUTS_RETENUS = {STATUT_VALIDE, STATUT_CORRIGE}
 STATUT_AUCUNE_OCCURRENCE = "aucune occurrence trouvée"
+# Doublon : erreur de détection (même action, même document, même zone,
+# même nature sonore, repérée deux fois par l'étape 2) — distinct d'un
+# rejet (qui signifie "pas une règle de bruit dans le périmètre diagBruit")
+# et distinct de la fusion de l'étape 4 (qui relie deux règles réellement
+# différentes). Voir plan-automatisation-regles-plu-diagbruit.md, "Doublon
+# vs fusion : deux notions à ne pas confondre".
+STATUT_DOUBLON = "doublon"
 # Réservé aux lignes RNU (ajouté le 17/08/2026) : rend explicite qu'aucun
 # opérateur ne les a relues, contrairement à validé/corrigé qui supposent un
 # passage par l'outil de relecture.
@@ -339,7 +360,12 @@ def synthetiser(code_departement: str, dossier_sortie: str | Path = "output") ->
     non_traitees = [l for l in lignes_export if not l.get("validation_manuelle_statut")]
     traitees = [l for l in lignes_export if l.get("validation_manuelle_statut")]
     retenues = [l for l in traitees if l["validation_manuelle_statut"] in STATUTS_RETENUS]
-    rejetees = [l for l in traitees if l["validation_manuelle_statut"] not in STATUTS_RETENUS]
+    doublons = [l for l in traitees if l["validation_manuelle_statut"] == STATUT_DOUBLON]
+    rejetees = [
+        l
+        for l in traitees
+        if l["validation_manuelle_statut"] not in STATUTS_RETENUS and l["validation_manuelle_statut"] != STATUT_DOUBLON
+    ]
 
     if non_traitees:
         chemin_non_traitees = dossier / f"etape3_{code_departement}_non_traitees.csv"
@@ -357,6 +383,28 @@ def synthetiser(code_departement: str, dossier_sortie: str | Path = "output") ->
         print(
             f"{len(rejetees)} occurrence(s) rejetée(s), conservée(s) pour "
             f"traçabilité dans {chemin_rejetees} (pas de suppression silencieuse)."
+        )
+
+    if doublons:
+        id_occurrence_retenues = {l["id_occurrence"] for l in retenues}
+        references_introuvables = [
+            l["id_occurrence"]
+            for l in doublons
+            if l.get("doublon_de_id_occurrence") not in id_occurrence_retenues
+        ]
+        if references_introuvables:
+            print(
+                f"ATTENTION : {len(references_introuvables)} doublon(s) référencent une "
+                "occurrence absente des occurrences retenues (vide, mal saisie, ou "
+                f"elle-même écartée) : {', '.join(references_introuvables)} — à corriger dans "
+                "l'outil de relecture avant de considérer le département terminé.",
+                file=sys.stderr,
+            )
+        chemin_doublons = dossier / f"etape3_{code_departement}_doublons.csv"
+        _ecrire_csv(chemin_doublons, colonnes_export, doublons)
+        print(
+            f"{len(doublons)} occurrence(s) écartée(s) comme doublon(s), conservée(s) pour "
+            f"traçabilité dans {chemin_doublons} (pas de suppression silencieuse)."
         )
 
     # Un document (id_gpu) est non significatif si aucune de ses occurrences

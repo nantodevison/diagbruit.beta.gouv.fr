@@ -15,6 +15,7 @@
     --couleur-valide: #2e7d46;
     --couleur-corrige: #b4740e;
     --couleur-rejete: #b3382c;
+    --couleur-doublon: #6a4c93;
     --couleur-non-traite: #8a90a0;
     font-family: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   }
@@ -118,6 +119,9 @@
   .occurrence.statut-valide { border-left-color: var(--couleur-valide); }
   .occurrence.statut-corrige { border-left-color: var(--couleur-corrige); }
   .occurrence.statut-rejete { border-left-color: var(--couleur-rejete); background: #fdf6f5; }
+  .occurrence.statut-doublon { border-left-color: var(--couleur-doublon); background: #f6f4fa; }
+  .badge-doublon-probable { background: #ece5f6; color: var(--couleur-doublon); }
+  .badge-id { font-family: ui-monospace, "Cascadia Code", Consolas, monospace; background: #eef1f5; color: var(--couleur-texte); user-select: all; }
 
   .ligne-badges { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-bottom: 10px; }
   .badge {
@@ -229,6 +233,8 @@
   .bouton-valider.actif { background: var(--couleur-valide); color: white; }
   .bouton-rejeter { color: var(--couleur-rejete); border-color: var(--couleur-rejete); }
   .bouton-rejeter.actif { background: var(--couleur-rejete); color: white; }
+  .bouton-doublon { color: var(--couleur-doublon); border-color: var(--couleur-doublon); }
+  .bouton-doublon.actif { background: var(--couleur-doublon); color: white; }
   .etat-actuel { font-size: 0.78rem; color: var(--couleur-texte-attenue); align-self: center; }
   .zone-validation .champ { flex: 1; min-width: 220px; margin-bottom: 0; }
 
@@ -264,6 +270,7 @@
   <ol>
     <li>Chargez le fichier <code>etape3_{dept}_a_valider.csv</code> produit par <code>preparer_revue.py</code> (ou un export précédent de cet outil, pour reprendre une session).</li>
     <li>Pour chaque occurrence : relisez la citation et son contexte, corrigez directement les champs si besoin (tous les champs sont modifiables, sauf les identifiants), puis cliquez « ✓ Valider » (sans modification = <em>validé</em>, avec modification = <em>corrigé</em> automatiquement) ou « ✕ Rejeter » si ce n'est pas une vraie règle de bruit. Un commentaire est possible mais facultatif.</li>
+    <li>Si un badge « ⚠ Doublon probable » apparaît (suggestion automatique, à confirmer), ou si vous repérez vous-même que deux occurrences décrivent <strong>la même règle</strong> du même document sur la même zone — pas seulement deux règles différentes sur le même secteur, voir la distinction doublon / fusion dans <code>plan-automatisation-regles-plu-diagbruit.md</code> — sélectionnez ou corrigez, dans le menu « Doublon de », l'occurrence sœur (du même document) à conserver, puis cliquez « ◎ Doublon ». L'occurrence sera écartée de la couverture finale au profit de celle sélectionnée, tout en restant tracée.</li>
     <li>Exportez régulièrement votre progression (bouton « Exporter » en haut à droite) — un export automatique se déclenche aussi tous les 10 traitements, en plus du bouton. Sans sauvegarde navigateur possible dans cet outil, un export non téléchargé = un travail non conservé si l'onglet se ferme.</li>
     <li>Une fois toutes les occurrences traitées, lancez <code>synthese_finale.py</code> : il retrouve seul votre dernier export (le plus récent des fichiers <code>etape3_export_outil_*.csv</code> téléchargés) dans le dossier <code>output/</code>, pas besoin de le renommer.</li>
   </ol>
@@ -280,6 +287,8 @@
     <option value="valide">Validées</option>
     <option value="corrige">Corrigées</option>
     <option value="rejete">Rejetées</option>
+    <option value="doublon">Doublons</option>
+    <option value="doublon-probable">Doublon probable suggéré</option>
   </select>
 
   <label for="tri-documents">Trier les documents par</label>
@@ -385,7 +394,8 @@ const COLONNES_ATTENDUES = [
   "zone_reglementaire_mentionnee", "portee_geometrique", "extrait_significatif", "contexte_documentaire",
   "confiance_extrait", "justification", "nature_occurrence", "nature_juridique_piece",
   "nature_sonore_zone", "statut_verification", "ocr_utilise", "ocr_confiance", "priorite",
-  "validation_manuelle_statut", "validation_manuelle_commentaire",
+  "doublon_probable_de", "validation_manuelle_statut", "validation_manuelle_commentaire",
+  "doublon_de_id_occurrence",
 ];
 
 // extrait_significatif et contexte_documentaire sont volontairement absents :
@@ -397,7 +407,7 @@ const CHAMPS_MODIFIABLES = [
   "zone_reglementaire_mentionnee", "portee_geometrique",
   "confiance_extrait", "justification", "nature_occurrence", "nature_juridique_piece",
   "nature_sonore_zone", "statut_verification", "type_piece_source", "reference_type",
-  "reference_precise", "numero_page", "ocr_utilise", "ocr_confiance",
+  "reference_precise", "numero_page", "ocr_utilise", "ocr_confiance", "doublon_probable_de",
 ];
 
 const SEUIL_EXPORT_AUTO = 10;
@@ -415,6 +425,14 @@ function chargerLignes(lignes, colonnesSource) {
     const occ = { ...ligne };
     if (occ.validation_manuelle_statut === undefined) occ.validation_manuelle_statut = "";
     if (occ.validation_manuelle_commentaire === undefined) occ.validation_manuelle_commentaire = "";
+    // Présélectionne le champ éditable avec la suggestion automatique
+    // (voir preparer_revue.py, "Détection automatique des doublons
+    // probables") — l'opérateur confirme d'un clic ou corrige le texte.
+    // Ne préremplit que si le champ n'a encore jamais été saisi (absent) ni
+    // exporté vide par un passage précédent dans l'outil.
+    if (occ.doublon_de_id_occurrence === undefined) {
+      occ.doublon_de_id_occurrence = occ.doublon_probable_de || "";
+    }
     return occ;
   });
   valeursOriginales = occurrences.map(occ => ({ ...occ }));
@@ -481,6 +499,37 @@ function champTexte(occ, nomChamp, libelle, multiligne) {
   </div>`;
 }
 
+// "Doublon de" ne peut être qu'une autre occurrence du MÊME document — voir
+// la définition du doublon (plan-automatisation-regles-plu-diagbruit.md,
+// "Doublon vs fusion"). Révisé le 29/08/2026 (retour utilisateur) : un
+// libellé lisible (zone + début de citation) semblait la solution la plus
+// naturelle, mais des occurrences réellement redondantes partagent souvent
+// un texte quasi identique — c'est même ce qui les rend suspectes de
+// doublon — ce qui rendait les options de la liste indiscernables entre
+// elles. `id_occurrence` (affiché sur chaque carte, voir "ligne-badges"
+// dans rendreOccurrence) sert donc à la fois de repère sur la carte et de
+// texte d'option ici : verbeux mais toujours unique, jamais ambigu.
+function champDoublonDe(occ) {
+  const soeurs = occurrences.filter(o => o.id_gpu === occ.id_gpu && o.id_occurrence !== occ.id_occurrence);
+  const valeurActuelle = occ.doublon_de_id_occurrence || "";
+  // La valeur courante peut référencer une occurrence hors de ce document
+  // (saisie avant ce correctif, ou fichier corrompu) : toujours proposée en
+  // option pour ne pas la faire disparaître silencieusement du champ.
+  const soeursEtValeurCourante = valeurActuelle && !soeurs.some(o => o.id_occurrence === valeurActuelle)
+    ? [...soeurs, { id_occurrence: valeurActuelle }]
+    : soeurs;
+  const optionsHtml = soeursEtValeurCourante
+    .map(o => `<option value="${echapperHTML(o.id_occurrence)}" ${o.id_occurrence === valeurActuelle ? "selected" : ""}>${echapperHTML(o.id_occurrence)}</option>`)
+    .join("");
+  return `<div class="champ">
+    <label>Doublon de (id_occurrence à conserver, même document)</label>
+    <select data-champ="doublon_de_id_occurrence">
+      <option value="" ${valeurActuelle ? "" : "selected"}>— sélectionner l'occurrence à conserver —</option>
+      ${optionsHtml}
+    </select>
+  </div>`;
+}
+
 // Repérage visuel de l'extrait_significatif (la citation retenue par
 // l'étape 2) au sein de contexte_documentaire — voir le CSS .apercu-contexte
 // ci-dessus. Le découpage mécanique en paragraphes de l'étape 2
@@ -518,16 +567,18 @@ function champSelect(occ, nomChamp, libelle, options) {
 function rendreOccurrence(occ) {
   const id = idUnique(occ);
   const statut = occ.validation_manuelle_statut;
-  const classeStatut = statut === "validé" ? "statut-valide" : statut === "corrigé" ? "statut-corrige" : statut === "rejeté" ? "statut-rejete" : "";
+  const classeStatut = statut === "validé" ? "statut-valide" : statut === "corrigé" ? "statut-corrige" : statut === "rejeté" ? "statut-rejete" : statut === "doublon" ? "statut-doublon" : "";
   const libelleEtat = statut ? `Statut actuel : ${statut}` : "Pas encore traité";
 
   return `
   <div class="occurrence ${classeStatut}" data-id="${id}">
     <div class="ligne-badges">
+      <span class="badge badge-id" title="id_occurrence, à retrouver dans la liste « Doublon de » d'une autre carte">${echapperHTML(occ.id_occurrence || "")}</span>
       <span class="badge">${echapperHTML(occ.type_piece_source || "pièce inconnue")}</span>
       <span class="badge">${echapperHTML(occ.reference_precise || occ.reference_type || "référence inconnue")}${occ.reference_type === "alinea" && occ.numero_page ? ` (page ${echapperHTML(occ.numero_page)})` : ""}</span>
       <span class="badge ${classeBadgeConfiance(occ.confiance_extrait)}">confiance : ${echapperHTML(occ.confiance_extrait || "non précisée")}</span>
       ${occ.ocr_utilise === "True" || occ.ocr_utilise === "true" ? `<span class="badge ${classeBadgeConfiance(occ.ocr_confiance)}">OCR : ${echapperHTML(occ.ocr_confiance || "?")}</span>` : ""}
+      ${occ.doublon_probable_de ? `<span class="badge badge-doublon-probable" title="Suggestion automatique, à confirmer ou corriger ci-dessous">⚠ Doublon probable de ${echapperHTML(occ.doublon_probable_de)}</span>` : ""}
       ${occ.lien_web_document ? `<span class="lien-source"><a href="${echapperHTML(occ.lien_web_document)}" target="_blank" rel="noopener">Ouvrir le PDF source ↗</a></span>` : ""}
     </div>
 
@@ -552,7 +603,9 @@ function rendreOccurrence(occ) {
       <div class="boutons-statut">
         <button type="button" class="bouton-statut bouton-valider ${statut === "validé" || statut === "corrigé" ? "actif" : ""}" data-action="valider">✓ Valider</button>
         <button type="button" class="bouton-statut bouton-rejeter ${statut === "rejeté" ? "actif" : ""}" data-action="rejeter">✕ Rejeter</button>
+        <button type="button" class="bouton-statut bouton-doublon ${statut === "doublon" ? "actif" : ""}" data-action="doublon" title="Même règle, même document, même zone, même nature sonore qu'une autre occurrence déjà vue — pas deux règles différentes à regrouper (ça, c'est une fusion, à l'étape 4)">◎ Doublon</button>
       </div>
+      ${champDoublonDe(occ)}
       <div class="champ">
         <label>Commentaire (facultatif)</label>
         <input type="text" data-champ="validation_manuelle_commentaire" value="${echapperHTML(occ.validation_manuelle_commentaire || "")}" placeholder="précision utile pour la suite…">
@@ -575,6 +628,8 @@ function correspondFiltreStatut(occ, filtre) {
   if (filtre === "valide") return occ.validation_manuelle_statut === "validé";
   if (filtre === "corrige") return occ.validation_manuelle_statut === "corrigé";
   if (filtre === "rejete") return occ.validation_manuelle_statut === "rejeté";
+  if (filtre === "doublon") return occ.validation_manuelle_statut === "doublon";
+  if (filtre === "doublon-probable") return !!occ.doublon_probable_de && occ.validation_manuelle_statut !== "doublon";
   return true;
 }
 
@@ -664,6 +719,12 @@ elListeGroupes.addEventListener("click", (evenement) => {
     occ.validation_manuelle_statut = estModifiee(occ, original) ? "corrigé" : "validé";
   } else if (bouton.dataset.action === "rejeter") {
     occ.validation_manuelle_statut = "rejeté";
+  } else if (bouton.dataset.action === "doublon") {
+    if (!(occ.doublon_de_id_occurrence || "").trim()) {
+      afficherToast("Sélectionnez d'abord \"Doublon de\" (l'occurrence à conserver) avant de confirmer.");
+      return;
+    }
+    occ.validation_manuelle_statut = "doublon";
   }
 
   compteurDepuisExport++;

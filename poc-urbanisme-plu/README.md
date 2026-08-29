@@ -152,10 +152,12 @@ python -m etape2_analyse_reglements.main --dept 067 --limit 5
 ### Étape 3 — Validation manuelle des occurrences
 
 Un opérateur relit les occurrences produites à l'étape 2 dans un outil HTML
-autonome, et l'étape réintègre aussi les communes RNU, les trous de
-couverture et les documents non exploitables (résolution en pièces échouée
-à l'étape 2). Nécessite un `etape2_{dept}.csv` et un
-`etape2_{dept}_erreurs.csv` existants.
+autonome — qui suggère aussi automatiquement les doublons probables (même
+règle repérée deux fois par l'étape 2, à distinguer d'une fusion, voir
+`docs/plan-automatisation-regles-plu-diagbruit.md`) — et l'étape réintègre
+aussi les communes RNU, les trous de couverture et les documents non
+exploitables (résolution en pièces échouée à l'étape 2). Nécessite un
+`etape2_{dept}.csv` et un `etape2_{dept}_erreurs.csv` existants.
 
 ```bash
 python -m etape3_validation_manuelle.preparer_revue --dept 067

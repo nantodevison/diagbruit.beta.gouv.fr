@@ -36,14 +36,25 @@ Les autres colonnes affichées (`type_piece_source`, `reference_precise`, `numer
 
 ## États de validation
 
-Chaque occurrence reçoit un nouveau champ `validation_manuelle_statut`, à trois valeurs :
+Chaque occurrence reçoit un nouveau champ `validation_manuelle_statut`, à quatre valeurs :
 
 - **validé** — l'opérateur confirme l'occurrence sans y toucher.
 - **corrigé** — l'opérateur a modifié au moins un champ avant de confirmer l'occurrence.
 - **rejeté** — l'opérateur écarte l'occurrence (ce n'est finalement pas une règle de bruit dans le périmètre diagBruit).
+- **doublon** (ajouté le 29/08/2026) — l'opérateur écarte l'occurrence parce qu'elle décrit, en réalité, la même règle qu'une autre déjà relue — voir "Détection et traitement des doublons" ci-dessous. Distinct d'un rejet : un rejet dit "ce n'est pas une règle de bruit", un doublon dit "c'est bien une règle de bruit, mais déjà comptée ailleurs".
 Un champ `validation_manuelle_commentaire`, libre et facultatif, permet de préciser une décision.
 
-Une occurrence rejetée n'est jamais supprimée du CSV de sortie — elle est conservée à part, pour la traçabilité, dans le même esprit que le reste du pipeline (cf. les lignes `aucune occurrence trouvée` de l'étape 2, déjà conservées pour la même raison).
+Une occurrence rejetée ou en doublon n'est jamais supprimée du CSV de sortie — elle est conservée à part, pour la traçabilité, dans le même esprit que le reste du pipeline (cf. les lignes `aucune occurrence trouvée` de l'étape 2, déjà conservées pour la même raison).
+
+## Détection et traitement des doublons
+
+*Ajouté le 29/08/2026, suite à un constat en relecture sur le 067 hors Eurométropole : plusieurs occurrences à vérifier concernaient en réalité le même texte. Voir `plan-automatisation-regles-plu-diagbruit.md`, "Doublon vs fusion : deux notions à ne pas confondre", pour la définition de fond — un doublon est une **erreur de détection** (même action, même document, même zone, même nature sonore), à ne jamais confondre avec une fusion (deux règles réellement différentes, regroupées à l'étape 4 pour l'affichage).*
+
+**Suggestion automatique** : à la préparation de la revue (`preparer_revue.py`), une comparaison textuelle légère (bibliothèque standard, sans appel externe) repère les paires d'occurrences du même document dont la citation se ressemble fortement et dont la nature sonore est identique, et présélectionne une suggestion — visible dans l'outil sous la forme d'un badge "⚠ Doublon probable de {…}". Cette suggestion est purement indicative : elle ne filtre ni ne masque jamais une occurrence, elle attire seulement l'attention de l'opérateur pour réduire son temps de lecture (l'objectif initial de cette fonctionnalité). Voir `etape-3-conception-technique.md`, "Détection automatique des doublons probables", pour l'algorithme.
+
+**Décision de l'opérateur** : chaque occurrence affiche désormais son propre `id_occurrence` (premier badge de la carte, copiable en un clic) — un premier essai avait plutôt affiché un libellé lisible (zone + début de citation) dans la liste "Doublon de", mais deux occurrences réellement redondantes partagent souvent un texte quasi identique, ce qui rendait les options indiscernables entre elles. Le champ `doublon_de_id_occurrence` est donc une liste déroulante proposant, par leur `id_occurrence`, les seules occurrences du même document. L'opérateur confirme la suggestion présélectionnée, la corrige, ou sélectionne lui-même la bonne occurrence (si la suggestion automatique n'a rien détecté — deux citations peuvent décrire la même règle sans se ressembler textuellement), puis clique "◎ Doublon". L'occurrence prend alors le statut `doublon` (voir "États de validation" ci-dessus) et sera écartée de `etape3_{dept}.csv` au profit de celle sélectionnée, tout en restant tracée à part dans `etape3_{dept}_doublons.csv` — jamais une suppression silencieuse.
+
+**Sur quel critère juger un doublon** : la définition retenue est stricte, les quatre conditions doivent être réunies — même action (même prescription ou recommandation), même document, même zone, même nature sonore (lutte contre le bruit existant ou préservation d'une zone calme). Si l'une des quatre diffère, ce n'est pas un doublon : soit deux règles réellement distinctes (à valider chacune séparément, avec une éventuelle fusion à envisager plus tard, à l'étape 4, si elles portent sur la même zone), soit un cas qui mérite d'être clarifié en commentaire plutôt que tranché hâtivement.
 
 `validation_manuelle_statut` ne concerne que les occurrences réellement soumises à l'outil de relecture. Les lignes de synthèse — documents non significatifs, documents non exploitables, RNU, trous de couverture — n'y passent jamais : `validation_manuelle_statut` y reste vide par construction, et c'est le champ distinct `statut_verification_finale` (voir "Agrégation par document" et les sections RNU / document non exploitable ci-dessous) qui porte leur statut final.
 

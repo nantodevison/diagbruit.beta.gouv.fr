@@ -20,6 +20,7 @@ from __future__ import annotations
 import argparse
 import csv
 import sys
+from difflib import SequenceMatcher
 from pathlib import Path
 
 from .contexte_documents import charger_contexte_documents
@@ -41,6 +42,17 @@ STATUTS_A_REVOIR = {STATUT_VALIDE, STATUT_A_VERIFIER}
 # dictionnaire (colonne vide) sont classées en dernier.
 RANG_CONFIANCE_EXTRAIT = {"faible": 0, "moyenne": 1, "forte": 2, "totale": 3}
 RANG_OCR_CONFIANCE = {"faible": 0, "moyenne": 1, "élevée": 2}
+
+# Seuil de similarité (ratio difflib.SequenceMatcher, 0 à 1) au-delà duquel
+# deux occurrences du même document sont signalées comme doublon probable —
+# voir "Détection automatique des doublons probables" dans
+# etape-3-conception-technique.md. Purement indicatif : jamais utilisé pour
+# filtrer, seulement pour présélectionner le champ `doublon_de_id_occurrence`
+# que l'opérateur confirme ou corrige dans l'outil de relecture. À affiner
+# selon l'usage réel — valeur de départ choisie pour rester permissive
+# (mieux vaut une fausse suggestion, écartée en un clic, qu'un doublon réel
+# manqué).
+SEUIL_SIMILARITE_DOUBLON = 0.6
 
 # Cet ordre de colonnes est celui utilisé par l'outil HTML et par
 # synthese_finale.py — voir etape-3-conception-technique.md, "Contrat de
@@ -71,6 +83,7 @@ COLONNES_SORTIE = [
     "ocr_utilise",
     "ocr_confiance",
     "priorite",
+    "doublon_probable_de",
 ]
 
 
@@ -82,6 +95,46 @@ def _priorite(ligne: dict[str, str]) -> int:
     rang_confiance = RANG_CONFIANCE_EXTRAIT.get(ligne.get("confiance_extrait", ""), 4)
     rang_ocr = RANG_OCR_CONFIANCE.get(ligne.get("ocr_confiance", ""), 3)
     return rang_confiance * 10 + rang_ocr
+
+
+def _doublons_probables(lignes: list[dict[str, str | int]]) -> dict[str, str]:
+    """Pour chaque `id_occurrence`, suggère l'`id_occurrence` la plus
+    textuellement proche parmi les occurrences du même document (`id_gpu`,
+    seul périmètre de comparaison : un doublon, par définition, vient du même
+    document — voir "Doublon vs fusion" dans
+    `plan-automatisation-regles-plu-diagbruit.md`) et de même
+    `nature_sonore_zone`, si leur similarité (`extrait_significatif`)
+    dépasse `SEUIL_SIMILARITE_DOUBLON`. Comparaison par paire à l'intérieur
+    de chaque document (coût négligeable : quelques dizaines d'occurrences
+    au plus par document).
+    """
+    par_document: dict[str, list[dict[str, str | int]]] = {}
+    for ligne in lignes:
+        par_document.setdefault(str(ligne["id_gpu"]), []).append(ligne)
+
+    suggestions: dict[str, str] = {}
+    for occurrences_document in par_document.values():
+        for i, candidate in enumerate(occurrences_document):
+            nature = candidate.get("nature_sonore_zone")
+            if not nature:
+                continue
+            meilleur_id: str | None = None
+            meilleur_score = SEUIL_SIMILARITE_DOUBLON
+            for j, autre in enumerate(occurrences_document):
+                if i == j or autre.get("nature_sonore_zone") != nature:
+                    continue
+                score = SequenceMatcher(
+                    None,
+                    str(candidate.get("extrait_significatif", "")),
+                    str(autre.get("extrait_significatif", "")),
+                ).ratio()
+                if score > meilleur_score:
+                    meilleur_score = score
+                    meilleur_id = str(autre["id_occurrence"])
+            if meilleur_id:
+                suggestions[str(candidate["id_occurrence"])] = meilleur_id
+
+    return suggestions
 
 
 def preparer(code_departement: str, dossier_sortie: str | Path = "output") -> Path:
@@ -109,7 +162,18 @@ def preparer(code_departement: str, dossier_sortie: str | Path = "output") -> Pa
     if not lignes_a_revoir:
         print(f"Aucune occurrence à valider pour le département {code_departement}.")
 
+    suggestions_doublons = _doublons_probables(lignes_a_revoir)
+    for ligne in lignes_a_revoir:
+        ligne["doublon_probable_de"] = suggestions_doublons.get(str(ligne["id_occurrence"]), "")
+
     lignes_a_revoir.sort(key=lambda l: (l["nom_document"], l["priorite"]))
+
+    n_suggestions = len(suggestions_doublons)
+    if n_suggestions:
+        print(
+            f"{n_suggestions} doublon(s) probable(s) suggéré(s) automatiquement "
+            "(à confirmer ou corriger dans l'outil de relecture)."
+        )
 
     chemin_sortie = dossier / f"etape3_{code_departement}_a_valider.csv"
     with chemin_sortie.open("w", newline="", encoding="utf-8-sig") as fichier:
