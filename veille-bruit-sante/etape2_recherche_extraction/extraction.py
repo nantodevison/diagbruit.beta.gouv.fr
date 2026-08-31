@@ -60,6 +60,11 @@ tres differents) ;
 - il n'y a pas de lien direct et mesure entre une exposition au bruit et un effet sur la \
 sante physique ou mentale — un article sur la seule mesure acoustique, sans volet \
 sanitaire, est hors perimetre ;
+- le document est un protocole d'etude ou d'essai clinique sans resultats — par exemple \
+une fiche d'enregistrement ClinicalTrials.gov ou un document methodologique (souvent nomme \
+"Prot_000.pdf" ou similaire) qui decrit un objectif, une methodologie et des criteres \
+d'inclusion prevus, sans aucune donnee ni resultat rapporte : il n'y a alors rien a \
+extraire tant que l'essai n'a pas produit de resultats publies ;
 - l'exposition etudiee est une exposition professionnelle au bruit (bruit au poste de \
 travail, risque auditif professionnel, reglementation de securite au travail, medecine du \
 travail) — meme si l'etude traite bien de sante, le bruit professionnel est totalement \
@@ -77,7 +82,10 @@ contraire — le doute profite a l'inclusion, la revue humaine tranchera ensuite
 - attention a la distinction avec source_bruit = Industriel : une etude sur le bruit \
 industriel percu par les riverains d'un site (exposition environnementale) reste dans le \
 perimetre ; une etude sur l'exposition sonore des salaries a l'interieur de ce meme site \
-(exposition professionnelle) est hors perimetre.
+(exposition professionnelle) est hors perimetre ;
+- un essai clinique reste dans le perimetre des lors qu'un resultat est rapporte (section \
+"Results" renseignee sur ClinicalTrials.gov, publication associee, rapport intermediaire \
+avec donnees) — seule l'absence totale de resultat exploitable rend hors_perimetre.
 
 ## doi_url
 
