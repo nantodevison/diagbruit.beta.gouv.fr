@@ -16,7 +16,8 @@ poc-urbanisme-plu/
 ├── etape7_stockage/
 │   ├── __init__.py                        # vide, comme les modules précédents
 │   ├── client_strapi.py                   # aide partagée : créer/mettre à jour une entrée noisezone-alert
-│   ├── client_notion.py                   # aide partagée : créer/mettre à jour une page + upload de la géométrie
+│   ├── client_box.py                      # aide partagée : déposer la géométrie sur Box, retourner son URL
+│   ├── client_notion.py                   # aide partagée : créer/mettre à jour une page (data = URL Box)
 │   └── inserer.py                         # phase unique — lit etape6_{dept}_export.csv + etape6_{dept}_geometries/
 └── output/
     ├── etape6_{dept}_export.csv
@@ -28,18 +29,21 @@ poc-urbanisme-plu/
 Étape à phase unique, comme l'étape 6. Usage, depuis `poc-urbanisme-plu/` :
 
 ```
-python -m etape7_stockage.inserer --dept 033
-# → dry-run : liste ce qui serait créé/mis à jour, sur Strapi et Notion, sans rien envoyer
+python -m etape7_stockage.inserer --dept 033 --box-folder-id 398163261000
+# → dry-run, Strapi préprod (défaut) : liste ce qui serait créé/mis à jour, sans rien envoyer
 
-python -m etape7_stockage.inserer --dept 033 --envoyer
-# → exécute réellement les créations/mises à jour
+python -m etape7_stockage.inserer --dept 033 --box-folder-id 398163261000 --envoyer
+# → exécute réellement les créations/mises à jour, sur le Strapi préprod
+
+python -m etape7_stockage.inserer --dept 033 --box-folder-id 398163261000 --environnement prod --envoyer
+# → même chose, sur le Strapi de production
 ```
 
-`--output-dir` (défaut `output/`) permet de pointer vers un autre dossier de lecture/écriture que le défaut.
+`--output-dir` (défaut `output/`) permet de pointer vers un autre dossier de lecture/écriture que le défaut. `--box-folder-id` est **requis** : il n'y a pas de dossier Box par défaut — un dossier Box existe par territoire, jamais résolu automatiquement depuis les données (voir "Dépôt sur Box" ci-dessous). `--environnement` (`preprod` par défaut, ou `prod`) choisit le Strapi ciblé — voir "Deux environnements Strapi" ci-dessous ; Notion et Box, eux, n'ont qu'un seul environnement.
 
 ## Phase unique — Insertion (`inserer.py`)
 
-Lit `etape6_{dept}_export.csv` (une ligne par géométrie finale, `alert_slug_propose` portant la valeur finale saisie via `outil_validation.html`) et le fichier `.geojson` correspondant dans `etape6_{dept}_geometries/`. S'arrête immédiatement, avant de traiter la moindre ligne, si `etape6_{dept}_export.csv` ou `etape6_{dept}_geometries/` sont introuvables, ou si `STRAPI_API_TOKEN`/`STRAPI_URL`/`PERSONNAL_NOTION_TOKEN`/`NOTION_DATABASE_ID` sont absents de l'environnement (voir "Gestion des erreurs").
+Lit `etape6_{dept}_export.csv` (une ligne par géométrie finale, `alert_slug_propose` portant la valeur finale saisie via `outil_validation.html`) et le fichier `.geojson` correspondant dans `etape6_{dept}_geometries/`. S'arrête immédiatement, avant de traiter la moindre ligne, si `etape6_{dept}_export.csv` ou `etape6_{dept}_geometries/` sont introuvables, ou si `PERSONNAL_NOTION_TOKEN`/`NOTION_DATABASE_ID`/`BOX_CLIENT_ID`/`BOX_CLIENT_SECRET`/`BOX_ENTREPRISE_ID` sont absents de l'environnement, ou si les deux variables Strapi de l'environnement ciblé par `--environnement` (`STRAPI_PREPROD_API_TOKEN`/`STRAPI_PREPROD_URL` par défaut, `STRAPI_PROD_API_TOKEN`/`STRAPI_PROD_URL` avec `--environnement prod`) sont absentes (voir "Gestion des erreurs").
 
 Pour chaque ligne :
 
@@ -51,15 +55,25 @@ Pour chaque ligne :
    - `reference` ← `strapi_reference`
    - `label` ← `label_propose`
    - `title` ← `titre_propose` (titre court généré par LLM à l'étape 5, validé par l'opérateur). `alert_slug` (champ `uid`, `targetField: title` côté schéma Strapi) est fourni explicitement dans le payload plutôt que dérivé de `title`.
-   - Recherche préalable (`trouver_document_id`, voir "Idempotence") : absente → création, `POST {STRAPI_URL}/api/noisezone-alerts?status=draft`, corps `{"data": {...}}`. Présente → mise à jour, `PUT {STRAPI_URL}/api/noisezone-alerts/{documentId}?status=draft` (Strapi 5 — `documentId`, une chaîne, pas l'`id` numérique).
+   - Recherche préalable (`trouver_document_id`, voir "Idempotence") : absente → création, `POST {url_environnement}/api/noisezone-alerts?status=draft`, corps `{"data": {...}}`. Présente → mise à jour, `PUT {url_environnement}/api/noisezone-alerts/{documentId}?status=draft` (Strapi 5 — `documentId`, une chaîne, pas l'`id` numérique). `url_environnement` vient de `STRAPI_PREPROD_URL` ou `STRAPI_PROD_URL` selon `--environnement` (voir "Deux environnements Strapi" ci-dessous).
    - Entrée créée **en brouillon** (`draftAndPublish` actif sur ce content-type), jamais publiée automatiquement par le script — l'opérateur relit et publie manuellement dans Strapi. Le paramètre de requête `status=draft` sur `POST`/`PUT` est ce qui garantit ce comportement — voir "Piège : publication automatique" ci-dessous.
-3. **Notion** (`client_notion.py`) :
-   - Upload de la géométrie : `POST /v1/file_uploads` avec le fichier renommé `{id_geometrie}.json` (`.geojson` refusé par l'API, voir `etape-7-stockage-diagbruit.md`, "Pièce jointe géométrie") et `content_type: application/json`, puis `POST {upload_url}` en `multipart/form-data`.
-   - Recherche préalable (`trouver_page_id`, `POST /v1/data_sources/{data_source_id}/query` — voir "Sources de données Notion" ci-dessous). Absente → création (`POST /v1/pages`, `parent` = `{"type": "data_source_id", "data_source_id": ...}`). Présente (`page_id`) → mise à jour (`PATCH /v1/pages/{page_id}`).
-   - Champs : `Territoire` ← `territoire_propose`, `Description` ← `titre_propose` (même source que `title` Strapi ci-dessus), `alert_slug` ← `alert_slug_propose`, `data` ← fichier uploadé (`{"type": "file_upload", "file_upload": {"id": "..."}}`).
-4. **Journal** (`etape7_{dept}_insertions.csv`, uniquement avec `--envoyer`) : une ligne est ajoutée dès qu'au moins un des deux systèmes a été créé ou mis à jour avec succès, écrite et vidée sur disque immédiatement après le traitement de la ligne — pas accumulée en mémoire jusqu'à la fin du run. Une interruption en cours de route (timeout, erreur réseau) laisse donc une trace locale des lignes déjà traitées avant l'arrêt.
+3. **Box puis Notion** (`client_box.py` + `client_notion.py`) :
+   - Dépôt de la géométrie sur Box (`client_box.televerser_geometrie`) : recherche d'un fichier du même nom dans `--box-folder-id` (index du dossier mis en cache pour le run, voir "Dépôt sur Box" ci-dessous) ; absent → `POST https://upload.box.com/api/2.0/files/content` (création) ; présent → `POST .../files/{id}/content` (nouvelle version, pas de doublon). Retourne `https://app.box.com/file/{id}`.
+   - Recherche préalable côté Notion (`trouver_page_id`, `POST /v1/data_sources/{data_source_id}/query` — voir "Sources de données Notion" ci-dessous). Absente → création (`POST /v1/pages`, `parent` = `{"type": "data_source_id", "data_source_id": ...}`). Présente (`page_id`) → mise à jour (`PATCH /v1/pages/{page_id}`).
+   - Champs : `Territoire` ← `territoire_propose`, `Description` ← `titre_propose` (même source que `title` Strapi ci-dessus), `alert_slug` ← `alert_slug_propose`, `data` ← lien externe vers le fichier Box (`{"type": "external", "external": {"url": "https://app.box.com/file/..."}}`), pas un fichier uploadé dans Notion.
+4. **Journal** (`etape7_{dept}_insertions.csv`, uniquement avec `--envoyer`) : une ligne est ajoutée dès qu'au moins un des deux systèmes (Strapi/Notion) a été créé ou mis à jour avec succès, écrite et vidée sur disque immédiatement après le traitement de la ligne — pas accumulée en mémoire jusqu'à la fin du run. Une interruption en cours de route (timeout, erreur réseau) laisse donc une trace locale des lignes déjà traitées avant l'arrêt.
 
-Strapi et Notion sont traités indépendamment pour une même ligne : un échec sur l'un n'empêche jamais de tenter l'autre (voir "Gestion des erreurs").
+Strapi et Notion (dépôt Box inclus, préalable à l'écriture Notion) sont traités indépendamment pour une même ligne : un échec sur l'un n'empêche jamais de tenter l'autre (voir "Gestion des erreurs").
+
+## Dépôt sur Box (`client_box.py`)
+
+Authentification Box en Client Credentials Grant, à l'échelle de l'entreprise (`POST https://api.box.com/oauth2/token`, `grant_type=client_credentials` + `box_subject_type=enterprise` + `box_subject_id={BOX_ENTREPRISE_ID}`) — même mécanisme que le `BoxResource` de `dagster/` (`box_sdk_gen`, `BoxCCGAuth`/`CCGConfig`), réimplémenté ici en REST brut (`requests`) pour rester sans dépendance nouvelle. Jeton mis en cache pour le run, renouvelé s'il expire (durée de vie Box : 60 minutes).
+
+Le dossier Box cible (`--box-folder-id`) est un dossier par territoire — jamais résolu automatiquement depuis les données, toujours fourni explicitement par l'opérateur (ex. `398163261000` pour l'Eurométropole de Strasbourg).
+
+**Idempotence côté Box** : au premier appel pour un dossier donné, `client_box` liste ses fichiers (`GET /2.0/folders/{id}/items`) et met l'index nom → id en cache pour le run (un seul listing par dossier, pas un par géométrie). Une géométrie déjà déposée (même nom de fichier, ex. `10.geojson`) reçoit une nouvelle version (`POST .../files/{id}/content`) plutôt qu'un doublon.
+
+**URL retournée** : `https://app.box.com/file/{id}` — l'URL native de la page Box du fichier, pas un *shared link* (`https://.../s/...`) qui nécessiterait d'activer explicitement le partage public du fichier (voir échange de cadrage du 04/09/2026).
 
 ## Sources de données Notion (`data_source_id` vs `database_id`)
 
@@ -68,6 +82,12 @@ Depuis la version d'API Notion `2025-09-03`, une base peut contenir plusieurs "s
 - **Lecture** (`trouver_page_id`) : `POST /v1/data_sources/{data_source_id}/query`, pas `/v1/databases/{id}/query` (retiré par cette version de l'API).
 - **Création** (`creer_ou_mettre_a_jour`) : `parent` = `{"type": "data_source_id", "data_source_id": ...}`, pas `{"database_id": ...}`.
 - **Mise à jour** (`PATCH /v1/pages/{page_id}`) : inchangée — une page reste identifiée par son propre `id` une fois créée, indépendamment de sa base parente.
+
+## Deux environnements Strapi (`--environnement`)
+
+`--environnement preprod|prod` (défaut `preprod`) sélectionne, à chaque appel réseau de `client_strapi.py`, la paire de variables à lire : `STRAPI_PREPROD_API_TOKEN`/`STRAPI_PREPROD_URL` ou `STRAPI_PROD_API_TOKEN`/`STRAPI_PROD_URL` (`client_strapi._nom_variable`). Chaque fonction du module qui touche le réseau (`trouver_document_id`, `creer_ou_mettre_a_jour`, `verifier_configuration`) prend `environnement` en paramètre explicite plutôt qu'un état global du module — un run cible un seul environnement du début à la fin, jamais un mélange.
+
+**Historique (04/09/2026)** : jusque-là, une seule paire `STRAPI_API_TOKEN`/`STRAPI_URL` existait, implicitement pointée vers le Strapi préprod. Renommée en `STRAPI_PREPROD_*` pour lever l'ambiguïté, à l'occasion de l'ajout de la paire `STRAPI_PROD_*` (renseignée par l'opérateur quand le Strapi de production est prêt à recevoir des écritures — voir "Configuration requise" ci-dessous). Notion et Box restent partagés entre les deux environnements Strapi : un seul `NOTION_DATABASE_ID` et un seul dossier Box par territoire, aucune notion de préprod/prod de leur côté.
 
 ## Piège : publication automatique à la création Strapi
 
@@ -79,7 +99,7 @@ Un `POST`/`PUT` sans le paramètre de requête `status=draft` publie l'entrée i
 
 Avant toute écriture, l'étape 7 cherche une entrée/page existante par `alert_slug`, de chaque côté — jamais l'inverse. Une ligne déjà insérée qui est relancée (ex. correction d'un message à l'étape 5, nouvel `etape6_{dept}_export.csv`) met donc à jour l'existant au lieu de dupliquer.
 
-- **Strapi** (`trouver_document_id`) : `GET {STRAPI_URL}/api/noisezone-alerts?filters[alert_slug][$eq]={valeur}&status=draft` puis, si rien n'est trouvé, la même requête avec `status=published` (utile si une entrée a été publiée par un opérateur entre deux passages — brouillon et publié peuvent légitimement coexister pour un même `documentId`, voir "Piège : publication automatique" ci-dessus). Une entrée trouvée donne son `documentId` pour la mise à jour ; aucune des deux recherches ne trouvant rien déclenche une création.
+- **Strapi** (`trouver_document_id`) : `GET {url_environnement}/api/noisezone-alerts?filters[alert_slug][$eq]={valeur}&status=draft` puis, si rien n'est trouvé, la même requête avec `status=published` (utile si une entrée a été publiée par un opérateur entre deux passages — brouillon et publié peuvent légitimement coexister pour un même `documentId`, voir "Piège : publication automatique" ci-dessus). Une entrée trouvée donne son `documentId` pour la mise à jour ; aucune des deux recherches ne trouvant rien déclenche une création. `url_environnement` dépend de `--environnement` (voir "Deux environnements Strapi" ci-dessus) — une même `alert_slug` peut donc légitimement exister séparément côté préprod et côté prod.
 - **Notion** (`trouver_page_id`) : `POST /v1/data_sources/{data_source_id}/query`, filtre `alert_slug` (propriété `rich_text`) égal à la valeur — même logique. Notion n'a pas de notion de statut brouillon/publié sur une ligne de base de données : une seule recherche suffit.
 
 `etape7_{dept}_insertions.csv` n'est qu'un journal de traçabilité pour l'opérateur (voir "Contrat de données") — jamais relu par le script : la source de vérité est systématiquement l'état réel de Strapi/Notion au moment de l'exécution, plus robuste qu'un fichier local qui pourrait être perdu, désynchronisé, ou absent sur une autre machine.
@@ -94,11 +114,11 @@ Avant toute écriture, l'étape 7 cherche une entrée/page existante par `alert_
 
 ## Mode dry-run
 
-Comportement par défaut de `inserer.py`, sans `--envoyer` : aucune requête d'écriture (`POST`/`PUT`/`PATCH`) n'est faite, ni sur Strapi ni sur Notion — seules les recherches en lecture (voir "Idempotence") sont exécutées, pour afficher un dry-run fidèle à l'état réel. Le script affiche, pour chaque ligne, ce qu'il ferait ("créerait" ou "mettrait à jour {documentId}/{page_id}", d'après la recherche live) — y compris les valeurs exactes des champs qui seraient envoyés, pour permettre une relecture avant tout envoi réel. Aucun fichier n'est écrit dans `output/` en dry-run (ni journal ni fichier d'erreurs).
+Comportement par défaut de `inserer.py`, sans `--envoyer` : aucune requête d'écriture (`POST`/`PUT`/`PATCH`) n'est faite, ni sur Strapi, ni sur Notion, ni sur Box — seules les recherches en lecture (voir "Idempotence") sont exécutées, pour afficher un dry-run fidèle à l'état réel. Le script affiche, pour chaque ligne, ce qu'il ferait ("créerait" ou "mettrait à jour {documentId}/{page_id}", d'après la recherche live) — y compris les valeurs exactes des champs qui seraient envoyés, pour permettre une relecture avant tout envoi réel. Aucun fichier n'est écrit dans `output/` en dry-run (ni journal ni fichier d'erreurs).
 
 ## Gestion des erreurs
 
-Même principe que les étapes précédentes : un échec isolé sur une ligne (ex. Strapi ou Notion indisponible, payload rejeté, `alert_slug` incomplet) n'empêche jamais le traitement des autres lignes — tracé dans `etape7_{dept}_erreurs.csv` (supprimé plutôt que laissé vide si rien à signaler). `inserer.py` s'arrête immédiatement, avant de traiter la moindre ligne, si `etape6_{dept}_export.csv` ou `etape6_{dept}_geometries/` sont introuvables, ou si `STRAPI_API_TOKEN`/`STRAPI_URL`/`PERSONNAL_NOTION_TOKEN`/`NOTION_DATABASE_ID` sont absents de l'environnement — rien d'exploitable sans eux.
+Même principe que les étapes précédentes : un échec isolé sur une ligne (ex. Strapi, Notion ou Box indisponible, payload rejeté, `alert_slug` incomplet) n'empêche jamais le traitement des autres lignes — tracé dans `etape7_{dept}_erreurs.csv` (supprimé plutôt que laissé vide si rien à signaler). Un échec Box (ex. dossier introuvable, jeton expiré) est tracé côté `notion` (le dépôt Box précède l'écriture Notion dans le même bloc `_traiter_notion`, voir "Phase unique"). `inserer.py` s'arrête immédiatement, avant de traiter la moindre ligne, si `etape6_{dept}_export.csv` ou `etape6_{dept}_geometries/` sont introuvables, ou si `PERSONNAL_NOTION_TOKEN`/`NOTION_DATABASE_ID`/`BOX_CLIENT_ID`/`BOX_CLIENT_SECRET`/`BOX_ENTREPRISE_ID` sont absents de l'environnement, ou si les deux variables Strapi de l'environnement ciblé par `--environnement` sont absentes (voir "Deux environnements Strapi") — rien d'exploitable sans eux.
 
 **Échec partiel Strapi/Notion pour une même ligne** : si l'insertion Strapi réussit mais l'insertion Notion échoue (ou l'inverse), la ligne est tracée en erreur pour la partie échouée, et journalisée pour la partie réussie (une ligne est journalisée dès qu'au moins un des deux identifiants est obtenu — voir "Phase unique" ci-dessus). Un second passage n'a besoin d'aucun état local pour ne pas dupliquer la partie déjà réussie : la recherche par `alert_slug` (voir "Idempotence") la retrouve à chaque exécution et ne retente que la partie manquante.
 
@@ -120,11 +140,13 @@ Même principe que les étapes précédentes : un échec isolé sur une ligne (e
 
 ## Dépendances retenues
 
-- `requests` — déjà présent (étape 1), réutilisé pour les appels REST Strapi et Notion.
-- `python-dotenv` — déjà présent (étape 2/5), pour charger `STRAPI_API_TOKEN`/`STRAPI_URL`/`PERSONNAL_NOTION_TOKEN`/`NOTION_DATABASE_ID` depuis `.env`.
-- `tenacity` — déjà présent (étape 1), même politique de nouvelle tentative que `resolution_territoire.py`/`communes.py` pour les deux clients.
-- Aucune dépendance nouvelle : ni SDK Strapi, ni SDK Notion officiel — REST brut via `requests`, cohérent avec le reste du pipeline.
+- `requests` — déjà présent (étape 1), réutilisé pour les appels REST Strapi, Notion et Box.
+- `python-dotenv` — déjà présent (étape 2/5), pour charger `STRAPI_PREPROD_API_TOKEN`/`STRAPI_PREPROD_URL`/`STRAPI_PROD_API_TOKEN`/`STRAPI_PROD_URL`/`PERSONNAL_NOTION_TOKEN`/`NOTION_DATABASE_ID`/`BOX_CLIENT_ID`/`BOX_CLIENT_SECRET`/`BOX_ENTREPRISE_ID` depuis `.env`.
+- `tenacity` — déjà présent (étape 1), même politique de nouvelle tentative que `resolution_territoire.py`/`communes.py` pour les trois clients.
+- Aucune dépendance nouvelle : ni SDK Strapi, ni SDK Notion officiel, ni `box_sdk_gen` (utilisé côté `dagster/`) — REST brut via `requests`, cohérent avec le reste du pipeline.
 
 ## Validation
 
 Testé en conditions réelles sur `067-plui-strasbourg` : dry-run (recherche Strapi et Notion vérifiée, aucune écriture), puis envoi réel sur une géométrie isolée (contenu relu et vérifié conforme des deux côtés — `content`/`source`/`reference`/`label`/`title` côté Strapi, `Territoire`/`Description`/`alert_slug`/géométrie jointe côté Notion), puis généralisation au département complet (28 géométries, `alert_slug` saisis via `outil_validation.html`) : les 28 lignes sont créées/à jour sur Strapi et sur Notion, sans nouveau doublon depuis le correctif décrit dans "Idempotence".
+
+**Évolution du 04/09/2026** : la pièce jointe Notion (upload direct du `.geojson`) est remplacée par un dépôt sur Box (`client_box.py`) puis un lien externe dans la propriété `data` — voir "Dépôt sur Box" ci-dessus. Les 28 pages Notion de l'Eurométropole de Strasbourg, créées avec l'ancien format, sont archivées puis réinsérées avec le nouveau.

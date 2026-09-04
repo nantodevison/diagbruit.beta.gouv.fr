@@ -66,12 +66,16 @@ cp .env.example .env
 
 `.env` n'est jamais versionné (voir `.gitignore`).
 
-### Accès Strapi et Notion (nécessaires pour l'étape 7)
+### Accès Strapi, Notion et Box (nécessaires pour l'étape 7)
 
-L'étape 7 (insertion dans Strapi et Notion) a besoin de quatre variables
-supplémentaires dans le même `.env` : `PERSONNAL_NOTION_TOKEN`,
-`NOTION_DATABASE_ID`, `STRAPI_API_TOKEN` et `STRAPI_URL` — voir les
-commentaires de `.env.example` et
+L'étape 7 (insertion dans Strapi et Notion, géométrie déposée sur Box) a
+besoin de neuf variables supplémentaires dans le même `.env` :
+`PERSONNAL_NOTION_TOKEN`, `NOTION_DATABASE_ID`, `STRAPI_PREPROD_API_TOKEN`,
+`STRAPI_PREPROD_URL` (utilisées par défaut — `--environnement preprod`),
+`STRAPI_PROD_API_TOKEN`, `STRAPI_PROD_URL` (utilisées avec
+`--environnement prod`, à ne renseigner qu'une fois prêt à écrire en
+production) et `BOX_CLIENT_ID`/`BOX_CLIENT_SECRET`/`BOX_ENTREPRISE_ID` — voir
+les commentaires de `.env.example` et
 [`etape-7-conception-technique.md`](docs/etape-7-conception-technique.md)
 pour le détail de chaque valeur.
 

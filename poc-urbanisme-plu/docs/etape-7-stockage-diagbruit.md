@@ -7,7 +7,7 @@
 Automatiser, à partir du livrable de l'étape 6 (`etape6_{dept}_export.csv`, complété par l'opérateur via `outil_validation.html` — `alert_slug_propose` y porte la valeur finale — et `etape6_{dept}_geometries/`), les deux actions jusqu'ici faites à la main par la partie métier (voir `etape-6-mise-en-forme-diagbruit.md`, "Rappel du circuit métier actuel") :
 
 1. créer (ou mettre à jour) l'entrée Strapi (préprod) portant le message d'une zone et son `alert_slug` ;
-2. créer (ou mettre à jour) l'entrée Notion correspondante (base "Données réglementaires locales (PLU, PPBE, …)"), avec le même `alert_slug` et la géométrie en pièce jointe.
+2. créer (ou mettre à jour) l'entrée Notion correspondante (base "Données réglementaires locales (PLU, PPBE, …)"), avec le même `alert_slug` et un lien vers la géométrie, déposée au préalable sur Box.
 
 Cette étape est implémentée (`etape7_stockage/`) et a été utilisée en conditions réelles sur `067-plui-strasbourg` (28 géométries) : les entrées Strapi et Notion de ce périmètre sont créées et à jour.
 
@@ -45,7 +45,9 @@ La base "Données réglementaires locales (PLU, PPBE, …)" porte `alert_slug` (
 
 ## Pièce jointe géométrie
 
-La géométrie de la zone (`.geojson`, produite à l'étape 6) est envoyée à Notion comme pièce jointe de la page (propriété `data`). L'API Notion refuse l'extension `.geojson` ; le fichier est donc envoyé tel quel, seulement renommé en `.json` — le contenu (du GeoJSON valide) n'a pas besoin d'être modifié. Un fichier envoyé sans être attaché à une page expire au bout d'une heure : pas de risque d'objets orphelins dans Notion si l'étape 7 échoue entre l'envoi et l'attachement.
+La géométrie de la zone (`.geojson`, produite à l'étape 6) est d'abord déposée sur Box, dans un dossier dédié au territoire (`--box-folder-id`, un dossier par territoire — ex. `398163261000` pour l'Eurométropole de Strasbourg). L'URL de la page Box du fichier (`https://app.box.com/file/{id}` — pas un *shared link*, qui nécessiterait d'activer explicitement le partage public) est ensuite renseignée dans la propriété `data` de la page Notion, comme lien externe plutôt que comme fichier attaché.
+
+**Historique** : jusqu'au 04/09/2026, le `.geojson` était uploadé directement à Notion comme pièce jointe (`file_upload`) — l'API Notion refusait l'extension `.geojson`, le fichier était donc renommé en `.json` avant envoi. Écarté au profit du dépôt Box pour disposer d'une copie durable et consultable indépendamment de Notion.
 
 ## Idempotence
 
@@ -57,13 +59,14 @@ Relancer l'étape 7 sur le même `etape6_{dept}_export.csv` (par exemple après 
 
 ## Configuration requise
 
-Quatre variables d'environnement, dans `poc-urbanisme-plu/.env` :
-- `STRAPI_URL` — l'origine seule (ex. `https://cms.preprod.diagbruit.fr`), sans chemin : le code ajoute lui-même `/api/noisezone-alerts` (au pluriel).
-- `STRAPI_API_TOKEN` — jeton avec les droits `find`/`findOne`/`create`/`update` sur `noisezone-alert` (la lecture, `find`/`findOne`, est nécessaire à l'idempotence ci-dessus).
+Neuf variables d'environnement, dans `poc-urbanisme-plu/.env` :
+- `STRAPI_PREPROD_URL` / `STRAPI_PREPROD_API_TOKEN` — Strapi préprod, ciblé par défaut (`--environnement preprod`, voir `etape-7-conception-technique.md`, "Deux environnements Strapi"). `STRAPI_PREPROD_URL` est l'origine seule (ex. `https://cms.preprod.diagbruit.fr`), sans chemin : le code ajoute lui-même `/api/noisezone-alerts` (au pluriel). Le jeton a les droits `find`/`findOne`/`create`/`update` sur `noisezone-alert` (la lecture, `find`/`findOne`, est nécessaire à l'idempotence ci-dessus).
+- `STRAPI_PROD_URL` / `STRAPI_PROD_API_TOKEN` — mêmes droits, sur le Strapi de production, ciblé par `--environnement prod`. Non requises tant que `inserer.py` n'est appelé qu'en préprod.
 - `PERSONNAL_NOTION_TOKEN` — orthographe (deux "N") conservée telle quelle depuis le `.env` existant.
 - `NOTION_DATABASE_ID` — identifiant de la base Notion, tel que visible dans son URL.
+- `BOX_CLIENT_ID` / `BOX_CLIENT_SECRET` / `BOX_ENTREPRISE_ID` — même application Box (Client Credentials Grant, à l'échelle entreprise) que `dagster/.env.example`.
 
-Sans l'une de ces quatre variables, `inserer.py` s'arrête avant de traiter la moindre ligne.
+`inserer.py` s'arrête avant de traiter la moindre ligne s'il manque `PERSONNAL_NOTION_TOKEN`, `NOTION_DATABASE_ID`, l'une des trois variables Box, ou l'une des deux variables Strapi de l'environnement ciblé par `--environnement` (les variables Strapi de l'autre environnement ne sont pas vérifiées). Le dossier Box cible (`--box-folder-id`, un par territoire) est un argument requis de `inserer.py`, pas une variable d'environnement — voir `etape-7-conception-technique.md`, "Dépôt sur Box".
 
 ## Point de vigilance transverse
 

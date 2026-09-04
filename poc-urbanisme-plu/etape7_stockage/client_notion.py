@@ -1,6 +1,6 @@
-"""Étape 7 — aide partagée : client Notion (créer/mettre à jour une page +
-téléverser la géométrie), base "Données réglementaires locales (PLU, PPBE, …)"
-— voir `docs/etape-7-conception-technique.md`.
+"""Étape 7 — aide partagée : client Notion (créer/mettre à jour une page,
+géométrie référencée en pièce jointe), base "Données réglementaires locales
+(PLU, PPBE, …)" — voir `docs/etape-7-conception-technique.md`.
 
 Une page est identifiée par sa propriété `alert_slug` (texte, pas de
 contrainte d'unicité native contrairement à Strapi) : `trouver_page_id`
@@ -15,20 +15,25 @@ ses lignes et y créer une page se font via un `data_source_id` distinct du
 puis mis en cache pour le reste du run). `NOTION_DATABASE_ID` reste
 l'identifiant à renseigner dans `.env` (le seul visible depuis l'URL Notion),
 `_data_source_id()` fait la traduction.
+
+**Géométrie en lien externe (depuis le 04/09/2026)** : la propriété `data`
+(Files & media) ne reçoit plus le `.geojson` en pièce jointe uploadée
+(`file_upload`, expirant au bout d'une heure si non attachée) mais un lien
+externe (`external`) vers le fichier déposé sur Box par `client_box.py` —
+Notion accepte les deux types d'entrée dans une propriété Files & media,
+aucun changement de schéma nécessaire côté base Notion.
 """
 
 from __future__ import annotations
 
 import os
 from dataclasses import dataclass
-from pathlib import Path
 
 import requests
 from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
 
 NOTION_API_BASE = "https://api.notion.com/v1"
-# Version requise par l'API de file upload — vérifiée en réel le 23/08/2026,
-# voir docs/etape-7-stockage-diagbruit.md, "Pièce jointe géométrie".
+# Version d'API vérifiée en réel le 23/08/2026 — voir "Migration data_sources" ci-dessus.
 NOTION_VERSION = "2026-03-11"
 
 
@@ -68,10 +73,6 @@ def _headers_json() -> dict:
     return {"Authorization": f"Bearer {_jeton()}", "Notion-Version": NOTION_VERSION, "Content-Type": "application/json"}
 
 
-def _headers_multipart() -> dict:
-    return {"Authorization": f"Bearer {_jeton()}", "Notion-Version": NOTION_VERSION}
-
-
 @retry(
     retry=retry_if_exception_type(requests.exceptions.RequestException),
     stop=stop_after_attempt(4),
@@ -108,23 +109,6 @@ def _patch_json(url: str, payload: dict) -> dict:
     return response.json()
 
 
-@retry(
-    retry=retry_if_exception_type(requests.exceptions.RequestException),
-    stop=stop_after_attempt(4),
-    wait=wait_exponential(multiplier=1, min=1, max=10),
-    reraise=True,
-)
-def _envoyer_fichier(upload_url: str, nom_upload: str, contenu: bytes) -> dict:
-    response = requests.post(
-        upload_url,
-        headers=_headers_multipart(),
-        files={"file": (nom_upload, contenu, "application/json")},
-        timeout=30,
-    )
-    response.raise_for_status()
-    return response.json()
-
-
 _cache_data_source_id: str | None = None
 
 
@@ -155,30 +139,12 @@ def trouver_page_id(alert_slug: str) -> str | None:
     return resultats[0]["id"] if resultats else None
 
 
-def televerser_geometrie(chemin_geojson: Path) -> str:
-    """Envoie le contenu d'un `.geojson` à Notion, renommé `.json`
-    (`.geojson` explicitement refusé par l'API, vérifié le 23/08/2026 — voir
-    `docs/etape-7-stockage-diagbruit.md`, "Pièce jointe géométrie") ; le
-    contenu lui-même n'a pas besoin d'être modifié. Retourne l'id de l'objet
-    *file upload*, à utiliser dans l'heure qui suit (expire sinon)."""
-    contenu = chemin_geojson.read_bytes()
-    nom_upload = f"{chemin_geojson.stem}.json"
-
-    creation = _post_json(
-        f"{NOTION_API_BASE}/file_uploads", {"filename": nom_upload, "content_type": "application/json"}
-    )
-    upload_id = creation["id"]
-    upload_url = creation.get("upload_url") or f"{NOTION_API_BASE}/file_uploads/{upload_id}/send"
-    _envoyer_fichier(upload_url, nom_upload, contenu)
-    return upload_id
-
-
 @dataclass
 class ChampsPageNotion:
     territoire: str
     description: str
     alert_slug: str
-    file_upload_id: str
+    url_geometrie: str
     nom_fichier: str
 
 
@@ -189,7 +155,7 @@ def _proprietes(champs: ChampsPageNotion) -> dict:
         "alert_slug": {"rich_text": [{"text": {"content": champs.alert_slug}}]},
         "data": {
             "files": [
-                {"type": "file_upload", "file_upload": {"id": champs.file_upload_id}, "name": champs.nom_fichier}
+                {"type": "external", "external": {"url": champs.url_geometrie}, "name": champs.nom_fichier}
             ]
         },
     }
@@ -210,3 +176,12 @@ def creer_ou_mettre_a_jour(champs: ChampsPageNotion) -> tuple[str, bool]:
     }
     reponse = _post_json(f"{NOTION_API_BASE}/pages", payload)
     return reponse["id"], True
+
+
+def archiver_page(page_id: str) -> None:
+    """Met une page existante à la corbeille Notion — utilisé pour les
+    nettoyages ponctuels, jamais appelé par `inserer.py`. `in_trash`, pas
+    `archived` (retiré par la version d'API `NOTION_VERSION` : `POST` avec
+    `archived` échoue en 400, `body.archived should be not present` —
+    vérifié en réel le 04/09/2026)."""
+    _patch_json(f"{NOTION_API_BASE}/pages/{page_id}", {"in_trash": True})

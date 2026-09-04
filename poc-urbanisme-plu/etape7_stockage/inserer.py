@@ -1,20 +1,29 @@
 """Étape 7 — phase unique : insertion dans Strapi et Notion (`inserer.py`),
-voir `docs/etape-7-conception-technique.md`.
+géométrie déposée sur Box, voir `docs/etape-7-conception-technique.md`.
 
 Lit `etape6_{dept}_export.csv` et `etape6_{dept}_geometries/`. Pour chaque
-géométrie finale : cherche une entrée Strapi/Notion existante par
+géométrie finale : dépose le `.geojson` dans le dossier Box `--box-folder-id`
+(un dossier par territoire), cherche une entrée Strapi/Notion existante par
 `alert_slug` (idempotence, voir la conception technique), crée ou met à
-jour chaque côté indépendamment.
+jour chaque côté indépendamment — Notion reçoit l'URL Box du fichier dans sa
+propriété `data`, pas le fichier lui-même.
+
+**Deux environnements Strapi** : `--environnement preprod|prod` (défaut
+`preprod`) sélectionne les variables lues par `client_strapi`
+(`STRAPI_PREPROD_API_TOKEN`/`STRAPI_PREPROD_URL` ou `STRAPI_PROD_API_TOKEN`/
+`STRAPI_PROD_URL`) — voir `docs/etape-7-conception-technique.md`. Notion et
+Box n'ont qu'un seul environnement, non concerné par ce choix.
 
 **Dry-run par défaut** : sans `--envoyer`, aucune requête d'écriture n'est
-faite sur Strapi ni Notion — seules les recherches en lecture, pour afficher
-fidèlement ce qui serait créé/mis à jour. Cette étape écrit dans des
+faite sur Strapi, Notion ni Box — seules les recherches en lecture, pour
+afficher fidèlement ce qui serait créé/mis à jour. Cette étape écrit dans des
 systèmes partagés, visibles par toute l'équipe métier (voir la conception
 technique, "Posture") : jamais d'envoi réel sans ce drapeau explicite.
 
 Usage :
-    python -m etape7_stockage.inserer --dept 033              # dry-run
-    python -m etape7_stockage.inserer --dept 033 --envoyer    # envoi réel
+    python -m etape7_stockage.inserer --dept 033 --box-folder-id 12345                          # dry-run, preprod
+    python -m etape7_stockage.inserer --dept 033 --box-folder-id 12345 --envoyer                # envoi réel, preprod
+    python -m etape7_stockage.inserer --dept 033 --box-folder-id 12345 --environnement prod --envoyer   # envoi réel, prod
 
 Entrée (dans `output/`, voir `--output-dir`) :
     etape6_{dept}_export.csv
@@ -35,7 +44,7 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
-from . import client_notion, client_strapi
+from . import client_box, client_notion, client_strapi
 
 load_dotenv()
 
@@ -67,7 +76,7 @@ def _lire_export(chemin: Path) -> list[dict]:
         return list(csv.DictReader(fichier))
 
 
-def _traiter_strapi(ligne: dict, alert_slug: str, envoyer: bool) -> tuple[str, str | None]:
+def _traiter_strapi(ligne: dict, alert_slug: str, environnement: str, envoyer: bool) -> tuple[str, str | None]:
     """Retourne `(document_id, message_erreur)` — `message_erreur` est
     `None` en cas de succès (ou en dry-run, jamais un échec)."""
     try:
@@ -80,16 +89,16 @@ def _traiter_strapi(ligne: dict, alert_slug: str, envoyer: bool) -> tuple[str, s
                 reference=_texte(ligne.get("strapi_reference")),
                 label=_texte(ligne.get("label_propose")),
             )
-            document_id, cree = client_strapi.creer_ou_mettre_a_jour(champs)
-            print(f"  [Strapi] {'créé' if cree else 'mis à jour'} ({document_id})")
+            document_id, cree = client_strapi.creer_ou_mettre_a_jour(champs, environnement)
+            print(f"  [Strapi/{environnement}] {'créé' if cree else 'mis à jour'} ({document_id})")
         else:
-            existant = client_strapi.trouver_document_id(alert_slug)
+            existant = client_strapi.trouver_document_id(alert_slug, environnement)
             document_id = existant or ""
             if existant:
-                print(f"  [Strapi] (dry-run) mettrait à jour {existant}")
+                print(f"  [Strapi/{environnement}] (dry-run) mettrait à jour {existant}")
             else:
                 print(
-                    f"  [Strapi] (dry-run) créerait — title={_texte(ligne.get('titre_propose'))!r}, "
+                    f"  [Strapi/{environnement}] (dry-run) créerait — title={_texte(ligne.get('titre_propose'))!r}, "
                     f"content={_texte(ligne.get('message_content'))[:60]!r}..., "
                     f"source={_texte(ligne.get('strapi_source'))!r}, reference={_texte(ligne.get('strapi_reference'))!r}, "
                     f"label={_texte(ligne.get('label_propose'))!r}"
@@ -99,7 +108,9 @@ def _traiter_strapi(ligne: dict, alert_slug: str, envoyer: bool) -> tuple[str, s
         return "", str(exc)
 
 
-def _traiter_notion(ligne: dict, alert_slug: str, dossier_geometries: Path, envoyer: bool) -> tuple[str, str | None]:
+def _traiter_notion(
+    ligne: dict, alert_slug: str, dossier_geometries: Path, box_folder_id: str, envoyer: bool
+) -> tuple[str, str | None]:
     """Retourne `(page_id, message_erreur)` — `message_erreur` est `None`
     en cas de succès (ou en dry-run, jamais un échec)."""
     try:
@@ -107,16 +118,16 @@ def _traiter_notion(ligne: dict, alert_slug: str, dossier_geometries: Path, envo
         if envoyer:
             if not chemin_geojson.exists():
                 raise FileNotFoundError(f"géométrie introuvable : {chemin_geojson}")
-            file_upload_id = client_notion.televerser_geometrie(chemin_geojson)
+            url_geometrie = client_box.televerser_geometrie(chemin_geojson, box_folder_id)
             champs = client_notion.ChampsPageNotion(
                 territoire=_texte(ligne.get("territoire_propose")),
                 description=_texte(ligne.get("titre_propose")),
                 alert_slug=alert_slug,
-                file_upload_id=file_upload_id,
+                url_geometrie=url_geometrie,
                 nom_fichier=chemin_geojson.name,
             )
             page_id, cree = client_notion.creer_ou_mettre_a_jour(champs)
-            print(f"  [Notion] {'créé' if cree else 'mis à jour'} ({page_id})")
+            print(f"  [Notion] {'créé' if cree else 'mis à jour'} ({page_id}) — géométrie : {url_geometrie}")
         else:
             existant = client_notion.trouver_page_id(alert_slug)
             page_id = existant or ""
@@ -126,14 +137,24 @@ def _traiter_notion(ligne: dict, alert_slug: str, dossier_geometries: Path, envo
                 print(
                     f"  [Notion] (dry-run) créerait — Territoire={_texte(ligne.get('territoire_propose'))!r}, "
                     f"Description={_texte(ligne.get('titre_propose'))[:60]!r}..., "
-                    f"géométrie={chemin_geojson.name!r} ({'présente' if chemin_geojson.exists() else 'MANQUANTE'})"
+                    f"géométrie={chemin_geojson.name!r} ({'présente' if chemin_geojson.exists() else 'MANQUANTE'}) "
+                    f"→ Box dossier {box_folder_id}"
                 )
         return page_id, None
     except Exception as exc:
         return "", str(exc)
 
 
-def inserer(code_departement: str, dossier_sortie: str | Path = "output", envoyer: bool = False) -> Path:
+def inserer(
+    code_departement: str,
+    box_folder_id: str,
+    environnement: str = "preprod",
+    dossier_sortie: str | Path = "output",
+    envoyer: bool = False,
+) -> Path:
+    if environnement not in client_strapi.ENVIRONNEMENTS:
+        raise ValueError(f"environnement doit être parmi {client_strapi.ENVIRONNEMENTS}, reçu {environnement!r}.")
+
     dossier = Path(dossier_sortie)
     chemin_export = dossier / f"etape6_{code_departement}_export.csv"
     dossier_geometries = dossier / f"etape6_{code_departement}_geometries"
@@ -145,8 +166,9 @@ def inserer(code_departement: str, dossier_sortie: str | Path = "output", envoye
 
     # Vérifié tôt, avant de traiter la moindre ligne — une configuration
     # manquante n'a rien d'un échec isolé, rien n'est exploitable sans elle.
-    client_strapi.verifier_configuration()
+    client_strapi.verifier_configuration(environnement)
     client_notion.verifier_configuration()
+    client_box.verifier_configuration()
 
     lignes = _lire_export(chemin_export)
     date_traitement = date.today().isoformat()
@@ -189,7 +211,7 @@ def inserer(code_departement: str, dossier_sortie: str | Path = "output", envoye
                 )
                 continue
 
-            strapi_document_id, erreur_strapi = _traiter_strapi(ligne, alert_slug, envoyer)
+            strapi_document_id, erreur_strapi = _traiter_strapi(ligne, alert_slug, environnement, envoyer)
             if erreur_strapi:
                 erreurs.append(
                     {
@@ -200,7 +222,9 @@ def inserer(code_departement: str, dossier_sortie: str | Path = "output", envoye
                     }
                 )
 
-            notion_page_id, erreur_notion = _traiter_notion(ligne, alert_slug, dossier_geometries, envoyer)
+            notion_page_id, erreur_notion = _traiter_notion(
+                ligne, alert_slug, dossier_geometries, box_folder_id, envoyer
+            )
             if erreur_notion:
                 erreurs.append(
                     {
@@ -261,6 +285,23 @@ def _parser() -> argparse.ArgumentParser:
         help="Dossier de lecture/écriture des fichiers (défaut : output/).",
     )
     parser.add_argument(
+        "--box-folder-id",
+        required=True,
+        help=(
+            "Identifiant du dossier Box cible pour les géométries (un dossier par territoire, "
+            "jamais résolu automatiquement — voir docs/etape-7-conception-technique.md)."
+        ),
+    )
+    parser.add_argument(
+        "--environnement",
+        choices=client_strapi.ENVIRONNEMENTS,
+        default="preprod",
+        help=(
+            "Environnement Strapi cible : préprod (défaut, STRAPI_PREPROD_API_TOKEN/STRAPI_PREPROD_URL) "
+            "ou prod (STRAPI_PROD_API_TOKEN/STRAPI_PROD_URL)."
+        ),
+    )
+    parser.add_argument(
         "--envoyer",
         action="store_true",
         help="Exécute réellement les créations/mises à jour. Sans ce drapeau : dry-run, rien n'est envoyé.",
@@ -271,16 +312,29 @@ def _parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> int:
     args = _parser().parse_args(argv)
 
-    print(f"Étape 7 — département {args.dept} — {'ENVOI RÉEL' if args.envoyer else 'dry-run'}")
+    print(
+        f"Étape 7 — département {args.dept} — Strapi/{args.environnement} — "
+        f"{'ENVOI RÉEL' if args.envoyer else 'dry-run'}"
+    )
     try:
-        inserer(args.dept, dossier_sortie=args.output_dir, envoyer=args.envoyer)
+        inserer(
+            args.dept,
+            args.box_folder_id,
+            environnement=args.environnement,
+            dossier_sortie=args.output_dir,
+            envoyer=args.envoyer,
+        )
     except ExportCsvIntrouvable as exc:
         print(f"Arrêt : etape6_{args.dept}_export.csv introuvable ({exc}).", file=sys.stderr)
         return 1
     except GeometriesIntrouvables as exc:
         print(f"Arrêt : etape6_{args.dept}_geometries/ introuvable ({exc}).", file=sys.stderr)
         return 1
-    except (client_strapi.ConfigurationStrapiManquante, client_notion.ConfigurationNotionManquante) as exc:
+    except (
+        client_strapi.ConfigurationStrapiManquante,
+        client_notion.ConfigurationNotionManquante,
+        client_box.ConfigurationBoxManquante,
+    ) as exc:
         print(f"Arrêt : {exc}", file=sys.stderr)
         return 1
     return 0
