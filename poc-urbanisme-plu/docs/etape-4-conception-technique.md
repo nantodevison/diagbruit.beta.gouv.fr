@@ -17,7 +17,7 @@ poc-urbanisme-plu/
 ├── etape3_validation_manuelle/          # existant
 ├── etape4_geometries/
 │   ├── __init__.py                      # vide, comme les modules précédents
-│   ├── sources_gpu.py                   # aide partagée : appels API Carto GPU (couches document/municipality)
+│   ├── sources_gpu.py                   # aide partagée : appels API Carto GPU (couches document/municipality/zone-urba)
 │   ├── preparer_geometries.py           # Phase 1 — auto : remplit geometries_administratives, prépare occurrences_a_georeferencer
 │   ├── controle_qualite.py              # aide partagée : validité OGC et type de géométrie (pas le CRS, vérifié séparément — voir Phase 3)
 │   ├── synthese_geometries.py           # Phase 3 — fusionne + contrôle qualité + vérification/reprojection CRS → etape4_{dept}.gpkg
@@ -44,10 +44,17 @@ python -m etape4_geometries.synthese_geometries --dept 033
 
 Lit `etape3_{dept}.csv` (module `csv` de la bibliothèque standard, `encoding="utf-8-sig"`, cohérent avec le reste du pipeline). Pour chaque ligne, deux chemins possibles :
 
-- **`portee_geometrique == "zone_specifique"`** → la ligne part telle quelle (tous ses attributs, géométrie laissée vide) dans la couche `occurrences_a_georeferencer`, sans aucun appel réseau.
+- **`portee_geometrique == "zone_specifique"`** → la ligne part dans la couche `occurrences_a_georeferencer`. Depuis le 09/09/2026, une correspondance automatique est d'abord tentée (voir "Correspondance automatique de zone (`zone-urba`)" plus bas) ; en cas de succès, la géométrie trouvée est écrite directement et `geometrie_origine = "zone_urba_auto"`. Sans correspondance (champ vide, `partition_gpu` vide, code introuvable dans la partition), la géométrie reste vide et `geometrie_origine = ""` — repli identique au comportement d'avant ce changement.
 - **Tous les autres cas** (`portee_geometrique == "administrative"`, ou `nature_zone` en `document_non_significatif` / `document_non_exploitable` / `rnu` / `trou_de_couverture`) → une géométrie est récupérée automatiquement, via `sources_gpu.py` :
-  - si `partition_gpu` est renseigné → appel à la couche `document` de l'API Carto GPU, filtrée sur cette valeur (déjà précalculée à l'étape 3, voir `etape-3-conception-technique.md`, "Calcul de `partition_gpu`"), pour récupérer le périmètre exact du document ;
-  - sinon (RNU, trou de couverture — `id_gpu`/`partition_gpu` vides) → appel à la couche `municipality`, déjà utilisée à l'étape 1 pour détecter le RNU, avec `code_insee_commune` en paramètre.
+  - si `partition_gpu` est renseigné → appel à la couche `document` de l'API Carto GPU, filtrée sur cette valeur (déjà précalculée à l'étape 3, voir `etape-3-conception-technique.md`, "Calcul de `partition_gpu`"), pour récupérer le périmètre exact du document (`geometrie_origine = "document"`) ;
+  - sinon (RNU, trou de couverture — `id_gpu`/`partition_gpu` vides) → appel à la couche `municipality`, déjà utilisée à l'étape 1 pour détecter le RNU, avec `code_insee_commune` en paramètre (`geometrie_origine = "municipality"`).
+
+### Correspondance automatique de zone (`zone-urba`)
+
+Pour chaque `partition_gpu` distincte parmi les occurrences `zone_specifique` (même dédoublonnage que pour `document` ci-dessus), `preparer_geometries.py` appelle une fois `sources_gpu.recuperer_zones_urba(partition_gpu)`, qui récupère **l'ensemble** des zones de la couche `zone-urba` pour cette partition — jamais un appel filtré par code, le paramètre `libelle` de cette couche étant ignoré côté serveur (vérifié en réel, voir `etape-4-construction-geometries-diagbruit.md`, "Sources de géométrie"). Chaque occurrence est ensuite comparée en mémoire, via `sources_gpu.trouver_geometrie_zone(features, zone_reglementaire_mentionnee)`, qui :
+- normalise le code recherché et celui de chaque zone (`libelle`) — espaces retirés, casse uniforme, rien de plus (pas de correction de l'ambiguïté chiffre/romain "1AUh" vs "IAUB" observée sur des données réelles, voir `ameliorations-identifiees.md`) ;
+- si une ou plusieurs zones correspondent, unit leurs géométries en une seule (`_unir_features`, même logique que pour `document` : un même code de zone peut apparaître en plusieurs polygones disjoints dans une même partition — décision du 09/09/2026 : pas de tentative de restreindre l'union à un sous-ensemble "plausible", une zone auto-matchée est **une seule entité géométrique par occurrence**, à vérifier comme telle en Phase 2) ;
+- sinon, échoue avec un message explicite — jamais une erreur bloquante ni une entrée dans `etape4_{dept}_erreurs.csv` : c'est le fonctionnement normal du repli vers le tracé manuel (seul un échec de l'appel réseau `recuperer_zones_urba` lui-même part en erreur, source `"zone-urba"`, dans `etape4_{dept}_erreurs.csv`).
 
 Avant tout appel réseau, les lignes sont dédoublonnées sur `id_gpu` (un PLUi intercommunal a autant de lignes dans `etape3_{dept}.csv` que de communes ou d'occurrences, mais un seul périmètre à récupérer) — même logique que le dédoublonnage déjà appliqué à l'étape 1 (EPCI) et à l'étape 2 (résolution de pièces). C'est `partition_gpu`, retrouvé pour l'`id_gpu` retenu par la déduplication, qui est effectivement passé à l'appel réseau.
 
@@ -125,6 +132,38 @@ def recuperer_geometrie_commune(code_insee_commune):
     if not features:
         return ResultatGeometrie(geometrie_geojson=None, erreur="commune introuvable dans le GPU")
     return ResultatGeometrie(geometrie_geojson=features[0]["geometry"], erreur=None)
+
+
+# Ajouté le 09/09/2026 — voir etape-4-construction-geometries-diagbruit.md,
+# "Sources de géométrie" : `libelle` n'est pas filtrable côté serveur
+# (vérifié en réel), d'où un unique appel par partition puis un filtrage en
+# mémoire pour chaque occurrence.
+def recuperer_zones_urba(partition_gpu):
+    try:
+        response = _get(f"{API_CARTO_GPU}/zone-urba", {"partition": partition_gpu})
+    except requests.exceptions.RequestException as exc:
+        return [], f"appel zone-urba indisponible : {exc}"
+    return response.json().get("features", []), None
+
+
+def _normaliser_code_zone(code):
+    return re.sub(r"\s+", "", code).strip().upper()
+
+
+def trouver_geometrie_zone(features, code_zone):
+    code_normalise = _normaliser_code_zone(code_zone)
+    if not code_normalise:
+        return ResultatGeometrie(geometrie_geojson=None, erreur="aucun code de zone à rechercher")
+
+    correspondances = [
+        f for f in features
+        if _normaliser_code_zone(f.get("properties", {}).get("libelle") or "") == code_normalise
+    ]
+    if not correspondances:
+        return ResultatGeometrie(
+            geometrie_geojson=None, erreur=f"zone « {code_zone} » introuvable dans le zonage GPU de la partition"
+        )
+    return ResultatGeometrie(geometrie_geojson=_unir_features(correspondances), erreur=None)
 ```
 
 Un échec (document introuvable dans le GPU, timeout persistant après les tentatives de `tenacity`, réponse vide) n'interrompt jamais le traitement du reste du département : la ligne concernée part dans `etape4_{dept}_erreurs.csv` (identifiant, source interrogée, message d'erreur), et le reste continue — même principe que les trois étapes précédentes.
@@ -143,15 +182,17 @@ Aucun script : l'opérateur ouvre `etape4_{dept}_a_completer.gpkg` dans QGIS, ch
 
 **Avant de l'utiliser sur un autre département que le 067**, penser à mettre à jour les filtres départementaux des deux couches WFS (parcelles, communes) — sans quoi elles resteraient limitées au département 67 quel que soit le département réellement travaillé.
 
+**Symbologie recommandée sur `geometrie_origine` (ajoutée le 09/09/2026, non appliquée dans `modele_validation_manuelle.qgz` — à faire manuellement dans QGIS, un fichier `.qgz` n'étant pas du texte éditable par ce code)** : une règle catégorisée sur `geometrie_origine` dans `occurrences_a_georeferencer` permet de distinguer d'un coup d'œil les entités déjà géoréférencées automatiquement (`"zone_urba_auto"`, à vérifier) de celles encore vides (`""`, à tracer intégralement) — plus rapide que d'ouvrir la table attributaire pour chaque entité.
+
 Pour chaque entité de `occurrences_a_georeferencer` (déjà pré-remplie en attributs, géométrie vide) : sélectionner la ligne dans la table attributaire, passer en mode édition, utiliser l'outil de digitalisation avec la fonction **"Ajouter une partie"** pour dessiner directement la géométrie de l'entité sélectionnée, en s'appuyant sur `lien_web_document` (ouvrir le PDF), `reference_precise` (aller au bon article ou à la bonne page) et `zone_reglementaire_mentionnee`/`justification` (savoir ce qu'on cherche à représenter). QGIS écrit directement dans le GeoPackage à chaque sauvegarde — pas d'export séparé à gérer.
 
 Si, en traçant, l'opérateur constate que deux occurrences décrivent en réalité la même règle sur le même secteur (voir "Mécanisme de fusion" plus bas), renseigner `fusionne_avec_id_gpu`/`fusionne_avec_id_occurrence` sur l'occurrence membre plutôt que de la tracer une deuxième fois — la géométrie peut alors rester vide pour cette ligne. Si cette vérification révèle par ailleurs que `nature_sonore_zone` est manifestement erronée sur l'une des deux occurrences (classification automatique de l'étape 2 prise en défaut), l'opérateur peut la corriger directement dans le gpkg — voir "Contrat de données", `nature_sonore_zone`.
 
-**Recommandation de validation** (même logique que le test Playwright de l'étape 3) : avant tout usage réel, tester ce flux avec un jeu de données factice couvrant les cas limites (une occurrence avec un attribut vide, une occurrence dont le tracé recouvre volontairement une géométrie de `geometries_administratives`, une occurrence volontairement laissée sans géométrie) pour s'assurer que la Phase 3 les traite correctement.
+**Recommandation de validation** (même logique que le test Playwright de l'étape 3) : avant tout usage réel, tester ce flux avec un jeu de données factice couvrant les cas limites (une occurrence avec un attribut vide, une occurrence dont le tracé recouvre volontairement une géométrie de `geometries_administratives`, une occurrence volontairement laissée sans géométrie) pour s'assurer que la Phase 3 les traite correctement. Depuis le 09/09/2026, ajouter aussi : une occurrence `zone_specifique` dont le code correspond à une zone réelle de la partition (vérifie `geometrie_origine = "zone_urba_auto"` et le passage en Phase 3 sans repasser par QGIS), une dont le code ne correspond à rien (vérifie le repli silencieux vers `occurrences_a_georeferencer`, géométrie vide, sans entrée dans `etape4_{dept}_erreurs.csv`), et une géométrie `zone_urba_auto` volontairement retracée par l'opérateur (vérifie qu'elle passe bien par le contrôle qualité comme n'importe quelle géométrie manuelle). Vérifié en conditions réelles le 09/09/2026 sur le PLUi de l'Eurométropole de Strasbourg (`DU_246700488`, zone "N1" trouvée avec succès, code inventé correctement écarté).
 
 ## Phase 3 — Synthèse (`synthese_geometries.py`)
 
-Lit `etape4_{dept}_a_completer.gpkg` (deux couches). Sépare `occurrences_a_georeferencer` en deux lots selon que la géométrie est renseignée ou non — sauf exception, voir plus bas :
+Lit `etape4_{dept}_a_completer.gpkg` (deux couches). Sépare `occurrences_a_georeferencer` en deux lots selon que la géométrie est renseignée ou non — sauf exception, voir plus bas. **Depuis le 09/09/2026**, "géométrie renseignée" couvre aussi bien une occurrence tracée à la main en Phase 2 qu'une occurrence pré-remplie automatiquement en Phase 1 (`geometrie_origine = "zone_urba_auto"`) et jamais rouverte par l'opérateur : la Phase 3 ne fait aucune différence entre les deux, elle ne regarde que la géométrie elle-même — voir "Contrat de données", `geometrie_origine`, pour la seule trace qui en reste dans le livrable final.
 
 - **géométrie vide, et aucune fusion déclarée** → écrites à part dans `etape4_{dept}_non_traitees.csv` (attributs seuls, pas de géométrie à exporter), exclues de la suite — même logique que les occurrences non traitées de l'étape 3 : jamais silencieusement ignorées, toujours listées pour reprise.
 - **géométrie renseignée, ou géométrie vide avec une fusion déclarée** (`fusionne_avec_id_occurrence` renseigné — voir "Mécanisme de fusion" ci-dessous) → passent au contrôle qualité avec les entités de `geometries_administratives`.
@@ -240,6 +281,7 @@ Une fusion invalide part dans `etape4_{dept}_erreurs.csv` (source `"fusion"`). S
 | `validation_manuelle_commentaire` | reprise de `etape3_{dept}.csv`. |
 | `statut_verification_finale` | reprise de `etape3_{dept}.csv` — `validé` / `corrigé` / `validé automatique` / `aucune occurrence trouvée`. |
 | `fusionne_avec_id_gpu`, `fusionne_avec_id_occurrence` | jamais reprises de `etape3_{dept}.csv` — vides à la sortie de `preparer_geometries.py`, renseignées par l'opérateur en Phase 2 pour désigner le meneur d'un groupe fusionné. Voir "Mécanisme de fusion" ci-dessus. |
+| `geometrie_origine` | ajoutée le 09/09/2026 — jamais reprise de `etape3_{dept}.csv`, écrite par `preparer_geometries.py` (Phase 1) : `"document"` / `"municipality"` pour `geometries_administratives` (jamais relue à la main, purement informatif) ; `"zone_urba_auto"` (correspondance automatique trouvée dans la couche `zone-urba`, géométrie déjà remplie mais à vérifier) ou `""` (aucune correspondance, tracé manuel intégral) pour `occurrences_a_georeferencer`. **Non maintenue à jour par la Phase 2** : un opérateur qui retrace intégralement une géométrie `"zone_urba_auto"` jugée fausse ne remet pas ce champ à jour dans QGIS (aucun contrôle ni consigne en ce sens) — discipline opérationnelle jugée suffisante pour ce POC, voir `ameliorations-identifiees.md`. |
 | `date_traitement` | date d'écriture de la ligne par `preparer_geometries.py` (Phase 1), pour les deux couches — y compris pour une entité de `occurrences_a_georeferencer` : c'est donc la date de création de la ligne vide, avant tracé manuel, pas celle du tracé effectif. `synthese_geometries.py` (Phase 3) ne la modifie jamais : la valeur écrite en Phase 1 traverse la Phase 2 et la Phase 3 sans changer. Distincte de la `date_traitement` des étapes précédentes, conservée telle quelle par ailleurs. |
 
 ## Gestion des erreurs

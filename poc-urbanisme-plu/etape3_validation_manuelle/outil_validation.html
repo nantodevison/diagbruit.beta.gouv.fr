@@ -716,6 +716,18 @@ elListeGroupes.addEventListener("click", (evenement) => {
   if (!occ) return;
 
   if (bouton.dataset.action === "valider") {
+    // Ajouté le 09/09/2026 : une occurrence à portée zone_specifique doit
+    // désormais toujours nommer sa zone — nécessaire à l'étape 4 pour
+    // tenter une recherche automatique dans la couche zone-urba du GPU
+    // avant de retomber sur le tracé manuel (voir
+    // docs/etape-4-construction-geometries-diagbruit.md, "Sources de
+    // géométrie"). Même logique de blocage que le bouton "◎ Doublon"
+    // ci-dessous : un toast, aucun changement d'état, plutôt qu'une
+    // validation silencieuse avec un champ vide inexploitable en aval.
+    if (occ.portee_geometrique === "zone_specifique" && !(occ.zone_reglementaire_mentionnee || "").trim()) {
+      afficherToast("Renseignez la zone réglementaire mentionnée avant de valider une occurrence à portée « zone_specifique ».");
+      return;
+    }
     occ.validation_manuelle_statut = estModifiee(occ, original) ? "corrigé" : "validé";
   } else if (bouton.dataset.action === "rejeter") {
     occ.validation_manuelle_statut = "rejeté";

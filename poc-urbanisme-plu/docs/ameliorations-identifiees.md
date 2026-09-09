@@ -76,6 +76,32 @@ Le seul palliatif actuel est purement opérationnel : ne jamais relancer `prepar
 
 **Accepté pour ce POC**, reporté à une prochaine session de conception dédiée.
 
+## Correspondance automatique `zone-urba` : normalisation minimale, pas d'ambiguïté chiffre/romain
+
+**Étape concernée : 4.**
+
+**Contexte** : `sources_gpu.trouver_geometrie_zone` (ajouté le 09/09/2026, voir `etape-4-construction-geometries-diagbruit.md`, "Sources de géométrie") compare `zone_reglementaire_mentionnee` au `libelle` de chaque zone de la partition après une normalisation minimale (espaces retirés, casse uniforme). Constat en explorant des données réelles (département 067 hors Eurométropole et Eurométropole de Strasbourg) : les phases d'urbanisation future (AU) sont couramment écrites avec un chiffre dans le règlement ("1AUh", "2AU"...) mais numérisées avec un chiffre romain dans la couche `zone-urba` du GPU ("IAUB", "IIAU"...) — une convention cartographique différente de la convention rédactionnelle, pas une erreur de saisie d'un côté ou de l'autre.
+
+**Problème** : cette ambiguïté chiffre/romain n'est pas couverte par la normalisation actuelle, qui compare les deux chaînes telles quelles. Une occurrence dont le règlement écrit dit "1AUh" ne trouvera donc pas la zone numérisée "IAUh" (ou inversement), même si elles désignent la même zone.
+
+**Impact** : pas une perte de donnée — une zone non trouvée retombe simplement sur le tracé manuel intégral, exactement comme si elle n'avait jamais été tentée automatiquement (voir "Correspondance automatique de zone (`zone-urba`)" dans `etape-4-conception-technique.md`). Le seul coût est un taux de correspondance automatique plus faible que le maximum atteignable pour les zones AU spécifiquement.
+
+**Piste de correction** : si le taux de correspondance observé sur des départements réels s'avère décevant pour les zones AU, ajouter une tentative de correspondance secondaire qui convertit la séquence de chiffres en tête du code en son équivalent romain (et inversement) avant de comparer — recherche à deux passes (exacte, puis normalisée chiffre/romain) plutôt qu'une normalisation unique plus permissive, pour ne pas risquer de faire correspondre par erreur deux codes qui se ressemblent sans être la même convention. Non retenu pour l'instant, cohérent avec la posture POC (préférer un repli sûr vers le manuel à une correspondance devinée) ; à mesurer sur un usage réel avant d'investir dans cette piste.
+
+## `geometrie_origine = "zone_urba_auto"` peut devenir trompeur après un tracé manuel correctif
+
+**Étape concernée : 4.**
+
+**Contexte** : une géométrie trouvée automatiquement dans la couche `zone-urba` (voir ci-dessus) porte `geometrie_origine = "zone_urba_auto"` dans `occurrences_a_georeferencer`, pour signaler à l'opérateur qu'elle mérite une vérification plutôt qu'un tracé depuis rien. Si cette vérification en Phase 2 (QGIS) révèle que la correspondance automatique est en réalité fausse (mauvais code recopié en étape 2/3, zone homonyme d'un autre secteur du même document) et que l'opérateur retrace entièrement la géométrie, rien dans le processus ne l'invite à remettre `geometrie_origine` à jour.
+
+**Problème** : la colonne `geometrie_origine` du livrable final (`etape4_{dept}.gpkg`) peut donc afficher `"zone_urba_auto"` sur une géométrie en réalité tracée à la main et déjà vérifiée — l'information n'est plus fausse au sens fonctionnel (la géométrie elle-même est correcte), mais la traçabilité de son origine l'est.
+
+**Impact** : cosmétique pour une géométrie individuelle déjà corrigée par un opérateur attentif. Devient gênant seulement à l'usage d'un futur audit qui voudrait s'appuyer sur `geometrie_origine` pour mesurer, a posteriori, le taux de correspondances automatiques jamais reprises manuellement (la métrique serait alors sous-estimée, pas surestimée : une correction manuelle réelle continuerait de compter comme automatique).
+
+**Piste de correction envisageable, non retenue pour l'instant** : un contrôle en Phase 3 (`synthese_geometries.py`) qui comparerait la géométrie finale à la géométrie initialement récupérée par `zone-urba` (à conserver quelque part pour la comparaison) et rétrograderait `geometrie_origine` à `"manuelle"` si elles diffèrent significativement — ajoute une notion de comparaison géométrique qui n'existe nulle part ailleurs dans le pipeline, pour un bénéfice jugé secondaire face à la discipline opérationnelle déjà en place ailleurs dans ce POC (ex. `nature_sonore_zone`, corrigible sans trace de la valeur d'origine, voir `etape-4-conception-technique.md`, "Contrat de données").
+
+**Accepté pour ce POC**, cohérent avec le principe déjà retenu pour `nature_sonore_zone`.
+
 ## Pas de mise en forme (gras, listes) capturée lors de la correction manuelle des messages
 
 **Étapes concernées : 5 (capture) et 7 (conversion en aval).**

@@ -102,6 +102,8 @@ Le prompt transmet le passage, son contexte immédiat (`contexte_avant`/`context
 - une citation verbatim (`extrait_significatif`) qui isole le mieux la règle, choisie librement dans le passage et son contexte immédiat — le contexte est transmis précisément pour que le modèle puisse y puiser si la règle y déborde (phrase commencée dans le contexte avant, terminée dans le contexte après, etc.) ;
 - un niveau de confiance (`confiance_extrait`) sur la clarté de cette citation, qui signale aussi, le cas échéant, qu'une règle par ailleurs claire ne concerne que l'infrastructure de transport (la raison précise est alors à lire dans `justification`, le raisonnement complet renvoyé par le modèle).
 
+**Zones multiples (ajouté le 09/09/2026, récupération automatique des zones PLU à l'étape 4)** : quand `portee_geometrique = "zone_specifique"`, le modèle ne renvoie plus une chaîne unique mais `zones_reglementaires_mentionnees`, une **liste** — une entrée par zone citée par la règle (ex. `["UA", "UB", "N"]` plutôt que `"UA, UB et N"` ou `"Uh - Ur"`). Chaque code doit être recopié tel qu'écrit dans le texte, jamais paraphrasé : il sert ensuite à l'étape 4 pour une recherche exacte dans la couche `zone-urba` de l'API Carto GPU (voir `etape-4-construction-geometries-diagbruit.md`, "Sources de géométrie"). `synthese.py` (phase 5) éclate alors chaque occurrence classifiée en autant de lignes du CSV de sortie qu'il y a de zones dans la liste (`_eclater_par_zone`) — le contrat de `etape2_{dept}.csv` garde une colonne `zone_reglementaire_mentionnee` à valeur unique, inchangé pour l'aval (étapes 3 et 4) ; seule la production de cette colonne change. Une liste vide (jamais `null`) donne toujours exactement une ligne, comme avant ce changement.
+
 Le raisonnement (thinking) est désactivé sur cet appel : `claude-sonnet-5` réfléchit par défaut (adaptive thinking) dès lors que ce paramètre n'est pas précisé, et ce raisonnement est décompté de `max_tokens` même s'il n'est pas affiché. Une tâche de classification structurée comme celle-ci n'a pas besoin de raisonnement approfondi ; le désactiver laisse tout le budget de tokens (`max_tokens=800`, calibré pour laisser la place à une justification détaillée) à la réponse, et réduit coût et latence.
 
 La citation renvoyée par le modèle (`extrait_significatif`) est vérifiée côté code comme étant réellement un extrait verbatim du texte fourni (contexte avant + passage + contexte après, après normalisation des espaces) ; si elle ne l'est pas (le modèle a reformulé malgré la consigne), le code retombe sur un découpage mécanique du passage plutôt que de perdre l'occurrence. `confiance_extrait` peut valoir "faible" pour deux raisons distinctes (citation peu claire, ou règle limitée à l'infrastructure de transport) : plutôt qu'une colonne dédiée à chacune, la consigne exige que `justification` précise laquelle des deux s'applique — voir `ameliorations-identifiees.md` pour la piste d'un champ séparé si ce choix gêne la relecture à l'usage.
@@ -142,7 +144,9 @@ SCHEMA_CLASSIFICATION = {
                 {"type": "null"},
             ]
         },
-        "zone_reglementaire_mentionnee": {"type": ["string", "null"]},
+        # Une liste (jamais null), une entrée par zone citée — voir
+        # "Zones multiples" ci-dessus.
+        "zones_reglementaires_mentionnees": {"type": "array", "items": {"type": "string"}},
         # Portée géométrique de la règle, nécessaire à
         # l'étape 4 pour savoir si une géométrie automatique (contour administratif)
         # suffit, ou si un tracé manuel dédié est requis. Distinct de
@@ -174,7 +178,7 @@ SCHEMA_CLASSIFICATION = {
         "retenu",
         "nature_occurrence",
         "nature_sonore_zone",
-        "zone_reglementaire_mentionnee",
+        "zones_reglementaires_mentionnees",
         "portee_geometrique",
         "justification",
         "extrait_significatif",
@@ -212,12 +216,17 @@ Si retenu=true, détermine aussi la portée géométrique de la règle
 - "administrative" : la règle s'applique à l'ensemble du zonage couvert par
   le document, à l'ensemble d'une commune, ou à l'ensemble d'un EPCI — le
   contour administratif déjà connu suffit à la localiser.
-- "zone_specifique" : la règle ne s'applique qu'à une zone réglementaire
-  précise (ex. une zone "UA", un secteur identifié) qui n'a pas de contour
-  automatiquement disponible et devra être tracée manuellement.
+- "zone_specifique" : la règle ne s'applique qu'à une ou plusieurs zones
+  réglementaires précises (ex. une zone "UA", un secteur identifié) dont le
+  contour n'est pas automatiquement disponible.
 Si le passage ne précise aucune limite spatiale propre (silence total sur la
 portée), pars du principe que la règle s'applique à l'ensemble du document
 ("administrative") plutôt que de la classer par défaut en "zone_specifique".
+
+Si portee_geometrique="zone_specifique", remplis aussi
+zones_reglementaires_mentionnees : une entrée de liste par zone (jamais une
+seule chaîne "UA, UB et N" — sépare-les), chacune recopiée exactement telle
+qu'écrite dans le texte, jamais paraphrasée.
 
 Contexte avant : {contexte_avant}
 PASSAGE À ANALYSER : {passage_texte}
@@ -265,11 +274,12 @@ Reprise à l'identique du pattern de l'étape 1 : `tenacity` enveloppe chaque ap
 
 Les colonnes elles-mêmes sont définies dans `etape-2-analyse-documents-urbanisme-diagbruit.md` (phase 5) ; cette section documente les valeurs possibles de chacune et leur origine dans le code.
 
-Colonnes dans l'ordre où elles apparaissent dans le CSV (`COLONNES_SYNTHESE` de `synthese.py`) ; `id_gpu`, `lien_web_document`, `zone_reglementaire_mentionnee` et `date_traitement` ne figurent pas ci-dessous, leur contenu (identifiant, URL, texte libre, date) ne nécessitant pas de table de valeurs.
+Colonnes dans l'ordre où elles apparaissent dans le CSV (`COLONNES_SYNTHESE` de `synthese.py`) ; `id_gpu`, `lien_web_document` et `date_traitement` ne figurent pas ci-dessous, leur contenu (identifiant, URL, date) ne nécessitant pas de table de valeurs.
 
 | Colonne | Valeurs possibles | Origine / remarque |
 |---|---|---|
-| `id_occurrence` | `{compteur}_{nom_fichier}`, ex. `1_246700488_reglement_20260206.pdf` | `synthese.py` (phase 5). Compteur qui repart à 1 pour chaque pièce (`nom_fichier`, unique dans le département) — jamais vide pour une occurrence réelle. Vide uniquement sur les lignes "aucune occurrence trouvée". |
+| `id_occurrence` | `{compteur}_{nom_fichier}`, ex. `1_246700488_reglement_20260206.pdf` | `synthese.py` (phase 5). Compteur qui repart à 1 pour chaque pièce (`nom_fichier`, unique dans le département) — jamais vide pour une occurrence réelle. Vide uniquement sur les lignes "aucune occurrence trouvée". **Mis à jour le 09/09/2026** : une occurrence classifiée citant plusieurs zones donne plusieurs `id_occurrence` consécutifs (un par zone, voir `zone_reglementaire_mentionnee` ci-dessous), le compteur les traitant comme des occurrences à part entière. |
+| `zone_reglementaire_mentionnee` | Texte libre, une seule zone (jamais une liste), ex. `"UA"` | `classification.py` (phase 4) renvoie une liste (`zones_reglementaires_mentionnees`, voir "Zones multiples" plus haut) ; `synthese.py` (phase 5, `_eclater_par_zone`) éclate chaque occurrence en une ligne par zone avant l'attribution des `id_occurrence`. Vide pour `portee_geometrique = "administrative"`, ou si le modèle n'a rien pu extraire pour une occurrence pourtant `zone_specifique` (une ligne unique est alors quand même produite). |
 | `type_piece_source` | `règlement écrit` / `OAP` / `PADD` / `PSMV` | Déduit du nom de fichier par `resolution_pieces.py` (phase 1) ; `PSMV` s'applique au règlement d'un document dont la `nature_document` (étape 1) vaut `PSMV`, plutôt que `règlement écrit`. |
 | `reference_type` | `alinea` / `page` | `filtrage_lexical.py` (phase 3). `alinea` dès qu'un "Article N" (et éventuellement un "alinéa N") a été repéré en tête de paragraphe avant le passage ; à défaut, repli sur `page`. |
 | `reference_precise` | Texte libre, ex. `"Article 15, alinéa 6"`, `"Article 11"`, `"page 24"` | Idem — jamais une citation du code de l'urbanisme (voir "Filtrage lexical (Phase 3)" ci-dessus). |
