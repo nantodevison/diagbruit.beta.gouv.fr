@@ -316,6 +316,20 @@ def main(argv: list[str] | None = None) -> int:
         f"Étape 7 — département {args.dept} — Strapi/{args.environnement} — "
         f"{'ENVOI RÉEL' if args.envoyer else 'dry-run'}"
     )
+    # TODO(alert_slug) — retirer ce bloc une fois le correctif implémenté (voir
+    # docs/etape-7-conception-technique.md, "⚠️ Correctif requis avant le
+    # prochain dépôt — alert_slug absent des géométries", ajouté le 11/09/2026) :
+    # le .geojson déposé sur Box ne porte aujourd'hui que id_geometrie, jamais
+    # alert_slug, qui doit pourtant assurer le lien géométrie ↔ Strapi une fois
+    # sorti de ce pipeline POC. Avertissement non bloquant, affiché en dry-run
+    # comme en envoi réel, pour ne pas relancer un dépôt réel sans y penser.
+    print(
+        "\n⚠️  ATTENTION (connu, non corrigé) : les .geojson déposés sur Box ne portent pas encore "
+        "alert_slug comme propriété — voir docs/etape-7-conception-technique.md, "
+        "'Correctif requis avant le prochain dépôt'. Ne pas relancer --envoyer sur un nouveau "
+        "département avant l'implémentation du correctif.\n",
+        file=sys.stderr,
+    )
     try:
         inserer(
             args.dept,
