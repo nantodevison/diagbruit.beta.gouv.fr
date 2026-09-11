@@ -213,17 +213,40 @@ def _code_insee_pour_partition(code_insee_commune: str) -> str:
     return correspondance.group("ancien") if correspondance else code_insee_commune
 
 
-def _partition_gpu(ligne_etape1: dict[str, str]) -> str:
-    """Construit la valeur attendue par le paramètre `partition` de la couche
-    `document` de l'API Carto GPU (format `<DU/PSMV>_<INSEE/SIREN>`) — voir
-    `etape-3-conception-technique.md`, "Calcul de partition_gpu". `id_gpu`
-    seul ne suffit pas : ce n'est pas la valeur attendue par ce paramètre."""
+def _partition_gpu_reconstruite(ligne_etape1: dict[str, str]) -> str:
+    """Reconstruit par supposition la valeur attendue par le paramètre
+    `partition` de la couche `document` de l'API Carto GPU (format
+    `<DU/PSMV>_<INSEE/SIREN>`) — voir `etape-3-conception-technique.md`,
+    "Calcul de partition_gpu". `id_gpu` seul ne suffit pas : ce n'est pas la
+    valeur attendue par ce paramètre.
+
+    Repli uniquement (voir `_partition_gpu` ci-dessous) : correct dans le cas
+    courant (un seul document par EPCI/commune), mais **faux pour un document
+    scindé en plusieurs parties** (suffixe "_A"/"_B" jamais reconstruit ici,
+    absent de cette formule) — constaté en réel le 11/09/2026 sur le
+    département 067 hors Eurométropole (deux PLUi intercommunaux : "aucune
+    géométrie renvoyée" par le GPU à l'étape 4, alors que le document existe
+    bien sous `DU_{siren}_A`). Depuis cette date, l'étape 1 capture la valeur
+    exacte (`partition_gpu`, voir `etape1_identification/documents_urbanisme.py`,
+    `DocumentTrouve.partition_gpu`) — cette reconstruction ne sert plus que de
+    repli pour un `etape1_{dept}.csv` généré avant son ajout."""
     famille = "PSMV" if ligne_etape1["statut"] == STATUT_ETAPE1_PSMV_ADDITIONNEL else "DU"
     if ligne_etape1["niveau_couverture"] == NIVEAU_COUVERTURE_EPCI:
         code = ligne_etape1["code_siren_epci"]
     else:
         code = _code_insee_pour_partition(ligne_etape1["code_insee_commune"])
     return f"{famille}_{code}"
+
+
+def _partition_gpu(ligne_etape1: dict[str, str]) -> str:
+    """Valeur `partition_gpu` à retenir pour cette ligne d'`etape1_{dept}.csv` :
+    la valeur capturée telle quelle à l'étape 1 (`partition_gpu`, autoritaire —
+    voir docstring du module `etape1_identification/synthese.py`) si présente,
+    sinon repli sur la reconstruction par supposition (voir
+    `_partition_gpu_reconstruite` ci-dessus) pour rester compatible avec un
+    `etape1_{dept}.csv` généré avant le 11/09/2026."""
+    valeur_capturee = ligne_etape1.get("partition_gpu", "")
+    return valeur_capturee if valeur_capturee else _partition_gpu_reconstruite(ligne_etape1)
 
 
 def _partitions_gpu_par_id_gpu(lignes_etape1: list[dict[str, str]]) -> dict[str, str]:
