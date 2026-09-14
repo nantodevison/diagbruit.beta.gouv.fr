@@ -17,11 +17,26 @@ chaque occurrence garde sa propre ligne dans le livrable final, y compris une
 occurrence membre sans géométrie propre (sa localisation est portée par le
 meneur) — mais toute fusion déclarée est revérifiée ici avant d'être
 acceptée : le meneur doit exister, ne pas être lui-même membre d'un autre
-groupe (pas de chaînage), avoir une géométrie, et partager avec le membre
-`nature_zone == "occurrence_locale"` ainsi qu'un `nature_sonore_zone`
-identique et non vide. Une fusion incohérente est rejetée (erreur consignée) ;
-si le membre a par ailleurs sa propre géométrie, il est tout de même
-conservé comme occurrence indépendante plutôt que perdu.
+groupe (pas de chaînage), ne pas avoir été rejeté (voir ci-dessous), avoir
+une géométrie, et partager avec le membre `nature_zone == "occurrence_locale"`
+ainsi qu'un `nature_sonore_zone` identique et non vide. Une fusion
+incohérente est rejetée (erreur consignée) ; si le membre a par ailleurs sa
+propre géométrie, il est tout de même conservé comme occurrence indépendante
+plutôt que perdu.
+
+Mécanisme de rejet (ajouté le 14/09/2026, voir `docs/etape-4-conception-technique.md`,
+section dédiée) : répond au manque documenté dans `ameliorations-identifiees.md`
+avant cette date — jusqu'ici, la seule façon d'écarter une occurrence de
+`occurrences_a_georeferencer` jugée hors périmètre en la traçant était de
+supprimer la ligne directement dans QGIS, sans laisser de trace. L'opérateur
+renseigne désormais `statut_geometrie = "rejeté"` (champ texte, à ajouter
+manuellement dans la couche s'il ne l'a pas déjà — voir Phase 1) sur la
+ligne à écarter ; cette étape la retire alors du livrable final et la trace
+dans `etape4_{dept}_rejetees.csv` plutôt que de la perdre silencieusement.
+Filtrée avant toute autre logique (géométrie vide, fusion), mais après la
+construction de l'index de résolution des meneurs, pour qu'un groupe qui
+s'appuierait sur une occurrence rejetée comme meneur soit détecté et
+invalidé (voir `_verifier_fusion`) plutôt que traité comme "introuvable".
 
 Usage :
     python -m etape4_geometries.synthese_geometries --dept 033
@@ -34,6 +49,9 @@ Sortie (dans le même dossier) :
     etape4_{dept}_non_traitees.csv    — occurrences jamais géoréférencées, si non vide ;
                                          supprimé si une exécution précédente l'avait
                                          écrit mais que celle-ci n'a plus rien à y lister
+    etape4_{dept}_rejetees.csv        — occurrences écartées par l'opérateur
+                                         (statut_geometrie = "rejeté"), si non vide ;
+                                         même logique de suppression que _non_traitees.csv
     etape4_{dept}_erreurs.csv         — géométries invalides, fusions incohérentes ou de
                                          type inattendu (recalculées à neuf à chaque
                                          exécution), complété (sans les écraser) des échecs
@@ -73,6 +91,12 @@ COLONNES_ERREURS = ["identifiant", "source", "message", "date_traitement"]
 # inefficace, faute de vérification de la localisation elle-même (jamais
 # recontrôlée, voir _verifier_fusion).
 NATURE_ZONE_ELIGIBLE_FUSION = "occurrence_locale"
+
+# Ajouté le 14/09/2026 (voir "Mécanisme de rejet" ci-dessous) : seule valeur
+# de statut_geometrie qui écarte une occurrence de occurrences_a_georeferencer
+# du livrable final — même casse/accent que validation_manuelle_statut à
+# l'étape 3, pour rester cohérent avec le reste du pipeline.
+STATUT_GEOMETRIE_REJETE = "rejeté"
 
 
 class GpkgIntrouvable(Exception):
@@ -122,6 +146,10 @@ def _est_membre_fusion(ligne: pd.Series) -> bool:
     return bool(_valeur(ligne, "fusionne_avec_id_occurrence"))
 
 
+def _est_rejetee(ligne: pd.Series) -> bool:
+    return _valeur(ligne, "statut_geometrie") == STATUT_GEOMETRIE_REJETE
+
+
 def _index_par_occurrence(*gdfs: gpd.GeoDataFrame) -> dict[tuple[str, str], pd.Series]:
     """Index (id_gpu, id_occurrence) -> ligne, sur l'ensemble brut des deux
     couches (avant tout filtrage), pour que la résolution d'un meneur de
@@ -140,7 +168,13 @@ def _verifier_fusion(ligne: pd.Series, index_par_occurrence: dict) -> tuple[bool
       inchangé, géométrie obligatoire ;
     - si la fusion déclarée est cohérente, (True, None) — la géométrie de
       `ligne` peut être vide, sa localisation est portée par le meneur ;
-    - sinon, (False, message d'erreur) — fusion rejetée."""
+    - sinon, (False, message d'erreur) — fusion rejetée.
+
+    Ajouté le 14/09/2026 : un meneur `statut_geometrie == "rejeté"` invalide
+    aussi la fusion (voir "Mécanisme de rejet" ci-dessous) — un groupe ne
+    peut pas s'appuyer sur une occurrence volontairement écartée. Le membre
+    lui-même, s'il est rejeté, n'atteint jamais cette fonction : il est
+    filtré en amont dans `synthetiser()`, avant la boucle de vérification."""
     if not _est_membre_fusion(ligne):
         return False, None
 
@@ -148,6 +182,9 @@ def _verifier_fusion(ligne: pd.Series, index_par_occurrence: dict) -> tuple[bool
     meneur = index_par_occurrence.get(cle_meneur)
     if meneur is None:
         return False, "fusion invalide : meneur introuvable"
+
+    if _est_rejetee(meneur):
+        return False, "fusion invalide : le meneur référencé a été rejeté (statut_geometrie)"
 
     if _est_membre_fusion(meneur):
         return False, "fusion invalide : le meneur référencé est lui-même membre d'un groupe (chaînage non autorisé)"
@@ -206,15 +243,34 @@ def synthetiser(code_departement: str, dossier_sortie: str | Path = "output") ->
     # (exclu pour géométrie vide, en erreur...), voir _verifier_fusion.
     index_par_occurrence = _index_par_occurrence(geodf_administratives, geodf_a_georeferencer)
 
+    # Mécanisme de rejet (ajouté le 14/09/2026, voir docstring du module) :
+    # une occurrence statut_geometrie == "rejeté" est écartée avant toute
+    # autre logique (géométrie vide, fusion) — un rejet est une décision
+    # délibérée de l'opérateur, elle ne doit jamais se retrouver mélangée à
+    # _non_traitees.csv (qui signale un oubli, pas un choix). Filtrée après
+    # la construction de index_par_occurrence ci-dessus : un meneur de
+    # fusion rejeté doit rester trouvable pour que _verifier_fusion puisse
+    # le détecter et invalider la fusion, plutôt que de le traiter comme
+    # "introuvable" (message trompeur). La colonne peut être absente
+    # (gpkg édité avant l'ajout de ce champ dans QGIS) : geodf.get() renvoie
+    # alors None, traité comme "aucun rejet".
+    statut_geometrie = geodf_a_georeferencer.get("statut_geometrie")
+    if statut_geometrie is not None:
+        rejetee = statut_geometrie.fillna("").astype(str).str.strip() == STATUT_GEOMETRIE_REJETE
+    else:
+        rejetee = pd.Series(False, index=geodf_a_georeferencer.index)
+    rejetees = geodf_a_georeferencer[rejetee]
+    restantes = geodf_a_georeferencer[~rejetee]
+
     # Une géométrie vide n'est routée vers _non_traitees.csv que si
     # l'occurrence ne déclare aucune fusion : membre d'un groupe fusionné,
     # elle est légitimement sans géométrie propre et rejoint le lot
     # géoréférencé pour vérification de cohérence de la fusion (voir
     # _verifier_fusion, appelé plus bas pour chaque ligne).
-    membre_fusion = geodf_a_georeferencer["fusionne_avec_id_occurrence"].fillna("").astype(str).str.strip() != ""
-    geometrie_vide = geodf_a_georeferencer.geometry.isna() | geodf_a_georeferencer.geometry.is_empty
-    non_traitees = geodf_a_georeferencer[geometrie_vide & ~membre_fusion]
-    georeferencees = geodf_a_georeferencer[~geometrie_vide | membre_fusion]
+    membre_fusion = restantes["fusionne_avec_id_occurrence"].fillna("").astype(str).str.strip() != ""
+    geometrie_vide = restantes.geometry.isna() | restantes.geometry.is_empty
+    non_traitees = restantes[geometrie_vide & ~membre_fusion]
+    georeferencees = restantes[~geometrie_vide | membre_fusion]
 
     date_traitement = date.today().isoformat()
     chemin_erreurs = dossier / f"etape4_{code_departement}_erreurs.csv"
@@ -269,6 +325,22 @@ def synthetiser(code_departement: str, dossier_sortie: str | Path = "output") ->
         )
     elif chemin_non_traitees.exists():
         chemin_non_traitees.unlink()
+
+    # Mécanisme de rejet (ajouté le 14/09/2026) : même logique que
+    # _non_traitees.csv ci-dessus (fichier recalculé à neuf à chaque
+    # exécution, supprimé s'il n'y a plus rien à y consigner) — mais jamais
+    # les deux mélangés dans le même fichier, pour qu'un futur audit
+    # distingue "oublié" (_non_traitees.csv) de "délibérément écarté"
+    # (_rejetees.csv), voir docstring du module.
+    chemin_rejetees = dossier / f"etape4_{code_departement}_rejetees.csv"
+    if not rejetees.empty:
+        rejetees[COLONNES_ATTRIBUTS].to_csv(chemin_rejetees, index=False, encoding="utf-8-sig")
+        print(
+            f"{len(rejetees)} occurrence(s) rejetée(s) par l'opérateur en Phase 2, listée(s) dans "
+            f"{chemin_rejetees} — jamais une suppression silencieuse."
+        )
+    elif chemin_rejetees.exists():
+        chemin_rejetees.unlink()
 
     if erreurs:
         with chemin_erreurs.open("w", newline="", encoding="utf-8-sig") as fichier:

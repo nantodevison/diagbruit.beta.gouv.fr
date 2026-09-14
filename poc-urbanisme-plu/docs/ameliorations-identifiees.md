@@ -45,18 +45,6 @@ fonctionnement retenu plutôt que ses limites.*
 
 **Piste de correction** : élargir la liste de motifs de `resolution_pieces.py` (par exemple au rapport de présentation) si des cas réels montrent des règles liées au bruit absentes du périmètre actuel.
 
-## Pas de mécanisme de rejet pour les occurrences à géométrie manuelle
-
-**Étape concernée : 4.**
-
-**Contexte** : contrairement à l'étape 3 (bouton "✕ Rejeter" dans `outil_validation.html`, tracé dans `etape3_{dept}_rejetees.csv`, jamais une suppression silencieuse), l'étape 4 n'offre aucun moyen propre d'écarter une occurrence de la couche `occurrences_a_georeferencer` qu'un opérateur juge finalement hors périmètre en la traçant : la seule option disponible est de supprimer la ligne directement dans QGIS.
-
-**Problème** : une suppression directe dans le GeoPackage ne laisse aucune trace. `etape3_{dept}.csv` continue de lister l'occurrence comme validée ; rien dans `etape4_{dept}.gpkg`, `_non_traitees.csv` ou `_erreurs.csv` ne permet de savoir plus tard qu'elle a été délibérément écartée plutôt qu'oubliée ou perdue par erreur — et aucune vérification de cohérence n'existe entre le nombre de lignes d'`etape3_{dept}.csv` et la somme des sorties de l'étape 4 pour détecter l'écart.
-
-**Piste de correction envisageable, non retenue pour l'instant** : un champ ou statut renseigné par l'opérateur dans QGIS plutôt qu'une suppression, exploité par `synthese_geometries.py` pour écrire une ligne dans un `etape4_{dept}_rejetees.csv` dédié plutôt que de perdre la trace.
-
-**Accepté pour ce POC**, reporté à une prochaine session de conception dédiée.
-
 ## Correspondance automatique `zone-urba` : normalisation minimale, pas d'ambiguïté chiffre/romain
 
 **Étape concernée : 4.**

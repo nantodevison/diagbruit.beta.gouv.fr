@@ -100,6 +100,7 @@ COLONNES_ATTRIBUTS = [
     "fusionne_avec_id_gpu",
     "fusionne_avec_id_occurrence",
     "geometrie_origine",
+    "statut_geometrie",
     "date_traitement",
 ]
 
@@ -164,6 +165,12 @@ def _attributs(ligne: dict[str, str], id_geometrie: int, date_traitement: str, g
         "fusionne_avec_id_gpu": "",
         "fusionne_avec_id_occurrence": "",
         "geometrie_origine": geometrie_origine,
+        # Ajouté le 14/09/2026 : vide ici, renseigné par l'opérateur dans
+        # QGIS en Phase 2 (valeur "rejeté") pour écarter proprement une
+        # occurrence de occurrences_a_georeferencer jugée hors périmètre en
+        # la traçant — voir etape-4-conception-technique.md, "Mécanisme de
+        # rejet".
+        "statut_geometrie": "",
         "date_traitement": date_traitement,
     }
 
