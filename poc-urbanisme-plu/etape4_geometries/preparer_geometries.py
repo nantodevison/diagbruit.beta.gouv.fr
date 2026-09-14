@@ -30,6 +30,11 @@ Entrée (dans `output/`, voir `--output-dir`) :
 Sortie (dans le même dossier) :
     etape4_{dept}_a_completer.gpkg — à ouvrir dans QGIS pour la Phase 2
     etape4_{dept}_erreurs.csv      — échecs d'appel API Carto GPU, si non vide
+
+Ajouté le 14/09/2026 (incident réel, département 067 hors Eurométropole) :
+refuse de s'exécuter si `etape4_{dept}_a_completer.gpkg` existe déjà — voir
+`docs/etape-4-conception-technique.md`, "Sécurité : refus si le fichier de
+sortie existe déjà".
 """
 
 from __future__ import annotations
@@ -113,6 +118,12 @@ COLONNES_ERREURS = ["identifiant", "source", "message", "date_traitement"]
 
 class Etape3CsvIntrouvable(Exception):
     pass
+
+
+class Etape4GpkgDejaExistant(Exception):
+    """`etape4_{dept}_a_completer.gpkg` existe déjà — voir "Sécurité :
+    refus si le fichier de sortie existe déjà" dans
+    `docs/etape-4-conception-technique.md`."""
 
 
 @dataclass
@@ -234,9 +245,24 @@ def _construire_geodataframe(
 def preparer(code_departement: str, dossier_sortie: str | Path = "output") -> Path:
     dossier = Path(dossier_sortie)
     chemin_etape3 = dossier / f"etape3_{code_departement}.csv"
+    chemin_sortie = dossier / f"etape4_{code_departement}_a_completer.gpkg"
 
     if not chemin_etape3.exists():
         raise Etape3CsvIntrouvable(str(chemin_etape3))
+
+    # Ajouté le 14/09/2026 (incident réel, département 067 hors Eurométropole) :
+    # la couche occurrences_a_georeferencer est écrite plus bas en mode "a"
+    # (append) — voulu pour une première écriture dans un fichier tout juste
+    # créé, mais qui empile silencieusement une deuxième copie complète de
+    # cette couche si le fichier existe déjà, sans jamais l'écraser. Un
+    # relancement de ce script (ex. après correction d'etape3_{dept}.csv)
+    # sur un etape4_{dept}_a_completer.gpkg déjà présent a produit exactement
+    # ce doublon en conditions réelles. Voir "Sécurité : refus si le fichier
+    # de sortie existe déjà" dans docs/etape-4-conception-technique.md — la
+    # suppression du fichier doit être un geste volontaire de l'opérateur,
+    # jamais un effet de bord silencieux de ce script.
+    if chemin_sortie.exists():
+        raise Etape4GpkgDejaExistant(str(chemin_sortie))
 
     lignes = _lire_etape3(chemin_etape3)
     date_traitement = date.today().isoformat()
@@ -317,7 +343,6 @@ def preparer(code_departement: str, dossier_sortie: str | Path = "output") -> Pa
     # rien à quoi l'accrocher, d'où le "Unknown" malgré le paramètre.
     geodf_a_georeferencer = _construire_geodataframe(attributs_a_georeferencer, geometries_a_georeferencer)
 
-    chemin_sortie = dossier / f"etape4_{code_departement}_a_completer.gpkg"
     print("Types réellement présents dans geometries_admin :", {g.geom_type for g in geometries_admin})
     geodf_administratives.to_file(
         chemin_sortie,
@@ -392,6 +417,16 @@ def main(argv: list[str] | None = None) -> int:
         preparer(args.dept, dossier_sortie=args.output_dir)
     except Etape3CsvIntrouvable as exc:
         print(f"Arrêt : etape3_{args.dept}.csv introuvable ({exc}).", file=sys.stderr)
+        return 1
+    except Etape4GpkgDejaExistant as exc:
+        print(
+            f"Arrêt : {exc} existe déjà. Le relancer sans le supprimer empilerait une deuxième copie "
+            "de la couche 'occurrences_a_georeferencer' par-dessus la première (voir "
+            "docs/etape-4-conception-technique.md, \"Sécurité : refus si le fichier de sortie existe "
+            "déjà\"). Si aucun tracé manuel (Phase 2) n'a été fait dessus, supprimez-le volontairement "
+            "puis relancez.",
+            file=sys.stderr,
+        )
         return 1
     return 0
 

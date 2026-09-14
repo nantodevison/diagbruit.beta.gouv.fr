@@ -45,25 +45,6 @@ fonctionnement retenu plutôt que ses limites.*
 
 **Piste de correction** : élargir la liste de motifs de `resolution_pieces.py` (par exemple au rapport de présentation) si des cas réels montrent des règles liées au bruit absentes du périmètre actuel.
 
-## `preparer_geometries.py` n'est pas sûr à relancer après le début de l'édition manuelle (Phase 2)
-
-**Étape concernée : 4.**
-
-**Contexte** : `preparer_geometries.py` régénère `etape4_{dept}_a_completer.gpkg` entièrement à partir de `etape3_{dept}.csv` à chaque exécution. La couche `geometries_administratives` est écrite avec `mode="w"` (remplacement propre). La couche `occurrences_a_georeferencer`, elle, est écrite avec `mode="a"` — un choix qui a du sens pour une écriture initiale dans un fichier tout juste créé, mais qui devient dangereux dès que le fichier existe déjà avec des données.
-
-**Problème, vérifié empiriquement** : `mode="a"` sur une couche déjà existante n'écrase pas son contenu, il **empile** une nouvelle copie complète par-dessus. Concrètement, pour un opérateur qui a déjà commencé à tracer dans QGIS puis relance `preparer_geometries.py` :
-- une occurrence déjà tracée se retrouve dupliquée dans la couche (une version tracée, une version vierge fraîchement régénérée, mêmes `id_gpu`/`id_occurrence`) ;
-- une occurrence que l'opérateur aurait supprimée de la couche réapparaît, puisqu'elle est toujours présente dans `etape3_{dept}.csv` et que le script ne sait pas qu'elle a été délibérément retirée.
-
-Le seul palliatif actuel est purement opérationnel : ne jamais relancer `preparer_geometries.py` une fois la Phase 2 commencée, et en cas de relancement accidentel, nettoyer la couche `occurrences_a_georeferencer` à la main.
-
-**Pistes de correction envisageables, non retenues pour l'instant** :
-- Rendre `preparer_geometries.py` idempotent vis-à-vis d'un fichier déjà existant : avant d'écrire, lire la couche `occurrences_a_georeferencer` existante (si le fichier est déjà là), ne réécrire/ajouter que les lignes dont l'`id_occurrence` n'y figure pas encore, et laisser intactes celles déjà présentes (tracées ou non). Réglerait le cas d'un relancement après ajout de nouvelles occurrences en amont (étape 3 relue), sans toucher au travail déjà fait dans QGIS.
-- Refuser purement et simplement de s'exécuter si `etape4_{dept}_a_completer.gpkg` existe déjà, avec un message explicite invitant à supprimer le fichier volontairement avant de relancer — plus simple à implémenter, mais oblige à perdre tout le travail de Phase 2 en cas de besoin réel de régénération.
-- Passer `mode="w"` pour les deux couches — empêcherait l'empilement, mais écraserait alors silencieusement tout travail de Phase 2 déjà fait, ce n'est pas mieux, juste un mode de défaillance différent.
-
-**Accepté pour ce POC** : la discipline opérationnelle ("ne jamais relancer après le début de la Phase 2") suffit tant que le pipeline n'est utilisé que par un seul opérateur averti. À corriger avant tout usage à plusieurs opérateurs ou sur plusieurs départements en parallèle, où l'erreur devient plus probable et plus coûteuse à détecter.
-
 ## Pas de mécanisme de rejet pour les occurrences à géométrie manuelle
 
 **Étape concernée : 4.**

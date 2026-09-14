@@ -49,7 +49,7 @@ python -m etape5_redaction_messages.verifier_orthographe --dept 033
 # ouvrir etape5_033.gpkg dans QGIS, filtrer sur "_validation_orthographe" != ''
 ```
 
-**À relancer dans cet ordre à chaque nouvelle correction** : `verifier_orthographe.py` réécrit `etape5_{dept}.gpkg` en place pour y ajouter une colonne — si `synthese_messages.py` est relancé ensuite (nouvel export corrigé), il réécrit le fichier en entier sans connaître cette colonne, qui disparaît. Il faut donc systématiquement relancer `verifier_orthographe.py` après toute nouvelle exécution de `synthese_messages.py` — discipline opérationnelle plutôt que verrou technique, même famille de contrainte que l'ordre déjà documenté pour l'étape 4 (`preparer_geometries.py` jamais relancé après le début de la Phase 2).
+**À relancer dans cet ordre à chaque nouvelle correction** : `verifier_orthographe.py` réécrit `etape5_{dept}.gpkg` en place pour y ajouter une colonne — si `synthese_messages.py` est relancé ensuite (nouvel export corrigé), il réécrit le fichier en entier sans connaître cette colonne, qui disparaît. Il faut donc systématiquement relancer `verifier_orthographe.py` après toute nouvelle exécution de `synthese_messages.py` — discipline opérationnelle plutôt que verrou technique (contrairement à `preparer_geometries.py` à l'étape 4, qui refuse désormais de s'exécuter si son fichier de sortie existe déjà, voir `etape-4-conception-technique.md`, "Sécurité : refus si le fichier de sortie existe déjà" — un garde-fou équivalent n'existe pas ici).
 
 ## Phase 1 — Garde-fou de cohérence géométrique (`controle_similarite.py`)
 

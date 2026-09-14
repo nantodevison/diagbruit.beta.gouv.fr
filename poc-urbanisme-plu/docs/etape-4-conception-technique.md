@@ -170,6 +170,16 @@ Un échec (document introuvable dans le GPU, timeout persistant après les tenta
 
 `preparer_geometries.py` écrit ensuite `etape4_{dept}_a_completer.gpkg`, avec ses deux couches (`geometries_administratives`, `occurrences_a_georeferencer`) au schéma identique — voir "Contrat de données" plus bas.
 
+### Sécurité : refus si le fichier de sortie existe déjà
+
+*Ajouté le 14/09/2026, suite à un incident réel sur le département 067 hors Eurométropole — voir `ameliorations-identifiees.md` avant cette date pour l'historique du problème, retiré de ce document une fois corrigé (il y était classé comme piste envisagée mais non retenue ; elle l'est désormais).*
+
+`geodf_administratives.to_file(..., mode="w", ...)` remplace proprement la couche `geometries_administratives` à chaque exécution. `geodf_a_georeferencer.to_file(..., mode="a", ...)`, lui, **ajoute** à la couche `occurrences_a_georeferencer` — un choix qui n'a de sens que pour une première écriture dans un fichier qui n'existe pas encore. Relancer `preparer_geometries.py` sur un `etape4_{dept}_a_completer.gpkg` déjà présent (par exemple après une correction d'`etape3_{dept}.csv`, sans avoir pensé à supprimer le fichier au préalable) empile alors une deuxième copie complète de cette couche par-dessus la première, sans jamais l'écraser — constaté en conditions réelles le 14/09/2026, 115 occurrences devenues 230 après une deuxième exécution.
+
+`preparer()` vérifie donc désormais, avant tout appel réseau, si `etape4_{dept}_a_completer.gpkg` existe déjà et lève `Etape4GpkgDejaExistant` si c'est le cas — `main()` l'affiche sur `stderr` avec un message explicite et retourne `1`, sans écrire ni modifier quoi que ce soit. La suppression du fichier doit toujours être un geste volontaire de l'opérateur (après vérification qu'aucun tracé manuel de la Phase 2 n'y a été fait), jamais un effet de bord silencieux de ce script.
+
+Parmi les trois pistes envisagées à l'origine pour ce problème (voir l'historique dans `ameliorations-identifiees.md` avant le 14/09/2026), c'est la plus simple qui a été retenue — refuser plutôt que fusionner intelligemment (idempotence par `id_occurrence`) ou écraser silencieusement (`mode="w"` pour les deux couches, qui aurait perdu tout travail de Phase 2 déjà fait) : un POC à un seul opérateur n'a pas besoin de plus qu'un garde-fou explicite, et un message clair reste plus sûr qu'une fusion automatique jamais testée en conditions réelles.
+
 ## Phase 2 — Édition manuelle (QGIS)
 
 Aucun script : l'opérateur ouvre `etape4_{dept}_a_completer.gpkg` dans QGIS, charge les deux couches. `geometries_administratives` sert de fond de carte de référence pendant le travail — elle permet de vérifier au passage que le pré-remplissage automatique a l'air correct (bonne occasion de repérer une géométrie qui semble étrange avant même la synthèse finale).
