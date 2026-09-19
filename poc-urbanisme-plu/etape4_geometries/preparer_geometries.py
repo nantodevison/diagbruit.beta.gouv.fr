@@ -420,6 +420,23 @@ def main(argv: list[str] | None = None) -> int:
     args = _parser().parse_args(argv)
 
     print(f"Étape 4, phase 1 — département {args.dept}")
+    # TODO(prefixe-zone) — retirer ce bloc une fois le correctif implémenté
+    # (voir docs/ameliorations-identifiees.md, "Correspondance automatique
+    # zone-urba : normalisation minimale, deux angles morts confirmés",
+    # problème 2, ajouté le 21/09/2026) : sources_gpu._normaliser_code_zone
+    # ne retire pas encore un éventuel préfixe "secteur"/"zone" avant de
+    # comparer au libelle GPU, ce qui fait manquer des correspondances
+    # automatiques par ailleurs réelles (constaté en réel, département 067
+    # hors Eurométropole). Avertissement non bloquant, aucun changement de
+    # comportement — reporté pour ne pas interférer avec un tracé manuel en
+    # cours au moment de la découverte.
+    print(
+        "\n⚠️  ATTENTION (connu, non corrigé) : la correspondance automatique zone-urba ne retire pas "
+        "encore un préfixe 'secteur'/'zone' avant de comparer — voir docs/ameliorations-identifiees.md, "
+        "'Correspondance automatique zone-urba : normalisation minimale, deux angles morts confirmés', "
+        "problème 2. Des correspondances par ailleurs réelles peuvent être manquées.\n",
+        file=sys.stderr,
+    )
     try:
         preparer(args.dept, dossier_sortie=args.output_dir)
     except Etape3CsvIntrouvable as exc:
