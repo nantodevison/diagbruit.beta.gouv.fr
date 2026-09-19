@@ -119,16 +119,29 @@ def recuperer_zones_urba(partition_gpu: str) -> tuple[list[dict], str | None]:
     return response.json().get("features", []), None
 
 
+# Ajouté le 25/09/2026 (retour utilisateur, tracé manuel du département 067
+# hors Eurométropole) : `zone_reglementaire_mentionnee` porte couramment un
+# préfixe descriptif avant le code lui-même ("Secteur Uh", "Zone N"), que ce
+# soit produit par l'étape 2 ou saisi à la main par un opérateur à l'étape 3
+# — jamais présent, lui, dans `libelle` côté GPU ("Uh", "N1"...). Un seul
+# retrait en tête de chaîne, pas récursif : suffisant pour les cas réels
+# observés, sans risquer de retirer un mot qui ferait partie du code lui-même.
+_PREFIXE_DESCRIPTIF = re.compile(r"^(?:(?:la|le|les|du|de la)\s+)?(?:secteurs?|zones?)\s+", re.IGNORECASE)
+
+
 def _normaliser_code_zone(code: str) -> str:
-    """Espaces retirés, casse uniforme — suffisant pour absorber l'essentiel
-    des variations de saisie ("UA" / "ua" / "U A"). Ne tente PAS de
-    normaliser l'ambiguïté chiffre/romain des phases de zone AU ("1AUh" dans
-    un règlement écrit vs "IAUB" dans la couche zone-urba, par exemple) :
-    une correspondance non trouvée retombe simplement sur le tracé manuel
-    (voir preparer_geometries.py), jamais une erreur bloquante — voir
+    """Retire un éventuel préfixe descriptif ("secteur"/"zone", voir
+    `_PREFIXE_DESCRIPTIF`), puis espaces retirés et casse uniforme —
+    suffisant pour absorber l'essentiel des variations de saisie ("UA" /
+    "ua" / "U A" / "Secteur UA"). Ne tente PAS de normaliser l'ambiguïté
+    chiffre/romain des phases de zone AU ("1AUh" dans un règlement écrit vs
+    "IAUB" dans la couche zone-urba, par exemple) : une correspondance non
+    trouvée retombe simplement sur le tracé manuel (voir
+    preparer_geometries.py), jamais une erreur bloquante — voir
     `docs/ameliorations-identifiees.md` pour cette piste d'amélioration si
     le taux de correspondance s'avère trop faible à l'usage réel."""
-    return re.sub(r"\s+", "", code).strip().upper()
+    sans_prefixe = _PREFIXE_DESCRIPTIF.sub("", code.strip())
+    return re.sub(r"\s+", "", sans_prefixe).strip().upper()
 
 
 def trouver_geometrie_zone(features: list[dict], code_zone: str) -> ResultatGeometrie:

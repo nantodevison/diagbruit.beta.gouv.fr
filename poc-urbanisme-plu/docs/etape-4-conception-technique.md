@@ -53,7 +53,7 @@ Lit `etape3_{dept}.csv` (module `csv` de la bibliothèque standard, `encoding="u
 ### Correspondance automatique de zone (`zone-urba`)
 
 Pour chaque `partition_gpu` distincte parmi les occurrences `zone_specifique` (même dédoublonnage que pour `document` ci-dessus), `preparer_geometries.py` appelle une fois `sources_gpu.recuperer_zones_urba(partition_gpu)`, qui récupère **l'ensemble** des zones de la couche `zone-urba` pour cette partition — jamais un appel filtré par code, le paramètre `libelle` de cette couche étant ignoré côté serveur (vérifié en réel, voir `etape-4-construction-geometries-diagbruit.md`, "Sources de géométrie"). Chaque occurrence est ensuite comparée en mémoire, via `sources_gpu.trouver_geometrie_zone(features, zone_reglementaire_mentionnee)`, qui :
-- normalise le code recherché et celui de chaque zone (`libelle`) — espaces retirés, casse uniforme, rien de plus (pas de correction de l'ambiguïté chiffre/romain "1AUh" vs "IAUB" observée sur des données réelles, voir `ameliorations-identifiees.md`) ;
+- normalise le code recherché et celui de chaque zone (`libelle`) — retrait d'un éventuel préfixe descriptif ("secteur"/"zone", ajouté le 25/09/2026, voir "Correction du préfixe descriptif" ci-dessous), espaces retirés, casse uniforme. Pas de correction de l'ambiguïté chiffre/romain "1AUh" vs "IAUB" observée sur des données réelles, voir `ameliorations-identifiees.md` ;
 - si une ou plusieurs zones correspondent, unit leurs géométries en une seule (`_unir_features`, même logique que pour `document` : un même code de zone peut apparaître en plusieurs polygones disjoints dans une même partition — décision du 09/09/2026 : pas de tentative de restreindre l'union à un sous-ensemble "plausible", une zone auto-matchée est **une seule entité géométrique par occurrence**, à vérifier comme telle en Phase 2) ;
 - sinon, échoue avec un message explicite — jamais une erreur bloquante ni une entrée dans `etape4_{dept}_erreurs.csv` : c'est le fonctionnement normal du repli vers le tracé manuel (seul un échec de l'appel réseau `recuperer_zones_urba` lui-même part en erreur, source `"zone-urba"`, dans `etape4_{dept}_erreurs.csv`).
 
@@ -147,8 +147,12 @@ def recuperer_zones_urba(partition_gpu):
     return response.json().get("features", []), None
 
 
+PREFIXE_DESCRIPTIF = re.compile(r"^(?:(?:la|le|les|du|de la)\s+)?(?:secteurs?|zones?)\s+", re.IGNORECASE)
+
+
 def _normaliser_code_zone(code):
-    return re.sub(r"\s+", "", code).strip().upper()
+    sans_prefixe = PREFIXE_DESCRIPTIF.sub("", code.strip())
+    return re.sub(r"\s+", "", sans_prefixe).strip().upper()
 
 
 def trouver_geometrie_zone(features, code_zone):
@@ -166,6 +170,14 @@ def trouver_geometrie_zone(features, code_zone):
         )
     return ResultatGeometrie(geometrie_geojson=_unir_features(correspondances), erreur=None)
 ```
+
+### Correction du préfixe descriptif ("secteur"/"zone")
+
+*Ajoutée le 25/09/2026 (retour utilisateur pendant le tracé manuel du département 067 hors Eurométropole).*
+
+`zone_reglementaire_mentionnee` porte couramment un préfixe descriptif avant le code de zone lui-même — ex. "Secteur Uh", "Zone N" — que ce soit produit par l'étape 2 ou saisi à la main par un opérateur en éclatant une occurrence multi-zones à l'étape 3. Le `libelle` de la couche `zone-urba`, lui, n'est jamais préfixé ainsi (vérifié en réel : "N1", "UCA2", "UB1"...) — ce préfixe faisait donc systématiquement échouer une correspondance par ailleurs réelle. `_normaliser_code_zone` retire désormais un préfixe `secteur(s)`/`zone(s)` en tête de chaîne (éventuellement précédé de "la"/"le"/"les"/"du"/"de la"), insensible à la casse, avant de comparer — jamais sur la valeur stockée/affichée de `zone_reglementaire_mentionnee`, seulement sur la comparaison interne. Retrait unique, pas récursif : suffisant pour les cas réels observés.
+
+**Vérifié en conditions réelles** sur le département 067 hors Eurométropole, en testant le correctif contre les occurrences déjà tracées manuellement (donc jamais auto-matchées, faute de ce correctif au moment où l'étape 4 avait tourné) : 6 des 50 occurrences tracées à la main auraient été récupérées automatiquement (`1_67252_reglement_20250623.pdf`, zones Uh/Uep/Uj/Up/Ul/Ue). Pas de retraitement rétroactif de ce département pour autant — la géométrie déjà tracée à la main reste valide, le correctif ne profite qu'aux prochains départements.
 
 Un échec (document introuvable dans le GPU, timeout persistant après les tentatives de `tenacity`, réponse vide) n'interrompt jamais le traitement du reste du département : la ligne concernée part dans `etape4_{dept}_erreurs.csv` (identifiant, source interrogée, message d'erreur), et le reste continue — même principe que les trois étapes précédentes.
 
