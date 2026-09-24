@@ -19,6 +19,9 @@ Ingestion and the dbt project both live under `dagster/` (there is no standalone
 `ingestion/` component — the legacy `ingestion/launch-ingestion.sh` path was
 removed in favour of Dagster assets).
 
+`veille-bruit-sante/` is a standalone side project (weekly scientific watch on
+noise & health): it feeds a Notion database and does not use the PostGIS database.
+
 All components share a single **PostgreSQL 15 + PostGIS 3.3** database. The `public_workspace` schema holds raw ingested data; the `public` schema holds dbt-transformed tables consumed by the API.
 
 ## Local Setup
@@ -64,3 +67,4 @@ Each component has its own `CLAUDE.md` with commands and architecture details:
 - `fastapi/CLAUDE.md`
 - `dagster/CLAUDE.md`
 - `dagster/dbt/CLAUDE.md`
+- `veille-bruit-sante/CLAUDE.md`
