@@ -16,8 +16,10 @@ Gardez-le court : quelques lignes par section suffisent.
   - [x] Exporter la base en CSV (`analyse_relecture/exporter_base.py`) :
         102 fiches, 55 favoris, toutes au statut « Lu », `url_source` vide
         partout, `fichier` renseigné sur 29 favoris (24 liens, 5 fichiers Notion).
-  - [ ] Comparer favoris / non-favoris (chiffres + lecture) et lister les
-        doublons présents dans la base.
+  - [x] Comparer favoris / non-favoris (chiffres + lecture) et lister les
+        doublons présents dans la base → `analyse_relecture/analyse-2026-09-24.md`.
+  - [ ] Valider les hypothèses H1–H5 et les 3 questions de l'analyse, puis
+        choisir parmi les 6 propositions de modification.
   - [ ] Régénérer `resume` et `resultat_cle` à partir du texte intégral pour
         les fiches dont la colonne `fichier` est renseignée (liens externes :
         PDF ou page web ; fichiers Notion : lien valable ~1 h). Estimer le
