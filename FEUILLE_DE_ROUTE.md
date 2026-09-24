@@ -25,7 +25,9 @@ Gardez-le court : quelques lignes par section suffisent.
   - [x] Tester la règle sur les 80 fiches relues ayant un contenu source :
         précision 81 %, rappel 60 %, 1,16 $ (analyse, section 7).
   - [ ] Décider d'un ajustement de la règle (variantes A/B de l'analyse) ou
-        la garder telle quelle.
+        la garder telle quelle (recommandation : la garder).
+  - [ ] Trancher : les communiqués, pages d'information et revues narratives
+        mis en favori (10 fiches) doivent-ils pouvoir devenir candidats ?
   - [ ] Diagnostiquer les 2 échecs d'extraction (`ValidationError`) sur des
         pages Inserm en français.
   - [x] Ajouter les colonnes de qualification à la base Notion
