@@ -86,3 +86,5 @@ docker-compose.override.yml
 .tmp*/
 
 graphify-out/
+# Exports locaux de la base Notion (veille bruit-sante)
+veille-bruit-sante/analyse_relecture/export/
