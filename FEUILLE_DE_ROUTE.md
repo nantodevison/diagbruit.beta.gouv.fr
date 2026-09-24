@@ -22,9 +22,12 @@ Gardez-le court : quelques lignes par section suffisent.
   - [x] Implémenter la qualification (type_document, sens_conclusion,
         elements_probants, reprise_de → candidat_favori, nouveaute) et le
         résultat chiffré obligatoire.
-  - [ ] Tester la règle sur les 80 fiches relues ayant un contenu source
-        (`tester_qualification.py`) et l'ajuster — 3 fiches testées
-        (0,056 $), 77 restantes estimées à ~1 $ (0,70–1,50 $).
+  - [x] Tester la règle sur les 80 fiches relues ayant un contenu source :
+        précision 81 %, rappel 60 %, 1,16 $ (analyse, section 7).
+  - [ ] Décider d'un ajustement de la règle (variantes A/B de l'analyse) ou
+        la garder telle quelle.
+  - [ ] Diagnostiquer les 2 échecs d'extraction (`ValidationError`) sur des
+        pages Inserm en français.
   - [x] Ajouter les colonnes de qualification à la base Notion
         (`--ajouter-qualification`), fait le 24/09.
   - [ ] Coût : la réflexion (thinking) de Sonnet 5 est active par défaut sur
