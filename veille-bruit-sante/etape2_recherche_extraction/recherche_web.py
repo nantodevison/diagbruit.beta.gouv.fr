@@ -17,7 +17,7 @@ CHEMIN_WHITELIST = Path(__file__).resolve().parent.parent / "config" / "domains_
 MODELE = "claude-sonnet-5"
 
 
-def _charger_domaines_autorises() -> list[str]:
+def charger_domaines_autorises() -> list[str]:
     """Aplatit toutes les catégories du fichier en une seule liste de domaines — les
     catégories n'existent que pour la lisibilité humaine du fichier, voir son en-tête."""
     with open(CHEMIN_WHITELIST, encoding="utf-8") as f:
@@ -31,7 +31,7 @@ def executer(date_depuis: date, date_jusqu_a: Optional[date] = None) -> list[dic
     structurées. La date de recherche est toujours injectée en toutes lettres dans le
     prompt (jamais une formulation relative), conformément au plan de veille."""
     date_jusqu_a = date_jusqu_a or date.today()
-    domaines = _charger_domaines_autorises()
+    domaines = charger_domaines_autorises()
 
     client = Anthropic()
     reponse = client.messages.create(

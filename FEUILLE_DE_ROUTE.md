@@ -18,8 +18,21 @@ Gardez-le court : quelques lignes par section suffisent.
         partout, `fichier` renseigné sur 29 favoris (24 liens, 5 fichiers Notion).
   - [x] Comparer favoris / non-favoris (chiffres + lecture) et lister les
         doublons présents dans la base → `analyse_relecture/analyse-2026-09-24.md`.
-  - [ ] Valider les hypothèses H1–H5 et les 3 questions de l'analyse, puis
-        choisir parmi les 6 propositions de modification.
+  - [x] Valider les hypothèses H1–H5 et les 3 questions de l'analyse.
+  - [x] Implémenter la qualification (type_document, sens_conclusion,
+        elements_probants, reprise_de → candidat_favori, nouveaute) et le
+        résultat chiffré obligatoire.
+  - [ ] Tester la règle sur les 80 fiches relues ayant un contenu source
+        (`tester_qualification.py`) et l'ajuster — 3 fiches testées
+        (0,056 $), 77 restantes estimées à ~1 $ (0,70–1,50 $).
+  - [x] Ajouter les colonnes de qualification à la base Notion
+        (`--ajouter-qualification`), fait le 24/09.
+  - [ ] Coût : la réflexion (thinking) de Sonnet 5 est active par défaut sur
+        l'extraction et représente environ la moitié du coût. Mesurer si
+        `effort: low` ou thinking désactivé garde la qualité.
+  - [ ] Nettoyer les étiquettes domaine_sante / source_bruit des 102 fiches.
+  - [ ] Canal web : donner à chaque source son propre contexte (aujourd'hui
+        la synthèse globale est partagée par toutes).
   - [ ] Régénérer `resume` et `resultat_cle` à partir du texte intégral pour
         les fiches dont la colonne `fichier` est renseignée (liens externes :
         PDF ou page web ; fichiers Notion : lien valable ~1 h). Estimer le
@@ -48,3 +61,10 @@ Gardez-le court : quelques lignes par section suffisent.
 - 2026-09-24 — Le texte intégral (colonne `fichier`) sert à régénérer le
   résumé de la fiche Notion — la fiche reste la source unique, l'artefact de
   synthèse en profite automatiquement.
+- 2026-09-24 — Critères d'un favori : conclusion claire (effet démontré ou
+  infirmé), source fiable et reconnue, explications qui étayent — issus de
+  la relecture manuelle de la base.
+- 2026-09-24 — Textes de référence anciens conservés, mais distingués des
+  nouveautés — ce sont des jalons qui contextualisent les nouveaux documents.
+- 2026-09-24 — Article et communiqué qui le relaie : on garde les deux —
+  pas de préférence, le lien entre les deux reste à établir.

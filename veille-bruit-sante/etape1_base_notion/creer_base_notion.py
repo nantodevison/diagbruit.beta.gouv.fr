@@ -33,6 +33,33 @@ PROPRIETES_VERIFICATION_URL = {
     "url_not_real": {"checkbox": {}},
 }
 
+# Qualification de chaque étude selon les critères d'une publication importante, tirés de la
+# relecture manuelle de la base (analyse_relecture/analyse-2026-09-24.md) : conclusion
+# claire, source fiable et reconnue, explications qui étayent la conclusion. Les deux listes
+# ci-dessous sont remplies par le LLM à l'extraction ; candidat_favori et nouveaute sont
+# calculées ensuite par des règles Python (etape2_recherche_extraction/qualification.py).
+OPTIONS_TYPE_DOCUMENT = (
+    "Etude originale",
+    "Meta-analyse ou revue systematique",
+    "Revue narrative ou editorial",
+    "Rapport institutionnel",
+    "Communique ou page d'information",
+)
+OPTIONS_SENS_CONCLUSION = (
+    "Effet demontre", "Absence d'effet", "Non concluant", "Pas de conclusion propre",
+)
+
+# Colonnes ajoutees apres la creation initiale de la base, isolees pour la meme raison que
+# PROPRIETES_VERIFICATION_URL (migration via ajouter_proprietes_qualification).
+PROPRIETES_QUALIFICATION = {
+    "type_document": {"select": {"options": [{"name": o} for o in OPTIONS_TYPE_DOCUMENT]}},
+    "sens_conclusion": {"select": {"options": [{"name": o} for o in OPTIONS_SENS_CONCLUSION]}},
+    "elements_probants": {"rich_text": {}},
+    "reprise_de": {"rich_text": {}},
+    "candidat_favori": {"checkbox": {}},
+    "nouveaute": {"checkbox": {}},
+}
+
 PROPRIETES = {
     "titre": {"title": {}},
     "auteurs": {"rich_text": {}},
@@ -45,6 +72,7 @@ PROPRIETES = {
     "source_bruit": {"multi_select": {"options": [{"name": o} for o in OPTIONS_SOURCE_BRUIT]}},
     "resume": {"rich_text": {}},
     "resultat_cle": {"rich_text": {}},
+    **PROPRIETES_QUALIFICATION,
     "date_ajout": {"created_time": {}},
     "statut": {"select": {"options": [
         {"name": "🆕 Nouveau"}, {"name": "✅ Lu"},
@@ -74,6 +102,15 @@ def ajouter_proprietes_verification_url(notion: Client, data_source_id: str) -> 
     notion.data_sources.update(data_source_id=data_source_id, properties=PROPRIETES_VERIFICATION_URL)
 
 
+def ajouter_proprietes_qualification(notion: Client, data_source_id: str) -> None:
+    """Migration ponctuelle pour une base 'Etudes' deja existante : ajoute les colonnes de
+    qualification (type_document, sens_conclusion...). A lancer AVANT le premier run qui
+    les ecrit, sinon chaque creation de fiche echoue sur une propriete inconnue. Meme
+    garantie que ajouter_proprietes_verification_url : aucune colonne ni page existante
+    n'est touchee."""
+    notion.data_sources.update(data_source_id=data_source_id, properties=PROPRIETES_QUALIFICATION)
+
+
 def main() -> None:
     load_dotenv()
     parser = argparse.ArgumentParser(
@@ -85,9 +122,19 @@ def main() -> None:
         metavar="DATA_SOURCE_ID",
         help="N'ajoute que les colonnes url_source/url_not_real a une base 'Etudes' existante",
     )
+    parser.add_argument(
+        "--ajouter-qualification",
+        metavar="DATA_SOURCE_ID",
+        help="N'ajoute que les colonnes de qualification (type_document, sens_conclusion...)",
+    )
     args = parser.parse_args()
 
     notion = Client(auth=os.environ["NOTION_API_KEY"])
+
+    if args.ajouter_qualification:
+        ajouter_proprietes_qualification(notion, args.ajouter_qualification)
+        print(f"Colonnes de qualification ajoutees a {args.ajouter_qualification}.")
+        return
 
     if args.ajouter_verification_url:
         ajouter_proprietes_verification_url(notion, args.ajouter_verification_url)
@@ -95,7 +142,7 @@ def main() -> None:
         return
 
     if not args.page_parent_id:
-        parser.error("page_parent_id est requis hors migration --ajouter-verification-url")
+        parser.error("page_parent_id est requis hors migrations --ajouter-...")
 
     database_id = creer_base(notion, args.page_parent_id)
 

@@ -42,6 +42,18 @@ def _proprietes(etude: dict) -> dict:
         "source_bruit": {"multi_select": [{"name": s} for s in etude.get("source_bruit") or []]},
         "resume": {"rich_text": _texte_riche(etude.get("resume"))},
         "resultat_cle": {"rich_text": _texte_riche(etude.get("resultat_cle"))},
+        # Qualification (etape2_recherche_extraction/qualification.py). Les deux select
+        # viennent d'une liste fermée (Literal) : pas besoin de _nettoyer_option_select.
+        "type_document": {"select": (
+            {"name": nom} if (nom := etude.get("type_document")) else None
+        )},
+        "sens_conclusion": {"select": (
+            {"name": nom} if (nom := etude.get("sens_conclusion")) else None
+        )},
+        "elements_probants": {"rich_text": _texte_riche(etude.get("elements_probants"))},
+        "reprise_de": {"rich_text": _texte_riche(etude.get("reprise_de"))},
+        "candidat_favori": {"checkbox": bool(etude.get("candidat_favori"))},
+        "nouveaute": {"checkbox": bool(etude.get("nouveaute"))},
         "statut": {"select": {"name": "🆕 Nouveau"}},
         "favori": {"checkbox": False},
     }

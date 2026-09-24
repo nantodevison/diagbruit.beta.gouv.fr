@@ -117,6 +117,44 @@ Deux études sont considérées identiques si leurs DOI normalisés sont égaux 
 
 Reprend la politique du projet (voir `etape-1-conception-technique.md`, posture, et `etape-3-integration-notion-diagbruit.md`) : `tenacity` (3 tentatives, délai exponentiel) sur chaque appel réseau individuel (un appel OpenAlex, un appel Europe PMC, l'appel `web_search`, un appel d'extraction). Un canal de recherche entièrement en échec après ses tentatives ne bloque pas l'autre — `executer()` retourne la liste construite à partir du ou des canaux qui ont fonctionné, avec un `print`/log signalant le canal en échec. Une étude dont l'extraction structurée échoue est écartée du run (journalisée), plutôt que transmise à l'étape 3 avec des champs incomplets.
 
+## Décision 7 — Qualification : le LLM décrit, des règles Python décident
+
+*Ajoutée le 24/09/2026, après la relecture manuelle de la base (voir
+`analyse_relecture/analyse-2026-09-24.md`).*
+
+L'utilisateur a défini ce qui fait une publication importante : une **conclusion claire**
+(effet démontré ou infirmé), une **source fiable et reconnue**, des **explications qui
+étayent** la conclusion. Les textes de référence anciens sont conservés mais distingués des
+nouveautés.
+
+L'extraction (Décision 4) remplit, dans le même appel, quatre champs descriptifs :
+`type_document` et `sens_conclusion` (listes fermées, `Literal` comme `domaine_sante`),
+`elements_probants` (texte, vide si le contenu ne fournit ni population, ni méthode, ni
+chiffre) et `reprise_de` (publication d'origine quand le document relaie ou commente une
+publication précise). Le module `qualification.py` en déduit ensuite, sans appel LLM :
+
+- `candidat_favori` = conclusion claire (« Effet demontre » ou « Absence d'effet ») ET
+  source fiable (type étude originale / méta-analyse / rapport institutionnel, venant du
+  canal API ou d'un domaine de `config/domains_whitelist.yaml`) ET `elements_probants`
+  non vide ;
+- `nouveaute` = année de publication ≥ année de début de la fenêtre de recherche
+  (comparaison à l'année près, faute de date plus précise dans la plupart des sources).
+
+**Pourquoi des règles Python plutôt qu'un « score de pertinence » demandé au LLM :** une
+règle se lit, se discute et s'ajuste en une ligne ; elle se teste sur les fiches déjà
+relues (`analyse_relecture/tester_qualification.py` compare `candidat_favori` aux favoris
+manuels). Un score produit par le LLM serait opaque et pourrait juger avec assurance la
+réputation d'une revue qu'il connaît mal.
+
+**Pourquoi garder les reprises (communiqués, commentaires) au lieu de les écarter :**
+choix de l'utilisateur — le communiqué est souvent plus lisible pour un non-spécialiste.
+`reprise_de` permet de relier les deux fiches.
+
+**Point d'attention — migration du schéma Notion :** les six colonnes correspondantes
+doivent être ajoutées à une base existante **avant** le premier run qui les écrit
+(`python -m etape1_base_notion.creer_base_notion --ajouter-qualification <data_source_id>`),
+sinon chaque création de fiche échoue sur une propriété inconnue.
+
 ## Dépendances retenues
 
 - `anthropic` — `web_search` et extraction structurée.

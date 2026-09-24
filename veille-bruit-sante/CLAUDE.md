@@ -17,6 +17,16 @@ sur la santé (populations européennes). Ce résumé doit permettre :
 Toute évolution du pipeline (prompts, filtres, dédoublonnage) se juge à l'aune
 de ces deux critères.
 
+**Ce qui fait une publication importante** (critères de l'utilisateur, tirés de
+sa relecture de la base — voir `analyse_relecture/analyse-2026-09-24.md`) :
+- une conclusion claire, qui démontre ou infirme un impact du bruit sur la santé ;
+- une source fiable et reconnue ;
+- des explications (méthode, données) qui étayent cette conclusion.
+
+Les **textes de référence anciens** (lignes directrices OMS, avis ANSES…) sont
+conservés : ce sont des jalons qui contextualisent les nouveautés. Ils doivent
+être distingués des nouveautés, pas écartés.
+
 ## Architecture
 
 Projet **autonome** : aucune dépendance avec Dagster, dbt, FastAPI ni PostGIS.
@@ -33,6 +43,7 @@ main.py  (point d'entrée unique, un run hebdomadaire)
   │                        config/domains_whitelist.yaml
   │    extraction.py       1 appel Claude par source → EtudeExtraite (Pydantic)
   │    dedoublonnage.py    doublons internes au run (DOI puis titre ≈ 90 %)
+  │    qualification.py    règles Python → candidat_favori, nouveaute
   └─ étape 3 — etape3_integration_notion/
        etat_existant.py / dedoublonnage_existant.py  doublons contre Notion
        verification_url.py  pose url_not_real (ne rejette jamais une étude)
@@ -46,6 +57,10 @@ main.py  (point d'entrée unique, un run hebdomadaire)
   Notion ≥ 2025-09-03 : `data_sources.query`, plus de `databases.query`).
 - `verifier_urls_existantes.py` : script ponctuel de revérification des URLs
   des fiches existantes, sans appel Anthropic.
+- `analyse_relecture/` : outils d'analyse de la base relue à la main
+  (`exporter_base.py` et `recuperer_contenus.py` gratuits,
+  `tester_qualification.py` payant, `--estimer` d'abord). Sorties dans
+  `analyse_relecture/export/`, ignoré par Git.
 
 ## Commandes
 
@@ -90,3 +105,10 @@ possible, et à chaque push sur `main` touchant ce dossier).
 - Format exact des résultats `web_search` à confirmer sur un vrai appel.
 - Exemples du `PROMPT_SYSTEME` marqués BROUILLON, à relire.
 - Pas d'option `--limit` pour tester sur quelques études.
+- Colonnes de qualification ajoutées à la base Notion le 24/09/2026. Pour toute
+  autre base (test, recréation) : `creer_base_notion --ajouter-qualification
+  <data_source_id>`, sinon toutes les écritures échouent.
+- Coût de l'extraction : environ 1 à 2 centimes par étude, dont à peu près la
+  moitié due à la réflexion (thinking) de Sonnet 5, active par défaut.
+- Canal web : toutes les sources d'un run reçoivent le même texte de contexte
+  (la synthèse globale de `web_search`), d'où des résumés pauvres.

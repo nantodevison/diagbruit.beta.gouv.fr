@@ -11,13 +11,16 @@ from pydantic import BaseModel
 from tenacity import retry, stop_after_attempt, wait_exponential
 
 from etape1_base_notion.creer_base_notion import (
-    OPTIONS_DOMAINE_SANTE, OPTIONS_SOURCE_BRUIT, OPTIONS_URL_SOURCE,
+    OPTIONS_DOMAINE_SANTE, OPTIONS_SENS_CONCLUSION, OPTIONS_SOURCE_BRUIT,
+    OPTIONS_TYPE_DOCUMENT, OPTIONS_URL_SOURCE,
 )
 
 MODELE = "claude-sonnet-5"
 
 DomaineSante = Literal[OPTIONS_DOMAINE_SANTE]  # type: ignore[valid-type]
 SourceBruit = Literal[OPTIONS_SOURCE_BRUIT]  # type: ignore[valid-type]
+TypeDocument = Literal[OPTIONS_TYPE_DOCUMENT]  # type: ignore[valid-type]
+SensConclusion = Literal[OPTIONS_SENS_CONCLUSION]  # type: ignore[valid-type]
 
 _API_METIER, _CLAUDE_WEB_SEARCH, _CLAUDE_LLM = OPTIONS_URL_SOURCE
 
@@ -34,6 +37,12 @@ class EtudeExtraite(BaseModel):
     source_bruit: List[SourceBruit] = []
     resume: str = ""
     resultat_cle: str = ""
+    # Qualification (voir etape-2-conception-technique.md, Décision 7). Optional : une
+    # étude hors périmètre n'a pas à les remplir, et un Literal ne peut pas être vide.
+    type_document: Optional[TypeDocument] = None
+    sens_conclusion: Optional[SensConclusion] = None
+    elements_probants: str = ""
+    reprise_de: str = ""
 
 
 # Instructions fixes, identiques a chaque appel du run — isolees du contenu variable de
@@ -119,10 +128,59 @@ source_bruit :
 - Ferroviaire : trains, trams, metros aeriens.
 - Industriel : usines, chantiers, activites industrielles ou artisanales.
 
+## Annee
+
+annee est l'annee de publication du document (pas celle de collecte des donnees). Reprends \
+l'annee trouvee lors de la recherche si elle est fournie ; sinon cherche-la dans le contenu \
+disponible (date de publication, mention "publie en", reference de citation). Laisse vide \
+seulement si aucune annee n'apparait. Un document ancien reste dans le perimetre : les \
+textes de reference (lignes directrices, avis d'agence) servent de jalons.
+
 ## Resume et resultat cle
 
 resume (2-3 phrases) et resultat_cle doivent etre rediges par toi, dans un francais neutre \
-et factuel, jamais recopies tels quels d'une source.
+et factuel, jamais recopies tels quels d'une source. Le lecteur n'est pas specialiste : \
+explique en termes simples ce qui a ete etudie et ce qui a ete trouve.
+
+resultat_cle doit reprendre le resultat chiffre principal quand le contenu disponible en \
+fournit un (risque relatif, pourcentage d'augmentation, seuil en dB, nombre de personnes \
+concernees), avec l'exposition et l'effet auxquels il se rapporte. Ne jamais inventer un \
+chiffre absent du contenu disponible.
+
+## Qualification du document
+
+Ces champs servent a reperer les publications les plus importantes, definies comme celles \
+qui ont une conclusion claire, proviennent d'une source fiable et fournissent des \
+explications qui etayent leur conclusion.
+
+type_document (une seule valeur) :
+- Etude originale : l'article presente ses propres donnees (cohorte, enquete, etude \
+cas-temoins, etude experimentale).
+- Meta-analyse ou revue systematique : synthese methodique d'etudes existantes avec une \
+methode de selection explicite.
+- Revue narrative ou editorial : synthese sans methode systematique, point de vue, \
+commentaire ou editorial d'une revue.
+- Rapport institutionnel : rapport, avis ou lignes directrices d'une agence ou institution \
+(OMS, AEE, ANSES, Sante publique France...).
+- Communique ou page d'information : communique de presse, actualite, page thematique ou \
+FAQ d'un site, fiche d'information grand public, meme sur un site institutionnel.
+
+sens_conclusion (une seule valeur) :
+- Effet demontre : le document conclut clairement a un effet du bruit sur la sante.
+- Absence d'effet : le document conclut clairement a l'absence d'effet mesurable.
+- Non concluant : resultats mitiges, non significatifs, ou appel explicite a davantage de \
+recherches sans conclusion ferme.
+- Pas de conclusion propre : le document ne produit pas de conclusion lui-meme (il relaie \
+celles d'autres travaux, ou decrit une methode ou un contexte).
+
+elements_probants (1-2 phrases) : ce qui etaye la conclusion — population et effectif, \
+methode, duree de suivi, resultat chiffre. Laisse vide si le contenu disponible ne fournit \
+aucun de ces elements : ne jamais les deduire du seul titre.
+
+reprise_de : si le document relaie ou commente une publication precise (communique \
+presentant une etude, editorial commentant un rapport, traduction ou resume d'un rapport), \
+indique le titre ou le DOI de cette publication d'origine tel qu'il apparait dans le \
+contenu disponible. Laisse vide sinon.
 
 ## Exemple
 
@@ -155,6 +213,11 @@ accru d'hypertension. L'association reste significative apres ajustement sur la 
 de l'air et le statut socio-economique."
 resultat_cle: "Une exposition nocturne au bruit routier (Lden > 55 dB) augmente de 18% le \
 risque d'hypertension incidente."
+type_document: "Etude originale"
+sens_conclusion: "Effet demontre"
+elements_probants: "Cohorte prospective de 45 000 adultes dans six pays europeens, suivie \
+10 ans, avec ajustement sur la pollution de l'air et le statut socio-economique."
+reprise_de: ""
 
 Contre-exemple (hors perimetre) : une etude portant sur des methodes de mesure acoustique \
 en usine, sans aucune donnee de sante humaine, meme si elle mentionne le bruit industriel, \
