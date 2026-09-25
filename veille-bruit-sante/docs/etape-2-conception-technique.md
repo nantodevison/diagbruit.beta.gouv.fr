@@ -133,17 +133,20 @@ L'extraction (Décision 4) remplit, dans le même appel, quatre champs descripti
 chiffre) et `reprise_de` (publication d'origine quand le document relaie ou commente une
 publication précise). Le module `qualification.py` en déduit ensuite, sans appel LLM :
 
-- `candidat_favori` = conclusion claire (« Effet demontre » ou « Absence d'effet ») ET
-  source fiable (type étude originale / méta-analyse / rapport institutionnel, venant du
-  canal API ou d'un domaine de `config/domains_whitelist.yaml`) ET `elements_probants`
-  non vide ;
+- `priorite` (select, *modifié le 25/09/2026, voir Décision 8*) :
+  - **Haute** = conclusion claire (« Effet demontre » ou « Absence d'effet ») ET source
+    fiable (type étude originale / méta-analyse / rapport institutionnel, venant du canal
+    API ou d'un domaine de `config/domains_whitelist.yaml`) ET `elements_probants` non vide ;
+  - **A examiner** = tout autre document qualifié par le LLM (`sens_conclusion` renseigné)
+    et de provenance reconnue, **quel que soit son type** ;
+  - **Faible** = le reste (contenu insuffisant, provenance inconnue) ;
 - `nouveaute` = année de publication ≥ année de début de la fenêtre de recherche
   (comparaison à l'année près, faute de date plus précise dans la plupart des sources).
 
 **Pourquoi des règles Python plutôt qu'un « score de pertinence » demandé au LLM :** une
 règle se lit, se discute et s'ajuste en une ligne ; elle se teste sur les fiches déjà
-relues (`analyse_relecture/tester_qualification.py` compare `candidat_favori` aux favoris
-manuels). Un score produit par le LLM serait opaque et pourrait juger avec assurance la
+relues (`analyse_relecture/tester_qualification.py` compare `priorite` aux favoris
+manuels, et recalcule les règles sans nouvel appel payant). Un score produit par le LLM serait opaque et pourrait juger avec assurance la
 réputation d'une revue qu'il connaît mal.
 
 **Pourquoi garder les reprises (communiqués, commentaires) au lieu de les écarter :**
@@ -154,6 +157,31 @@ choix de l'utilisateur — le communiqué est souvent plus lisible pour un non-s
 doivent être ajoutées à une base existante **avant** le premier run qui les écrit
 (`python -m etape1_base_notion.creer_base_notion --ajouter-qualification <data_source_id>`),
 sinon chaque création de fiche échoue sur une propriété inconnue.
+
+## Décision 8 — Priorité à 3 niveaux et rien d'écarté silencieusement
+
+*Ajoutée le 25/09/2026. Schéma du circuit complet : `docs/workflow-veille.md`.*
+
+**Priorité plutôt que case `candidat_favori`.** La première version posait une case
+`candidat_favori` (règle Haute seule). Testée sur 78 fiches relues : précision 81 %, mais
+rappel 60 % — 17 favoris manqués, dont des communiqués et revues narratives que
+l'utilisateur veut pouvoir retenir. Son choix : **rappel avant précision** (mieux vaut plus
+de documents à trier qu'un favori potentiel manqué), et une distinction nette entre ce qui
+**informe** (la priorité, calculée) et ce qui **décide** (la case `favori`, cochée à la
+main). `candidat_favori` est retirée de la base au profit de `priorite`. Mesuré sur les
+mêmes fiches : Haute contient 81 % de favoris, Haute + A examiner retrouvent 93 % des
+favoris.
+
+**Rien n'est écarté sans trace.** Un document ne quitte le circuit qu'à trois endroits,
+chacun journalisé avec son titre dans la sortie du run GitHub Actions :
+- échec d'extraction (déjà journalisé, Décision 6) ;
+- hors périmètre : le modèle renvoie un `motif_exclusion`, imprimé avec le titre ;
+- doublon : dans le run (`dedoublonnage.py`) comme contre Notion (`etape3/main.py`).
+
+Un contenu **trop pauvre pour juger** n'est plus une cause d'exclusion : le modèle renvoie
+`contenu_insuffisant`, et l'étude est écrite avec la case `a_verifier` cochée (et
+généralement la priorité Faible). Constaté au test : un favori (page AEE de 700
+caractères) avait été écarté comme hors périmètre à cause de ce seul critère.
 
 ## Dépendances retenues
 

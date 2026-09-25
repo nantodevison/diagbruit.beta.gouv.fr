@@ -2,7 +2,9 @@
 
 Consignes de travail pour ce sous-projet. Le cadrage complet est dans
 `docs/plan-veille-bruit-sante-diagbruit.md`, le détail de chaque étape dans
-`docs/etape-N-*.md`.
+`docs/etape-N-*.md`, et le **schéma validé du workflow** (du scan à la mise à
+disposition des favoris) dans `docs/workflow-veille.md` — à tenir à jour quand
+le circuit change.
 
 ## Objectif
 
@@ -43,7 +45,8 @@ main.py  (point d'entrée unique, un run hebdomadaire)
   │                        config/domains_whitelist.yaml
   │    extraction.py       1 appel Claude par source → EtudeExtraite (Pydantic)
   │    dedoublonnage.py    doublons internes au run (DOI puis titre ≈ 90 %)
-  │    qualification.py    règles Python → candidat_favori, nouveaute
+  │    qualification.py    règles Python → priorite (Haute / A examiner /
+  │                        Faible), nouveaute
   └─ étape 3 — etape3_integration_notion/
        etat_existant.py / dedoublonnage_existant.py  doublons contre Notion
        verification_url.py  pose url_not_real (ne rejette jamais une étude)
@@ -95,6 +98,12 @@ possible, et à chaque push sur `main` touchant ce dossier).
 - **Deux dédoublonnages distincts** (interne au run / contre Notion) partagent
   les fonctions de normalisation de `dedoublonnage.py` : ne pas les dupliquer.
 - **Un échec isolé n'interrompt pas le run** (écriture d'une fiche, URL morte).
+- **Rien n'est écarté silencieusement** : toute exclusion (échec, hors
+  périmètre, doublon) est journalisée avec le titre et la raison ; un contenu
+  trop pauvre est écrit avec `a_verifier` plutôt qu'exclu.
+- **Rappel avant précision** : l'utilisateur préfère trier plus de documents
+  que manquer un favori potentiel. La `priorite` informe, la case `favori`
+  (manuelle) décide.
 - Toute décision de conception est consignée dans le
   `docs/etape-N-conception-technique.md` concerné (format « Décision N — …
   **Pourquoi :** … »).

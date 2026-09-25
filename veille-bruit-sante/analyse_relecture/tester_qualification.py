@@ -1,5 +1,5 @@
-"""Teste la qualification (candidat_favori) sur les fiches déjà relues : la règle
-retrouve-t-elle les favoris choisis à la main ?
+"""Teste la qualification (priorite) sur les fiches déjà relues : les priorités
+hautes regroupent-elles les favoris choisis à la main ?
 
 PAYANT : un appel Anthropic (extraction) par fiche testée. Rien n'est écrit dans Notion :
 les résultats vont dans export/qualification.jsonl (un résultat par ligne, conservé d'un
@@ -122,35 +122,46 @@ def tester(fiches: list, limite: int) -> None:
             sortie.write(json.dumps(resultat, ensure_ascii=False) + "\n")
             sortie.flush()  # un arrêt en cours de route ne perd pas ce qui est payé
             print(f"{numero:3}/{len(a_faire)} fav={'oui' if resultat['favori'] else 'non'} "
-                  f"candidat={'oui' if etude['candidat_favori'] else 'non'} "
+                  f"priorite={etude['priorite']:10} "
                   f"{etude.get('type_document') or '-':35} {fiche['titre'][:50]}")
 
     print(f"Coût réel de ce lancement : {cout_total:.3f} $")
 
 
 def bilan() -> None:
-    """Tableau favori (choix manuel) × candidat_favori (règle), plus un CSV à relire."""
+    """Tableau favori (choix manuel) × priorite (règle), plus un CSV à relire.
+
+    La priorité est recalculée ici à partir des champs extraits déjà enregistrés : on peut
+    ainsi ajuster les règles de qualification.py et remesurer sans aucun nouvel appel payant.
+    """
     resultats = list(_deja_faits().values())
     if not resultats:
         return
-    compte = {(f, c): 0 for f in (True, False) for c in (True, False)}
+    qualification.qualifier(resultats, DATE_DEPUIS)
+    # Dans le pipeline, une étude hors périmètre n'atteint jamais Notion : on la compte à part.
+    ECARTEE = "(ecartee)"
     for r in resultats:
-        compte[(r["favori"], bool(r["candidat_favori"]))] += 1
-    vp, fn = compte[(True, True)], compte[(True, False)]
-    fp, vn = compte[(False, True)], compte[(False, False)]
+        if r["hors_perimetre"]:
+            r["priorite"] = ECARTEE
+    niveaux = (qualification.HAUTE, qualification.A_EXAMINER, qualification.FAIBLE, ECARTEE)
+    nb_favoris = sum(r["favori"] for r in resultats)
 
-    print(f"\n=== Bilan sur {len(resultats)} fiche(s) ===")
-    print("                    règle: candidat   règle: non")
-    print(f"favori (manuel)          {vp:4}           {fn:4}")
-    print(f"non favori               {fp:4}           {vn:4}")
-    if vp + fp:
-        print(f"Précision : {vp / (vp + fp):.0%} des candidats sont de vrais favoris")
-    if vp + fn:
-        print(f"Rappel    : {vp / (vp + fn):.0%} des favoris sont retrouvés par la règle")
+    print(f"\n=== Bilan sur {len(resultats)} fiche(s), dont {nb_favoris} favoris ===")
+    print(f"{'priorité':12} {'fiches':>6} {'dont favoris':>13} {'part de favoris':>16}")
+    favoris_cumules = 0
+    for niveau in niveaux:
+        du_niveau = [r for r in resultats if r["priorite"] == niveau]
+        favoris = sum(r["favori"] for r in du_niveau)
+        favoris_cumules += favoris
+        part = f"{favoris / len(du_niveau):.0%}" if du_niveau else "-"
+        print(f"{niveau:12} {len(du_niveau):6} {favoris:13} {part:>16}")
+        if niveau in (qualification.HAUTE, qualification.A_EXAMINER) and nb_favoris:
+            print(f"{'':12} → jusqu'à « {niveau} » : {favoris_cumules / nb_favoris:.0%} des favoris retrouvés")
     print(f"Coût cumulé : {sum(r.get('cout', 0) for r in resultats):.3f} $")
 
     colonnes = [
-        "favori", "candidat_favori", "hors_perimetre", "type_document", "sens_conclusion",
+        "favori", "priorite", "hors_perimetre", "motif_exclusion", "contenu_insuffisant",
+        "type_document", "sens_conclusion",
         "elements_probants", "reprise_de", "annee", "nouveaute", "titre", "doi_url",
         "domaine_sante", "source_bruit", "resume", "resultat_cle", "methode_contenu",
         "a_fichier", "page_id",

@@ -49,9 +49,13 @@ def dedoublonner(etudes: list[dict]) -> list[dict]:
         doi = normaliser_doi(etude.get("doi_url"))
         titre = normaliser_titre(etude.get("titre"))
 
+        # Chaque doublon écarté est journalisé : rien n'est écarté sans trace
+        # (docs/workflow-veille.md).
         if doi and doi in doi_vus:
+            print(f"[etape2][dedoublonnage] doublon (meme DOI/URL) ecarte : '{etude.get('titre', '?')}'")
             continue
         if any(titres_similaires(titre, t) for t in titres_vus):
+            print(f"[etape2][dedoublonnage] doublon (titre similaire) ecarte : '{etude.get('titre', '?')}'")
             continue
 
         retenues.append(etude)

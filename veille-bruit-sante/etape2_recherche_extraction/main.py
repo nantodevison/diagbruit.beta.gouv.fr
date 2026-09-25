@@ -5,7 +5,7 @@ from . import dedoublonnage, extraction, qualification, recherche_apis, recherch
 
 
 def executer(date_depuis: date) -> list[dict]:
-    """Retourne la liste des études trouvées, dédoublonnées et qualifiées (candidat_favori,
+    """Retourne la liste des études trouvées, dédoublonnées et qualifiées (priorite,
     nouveaute), prêtes pour l'étape 3."""
     sources: list[dict] = []
     sources.extend(recherche_apis.executer(date_depuis))

@@ -1,16 +1,20 @@
 """Phase 4 (etape 2) — qualification des études extraites, par des règles Python.
 
-Voir etape-2-conception-technique.md, Décision 7. Traduit les critères d'une publication
-importante, tirés de la relecture manuelle de la base (conclusion claire, source fiable et
-reconnue, explications qui étayent la conclusion), en deux cases à cocher :
+Voir etape-2-conception-technique.md, Décisions 7 et 8. Traduit les critères d'une
+publication importante, tirés de la relecture manuelle de la base (conclusion claire, source
+fiable et reconnue, explications qui étayent la conclusion), en deux attributs :
 
-- `candidat_favori` : l'étude remplit les trois critères ;
+- `priorite` (Haute / A examiner / Faible) : ordonne la relecture manuelle. Elle informe
+  l'utilisateur ; c'est la case `favori`, cochée à la main, qui traduit son choix. Réglée
+  pour le rappel plutôt que la précision : mieux vaut un document de plus à trier qu'un
+  favori potentiel relégué en bas de liste ;
 - `nouveaute` : l'étude a été publiée dans la fenêtre de recherche. Un texte plus ancien
   (ex. lignes directrices OMS) n'est pas écarté : c'est un jalon qui contextualise les
   nouveautés, il est seulement distingué.
 
 Aucun appel LLM ici : le LLM remplit les champs descriptifs à l'extraction (type_document,
 sens_conclusion, elements_probants), les règles ci-dessous restent lisibles et ajustables.
+Mesures sur les 78 fiches relues du 24/09/2026 : voir analyse_relecture/analyse-2026-09-24.md.
 """
 from datetime import date
 from functools import lru_cache
@@ -19,9 +23,12 @@ from urllib.parse import urlparse
 
 from .recherche_web import charger_domaines_autorises
 
-# Types de documents qui peuvent compter comme « source fiable ». Les revues narratives,
-# éditoriaux, communiqués et pages d'information en sont exclus : ils relaient ou
-# commentent des conclusions plutôt que de les établir.
+# Libellés identiques aux options de la colonne Notion (etape1_base_notion/creer_base_notion.py).
+HAUTE, A_EXAMINER, FAIBLE = "Haute", "A examiner", "Faible"
+
+# Types de documents qui établissent leurs propres conclusions. Seuls eux peuvent être en
+# priorité Haute ; les autres (revues narratives, éditoriaux, communiqués, pages
+# d'information) restent candidats via la priorité « A examiner ».
 TYPES_SOURCE_FIABLE = {
     "Etude originale",
     "Meta-analyse ou revue systematique",
@@ -47,20 +54,32 @@ def domaine_autorise(url: Optional[str]) -> bool:
     return any(hote == d or hote.endswith("." + d) for d in _domaines_autorises())
 
 
-def source_fiable(etude: dict) -> bool:
-    """Type de document fiable ET provenance reconnue : canal API scientifique (revues
-    indexées par OpenAlex / Europe PMC) ou URL d'un domaine de la liste blanche."""
-    if etude.get("type_document") not in TYPES_SOURCE_FIABLE:
-        return False
+def provenance_reconnue(etude: dict) -> bool:
+    """Canal API scientifique (revues indexées par OpenAlex / Europe PMC) ou URL d'un
+    domaine de la liste blanche."""
     return etude.get("canal") == "api" or domaine_autorise(etude.get("doi_url"))
 
 
-def est_candidat_favori(etude: dict) -> bool:
-    return (
+def source_fiable(etude: dict) -> bool:
+    """Type de document qui établit ses conclusions ET provenance reconnue."""
+    return etude.get("type_document") in TYPES_SOURCE_FIABLE and provenance_reconnue(etude)
+
+
+def calculer_priorite(etude: dict) -> str:
+    """Haute : les trois critères (conclusion claire, source fiable, explications) — sur les
+    fiches relues, 81 % de ces études étaient des favoris.
+    A examiner : tout autre document qualifié par le LLM et de provenance reconnue, quel que
+    soit son type — Haute + A examiner retrouvent 93 % des favoris.
+    Faible : le reste (contenu insuffisant, provenance inconnue)."""
+    if (
         etude.get("sens_conclusion") in CONCLUSIONS_CLAIRES
         and source_fiable(etude)
         and bool((etude.get("elements_probants") or "").strip())
-    )
+    ):
+        return HAUTE
+    if etude.get("sens_conclusion") is not None and provenance_reconnue(etude):
+        return A_EXAMINER
+    return FAIBLE
 
 
 def est_nouveaute(etude: dict, date_depuis: date) -> bool:
@@ -71,9 +90,9 @@ def est_nouveaute(etude: dict, date_depuis: date) -> bool:
 
 
 def qualifier(etudes: list, date_depuis: date) -> list:
-    """Ajoute candidat_favori et nouveaute à chaque étude (modifie les dict en place et
-    renvoie la même liste, pour s'enchaîner dans etape2_recherche_extraction/main.py)."""
+    """Ajoute priorite et nouveaute à chaque étude (modifie les dict en place et renvoie la
+    même liste, pour s'enchaîner dans etape2_recherche_extraction/main.py)."""
     for etude in etudes:
-        etude["candidat_favori"] = est_candidat_favori(etude)
+        etude["priorite"] = calculer_priorite(etude)
         etude["nouveaute"] = est_nouveaute(etude, date_depuis)
     return etudes

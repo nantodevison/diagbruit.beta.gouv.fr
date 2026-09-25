@@ -27,6 +27,11 @@ _API_METIER, _CLAUDE_WEB_SEARCH, _CLAUDE_LLM = OPTIONS_URL_SOURCE
 
 class EtudeExtraite(BaseModel):
     hors_perimetre: bool
+    # Motif court d'exclusion, inscrit dans le journal du run : rien n'est écarté sans
+    # trace (docs/workflow-veille.md).
+    motif_exclusion: str = ""
+    # Contenu trop pauvre pour juger : l'étude est écrite avec a_verifier plutôt qu'exclue.
+    contenu_insuffisant: bool = False
     titre: str
     auteurs: str = ""
     annee: Optional[int] = None
@@ -78,9 +83,18 @@ extraire tant que l'essai n'a pas produit de resultats publies ;
 travail, risque auditif professionnel, reglementation de securite au travail, medecine du \
 travail) — meme si l'etude traite bien de sante, le bruit professionnel est totalement \
 hors du perimetre de cette veille, qui ne porte que sur l'exposition environnementale et \
-residentielle des populations ;
-- le contenu disponible est trop insuffisant pour juger du perimetre (resume absent ou non \
-pertinent).
+residentielle des populations.
+
+Si hors_perimetre est true, indique dans motif_exclusion, en une phrase courte, la \
+condition remplie (ex. "exposition professionnelle au bruit"). Sinon laisse-le vide.
+
+## Contenu insuffisant
+
+Si le contenu disponible est trop pauvre pour juger l'etude (resume absent, page d'accueil \
+ou de navigation, texte sans rapport avec le titre), ne mets PAS hors_perimetre a true : \
+mets contenu_insuffisant a true, et remplis seulement les champs que le contenu permet \
+d'etablir (titre, doi_url, annee...), sans rien deduire du seul titre. Le document sera \
+verifie a la main : mieux vaut un document a trier qu'une etude perdue.
 
 Cas limites :
 - une etude multi-pays incluant au moins un pays europeen reste dans le perimetre, meme si \
@@ -198,6 +212,8 @@ de l'air et le statut socio-economique.
 
 Sortie attendue :
 hors_perimetre: false
+motif_exclusion: ""
+contenu_insuffisant: false
 titre: "Long-term exposure to road traffic noise and incident hypertension: a prospective \
 cohort study in six European countries"
 auteurs: "Dubois M et al."
@@ -221,7 +237,8 @@ reprise_de: ""
 
 Contre-exemple (hors perimetre) : une etude portant sur des methodes de mesure acoustique \
 en usine, sans aucune donnee de sante humaine, meme si elle mentionne le bruit industriel, \
-est hors_perimetre = true : il n'y a pas de lien direct avec la sante, seulement une \
+est hors_perimetre = true, avec motif_exclusion = "pas de donnee de sante, mesure \
+acoustique seule" : il n'y a pas de lien direct avec la sante, seulement une \
 caracterisation technique du bruit."""
 
 
@@ -279,9 +296,13 @@ def executer(sources: list[dict]) -> list[dict]:
         tokens_caches_ecrits += getattr(usage, "cache_creation_input_tokens", 0) or 0
 
         if extraite.hors_perimetre:
+            # Exclusion journalisée avec son motif : rien n'est écarté sans trace.
+            print(f"[etape2][extraction] ecarte (hors perimetre) '{source.get('titre', '?')}'"
+                  f" : {extraite.motif_exclusion or 'motif non precise'}")
             continue
 
-        etude = extraite.model_dump(exclude={"hors_perimetre"})
+        etude = extraite.model_dump(exclude={"hors_perimetre", "motif_exclusion", "contenu_insuffisant"})
+        etude["a_verifier"] = extraite.contenu_insuffisant
         etude["canal"] = source.get("canal", "")
 
         doi_source = source.get("doi_url", "")

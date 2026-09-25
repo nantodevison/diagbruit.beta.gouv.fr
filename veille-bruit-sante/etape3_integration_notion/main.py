@@ -12,6 +12,7 @@ def executer(etudes: list[dict], notion: Client, data_source_id: str) -> None:
     nb_creees = 0
     for etude in etudes:
         if dedoublonnage_existant.est_deja_present(etude, doi_existants, titres_existants):
+            print(f"[etape3][dedoublonnage] deja present dans Notion, ecarte : '{etude.get('titre', '?')}'")
             continue
 
         # Verifie l'URL seulement ici (pas plus tot dans le pipeline) : inutile de faire

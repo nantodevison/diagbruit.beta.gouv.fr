@@ -24,10 +24,22 @@ Gardez-le court : quelques lignes par section suffisent.
         résultat chiffré obligatoire.
   - [x] Tester la règle sur les 80 fiches relues ayant un contenu source :
         précision 81 %, rappel 60 %, 1,16 $ (analyse, section 7).
-  - [ ] Décider d'un ajustement de la règle (variantes A/B de l'analyse) ou
-        la garder telle quelle (recommandation : la garder).
-  - [ ] Trancher : les communiqués, pages d'information et revues narratives
-        mis en favori (10 fiches) doivent-ils pouvoir devenir candidats ?
+  - [x] Décider de la règle : remplacée par une priorité à 3 niveaux (voir
+        décisions du 25/09).
+  - [x] Trancher : les communiqués, pages d'information et revues narratives
+        mis en favori peuvent devenir candidats (oui).
+  - [x] Ajouter l'attribut `priorite` (Haute / A examiner / Faible) et
+        retirer `candidat_favori` (code + colonne Notion, migrée le 25/09).
+        Mesuré : Haute = 81 % de favoris, Haute + A examiner = 93 % des
+        favoris retrouvés.
+  - [x] Ne plus rien écarter silencieusement : `contenu_insuffisant` →
+        case `a_verifier` au lieu d'exclure ; exclusions et doublons
+        journalisés avec titre et motif.
+  - [x] Créer un graphique Mermaid du workflow → `veille-bruit-sante/docs/workflow-veille.md`.
+  - [ ] Vérifier avec le nouveau prompt les 8 fiches écartées au test, dont
+        1 favori (~0,15 $).
+  - [ ] Remplir `priorite` / qualification pour les 102 fiches déjà en base
+        (elles ont été écrites avant ces colonnes).
   - [ ] Diagnostiquer les 2 échecs d'extraction (`ValidationError`) sur des
         pages Inserm en français.
   - [x] Ajouter les colonnes de qualification à la base Notion
@@ -73,3 +85,12 @@ Gardez-le court : quelques lignes par section suffisent.
   nouveautés — ce sont des jalons qui contextualisent les nouveaux documents.
 - 2026-09-24 — Article et communiqué qui le relaie : on garde les deux —
   pas de préférence, le lien entre les deux reste à établir.
+- 2026-09-25 — Rappel avant précision : mieux vaut plus de documents à trier
+  à la main que manquer silencieusement un favori potentiel.
+- 2026-09-25 — Tous les types de documents (communiqués, revues narratives…)
+  peuvent devenir candidats — plusieurs favoris manuels en font partie.
+- 2026-09-25 — Priorité à 3 niveaux comme nouvel attribut automatique,
+  distinct de la case `favori` — la priorité informe, la case traduit le
+  choix de l'utilisateur. `candidat_favori` est retiré, devenu redondant.
+- 2026-09-25 — Ne rien écarter silencieusement — conséquence directe du
+  choix « rappel avant précision ».

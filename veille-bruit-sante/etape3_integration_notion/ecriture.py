@@ -52,8 +52,11 @@ def _proprietes(etude: dict) -> dict:
         )},
         "elements_probants": {"rich_text": _texte_riche(etude.get("elements_probants"))},
         "reprise_de": {"rich_text": _texte_riche(etude.get("reprise_de"))},
-        "candidat_favori": {"checkbox": bool(etude.get("candidat_favori"))},
+        "priorite": {"select": (
+            {"name": nom} if (nom := etude.get("priorite")) else None
+        )},
         "nouveaute": {"checkbox": bool(etude.get("nouveaute"))},
+        "a_verifier": {"checkbox": bool(etude.get("a_verifier"))},
         "statut": {"select": {"name": "🆕 Nouveau"}},
         "favori": {"checkbox": False},
     }

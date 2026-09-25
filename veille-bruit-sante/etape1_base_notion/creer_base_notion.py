@@ -36,8 +36,8 @@ PROPRIETES_VERIFICATION_URL = {
 # Qualification de chaque étude selon les critères d'une publication importante, tirés de la
 # relecture manuelle de la base (analyse_relecture/analyse-2026-09-24.md) : conclusion
 # claire, source fiable et reconnue, explications qui étayent la conclusion. Les deux listes
-# ci-dessous sont remplies par le LLM à l'extraction ; candidat_favori et nouveaute sont
-# calculées ensuite par des règles Python (etape2_recherche_extraction/qualification.py).
+# ci-dessous sont remplies par le LLM à l'extraction ; priorite et nouveaute sont calculées
+# ensuite par des règles Python (etape2_recherche_extraction/qualification.py).
 OPTIONS_TYPE_DOCUMENT = (
     "Etude originale",
     "Meta-analyse ou revue systematique",
@@ -48,6 +48,9 @@ OPTIONS_TYPE_DOCUMENT = (
 OPTIONS_SENS_CONCLUSION = (
     "Effet demontre", "Absence d'effet", "Non concluant", "Pas de conclusion propre",
 )
+# Priorité de relecture, calculée automatiquement : elle informe l'utilisateur, alors que
+# la case `favori` (cochée à la main) traduit son choix — voir docs/workflow-veille.md.
+OPTIONS_PRIORITE = ("Haute", "A examiner", "Faible")
 
 # Colonnes ajoutees apres la creation initiale de la base, isolees pour la meme raison que
 # PROPRIETES_VERIFICATION_URL (migration via ajouter_proprietes_qualification).
@@ -56,9 +59,16 @@ PROPRIETES_QUALIFICATION = {
     "sens_conclusion": {"select": {"options": [{"name": o} for o in OPTIONS_SENS_CONCLUSION]}},
     "elements_probants": {"rich_text": {}},
     "reprise_de": {"rich_text": {}},
-    "candidat_favori": {"checkbox": {}},
+    "priorite": {"select": {"options": [{"name": o} for o in OPTIONS_PRIORITE]}},
     "nouveaute": {"checkbox": {}},
+    # Contenu trop pauvre pour juger l'étude : écrite quand même, pour vérification
+    # manuelle, plutôt qu'écartée sans trace.
+    "a_verifier": {"checkbox": {}},
 }
+
+# Colonnes retirées du schéma : supprimées d'une base existante par la migration.
+# candidat_favori (case automatique) a été remplacée par `priorite` le 25/09/2026.
+PROPRIETES_OBSOLETES = ("candidat_favori",)
 
 PROPRIETES = {
     "titre": {"title": {}},
@@ -103,12 +113,18 @@ def ajouter_proprietes_verification_url(notion: Client, data_source_id: str) -> 
 
 
 def ajouter_proprietes_qualification(notion: Client, data_source_id: str) -> None:
-    """Migration ponctuelle pour une base 'Etudes' deja existante : ajoute les colonnes de
-    qualification (type_document, sens_conclusion...). A lancer AVANT le premier run qui
-    les ecrit, sinon chaque creation de fiche echoue sur une propriete inconnue. Meme
-    garantie que ajouter_proprietes_verification_url : aucune colonne ni page existante
-    n'est touchee."""
-    notion.data_sources.update(data_source_id=data_source_id, properties=PROPRIETES_QUALIFICATION)
+    """Migration pour une base 'Etudes' deja existante : ajoute les colonnes de
+    qualification (type_document, sens_conclusion, priorite...) et supprime les colonnes
+    obsoletes (PROPRIETES_OBSOLETES). A lancer AVANT le premier run qui les ecrit, sinon
+    chaque creation de fiche echoue sur une propriete inconnue. Rejouable sans risque :
+    les autres colonnes et les pages ne sont pas touchees, et une colonne obsolete deja
+    absente est simplement ignoree."""
+    existantes = notion.data_sources.retrieve(data_source_id=data_source_id)["properties"]
+    # Dans l'API Notion, passer None pour une propriété la supprime de la base.
+    a_supprimer = {nom: None for nom in PROPRIETES_OBSOLETES if nom in existantes}
+    notion.data_sources.update(
+        data_source_id=data_source_id, properties={**PROPRIETES_QUALIFICATION, **a_supprimer},
+    )
 
 
 def main() -> None:
@@ -125,7 +141,7 @@ def main() -> None:
     parser.add_argument(
         "--ajouter-qualification",
         metavar="DATA_SOURCE_ID",
-        help="N'ajoute que les colonnes de qualification (type_document, sens_conclusion...)",
+        help="Met a jour les colonnes de qualification (ajoute priorite..., retire les obsoletes)",
     )
     args = parser.parse_args()
 
