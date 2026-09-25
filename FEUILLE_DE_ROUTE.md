@@ -9,6 +9,9 @@ Gardez-le court : quelques lignes par section suffisent.
 ## En cours
 - [x] Créer la documentation spécifique au projet de veille documentaire
       (`veille-bruit-sante/CLAUDE.md` + mention dans le `CLAUDE.md` racine)
+- [ ] **Prochaine étape : construction de l'artefact de synthèse** des
+      documents cochés favori (dernière étape de `docs/workflow-veille.md`).
+      Forme à définir d'abord : périmètre, support, fréquence.
 
 ## Prochaines étapes
 - [ ] **Analyse de la relecture manuelle** — premier parcours de la base Notion
