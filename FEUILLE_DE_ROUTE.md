@@ -56,10 +56,12 @@ Gardez-le court : quelques lignes par section suffisent.
   - [ ] Nettoyer les étiquettes domaine_sante / source_bruit des 102 fiches.
   - [ ] Canal web : donner à chaque source son propre contexte (aujourd'hui
         la synthèse globale est partagée par toutes).
-  - [ ] Régénérer `resume` et `resultat_cle` à partir du texte intégral pour
-        les fiches dont la colonne `fichier` est renseignée (liens externes :
-        PDF ou page web ; fichiers Notion : lien valable ~1 h). Estimer le
-        coût avant tout lancement.
+  - [x] Régénérer `resume`, `resultat_cle` et la qualification à partir du
+        texte intégral (`analyse_relecture/regenerer_resumes.py`, 25/09) :
+        les 29 fiches avec fichier, 7,46 $ (dont 4,47 $ pour les 3 gros
+        rapports). Favoris : 32 Haute, 17 A examiner, 6 Faible (contre
+        25 / 14 / 16) avant la dernière fiche. La fiche du communiqué Inserm
+        ELFE a été supprimée (même source que l'article) : base à 101 fiches.
   - [ ] Affiner la détection des contenus réellement nouveaux :
     - [ ] repérer les reprises (communiqués, relais presse) d'études déjà
           connues ou anciennes, que le dédoublonnage DOI/titre ne voit pas ;
