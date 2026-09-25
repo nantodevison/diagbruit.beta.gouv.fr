@@ -36,8 +36,10 @@ Gardez-le court : quelques lignes par section suffisent.
         case `a_verifier` au lieu d'exclure ; exclusions et doublons
         journalisés avec titre et motif.
   - [x] Créer un graphique Mermaid du workflow → `veille-bruit-sante/docs/workflow-veille.md`.
-  - [ ] Vérifier avec le nouveau prompt les 8 fiches écartées au test, dont
-        1 favori (~0,15 $).
+  - [x] Vérifier avec le nouveau prompt les 8 fiches écartées au test (0,10 $) :
+        6 gardées dont le favori (5 avec `a_verifier`), 2 écartées avec motif.
+        A révélé une erreur 400 « Schema is too complex » (corrigée : champs
+        d'extraction sans valeur par défaut).
   - [ ] Remplir `priorite` / qualification pour les 102 fiches déjà en base
         (elles ont été écrites avant ces colonnes).
   - [ ] Diagnostiquer les 2 échecs d'extraction (`ValidationError`) sur des

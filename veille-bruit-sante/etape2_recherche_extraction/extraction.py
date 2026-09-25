@@ -25,29 +25,36 @@ SensConclusion = Literal[OPTIONS_SENS_CONCLUSION]  # type: ignore[valid-type]
 _API_METIER, _CLAUDE_WEB_SEARCH, _CLAUDE_LLM = OPTIONS_URL_SOURCE
 
 
+# IMPORTANT — aucun champ n'a de valeur par défaut : tous sont « obligatoires » dans le
+# schéma envoyé à l'API. Chaque champ optionnel (avec défaut) alourdit le schéma de sortie
+# structurée, et l'API le refuse au-delà d'un seuil (erreur 400 « Schema is too complex »,
+# constatée le 25/09/2026 à 15 champs optionnels, alors que 13 passaient). Le modèle renvoie
+# donc explicitement "" / [] / null pour ce qui ne s'applique pas. Pour ajouter un champ :
+# le déclarer sans défaut, et décrire dans PROMPT_SYSTEME la valeur attendue quand il est vide.
 class EtudeExtraite(BaseModel):
     hors_perimetre: bool
     # Motif court d'exclusion, inscrit dans le journal du run : rien n'est écarté sans
-    # trace (docs/workflow-veille.md).
-    motif_exclusion: str = ""
+    # trace (docs/workflow-veille.md). "" si l'étude est dans le périmètre.
+    motif_exclusion: str
     # Contenu trop pauvre pour juger : l'étude est écrite avec a_verifier plutôt qu'exclue.
-    contenu_insuffisant: bool = False
+    contenu_insuffisant: bool
     titre: str
-    auteurs: str = ""
-    annee: Optional[int] = None
-    revue: str = ""
-    organisme: str = ""
-    doi_url: str = ""
-    domaine_sante: List[DomaineSante] = []
-    source_bruit: List[SourceBruit] = []
-    resume: str = ""
-    resultat_cle: str = ""
-    # Qualification (voir etape-2-conception-technique.md, Décision 7). Optional : une
-    # étude hors périmètre n'a pas à les remplir, et un Literal ne peut pas être vide.
-    type_document: Optional[TypeDocument] = None
-    sens_conclusion: Optional[SensConclusion] = None
-    elements_probants: str = ""
-    reprise_de: str = ""
+    auteurs: str
+    annee: Optional[int]
+    revue: str
+    organisme: str
+    doi_url: str
+    domaine_sante: List[DomaineSante]
+    source_bruit: List[SourceBruit]
+    resume: str
+    resultat_cle: str
+    # Qualification (voir etape-2-conception-technique.md, Décision 7). Optional (null
+    # autorisé) : une étude hors périmètre n'a pas à les remplir, et un Literal ne peut pas
+    # être vide.
+    type_document: Optional[TypeDocument]
+    sens_conclusion: Optional[SensConclusion]
+    elements_probants: str
+    reprise_de: str
 
 
 # Instructions fixes, identiques a chaque appel du run — isolees du contenu variable de

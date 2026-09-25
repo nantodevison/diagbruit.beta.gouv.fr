@@ -181,7 +181,18 @@ chacun journalisé avec son titre dans la sortie du run GitHub Actions :
 Un contenu **trop pauvre pour juger** n'est plus une cause d'exclusion : le modèle renvoie
 `contenu_insuffisant`, et l'étude est écrite avec la case `a_verifier` cochée (et
 généralement la priorité Faible). Constaté au test : un favori (page AEE de 700
-caractères) avait été écarté comme hors périmètre à cause de ce seul critère.
+caractères) avait été écarté comme hors périmètre à cause de ce seul critère ; avec ce
+changement, il est gardé avec `a_verifier` (vérifié le 25/09 sur les 8 fiches écartées du
+test : 6 gardées, dont ce favori ; 2 écartées avec motif — bruit professionnel, bruit
+hospitalier).
+
+**Point d'attention — complexité du schéma de sortie structurée :** l'API refuse un
+schéma trop complexe (erreur 400 « Schema is too complex »). Constaté en ajoutant
+`motif_exclusion` et `contenu_insuffisant` : 15 champs optionnels (avec valeur par défaut)
+étaient refusés, 13 passaient. Tous les champs de `EtudeExtraite` sont donc déclarés
+**sans valeur par défaut** (obligatoires dans le schéma, `null` autorisé pour les
+`Optional`) : le modèle renvoie explicitement une valeur vide. Tout nouveau champ doit
+suivre cette règle.
 
 ## Dépendances retenues
 

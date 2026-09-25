@@ -95,6 +95,9 @@ possible, et à chaque push sur `main` touchant ce dossier).
 - **Cache de prompt** : `PROMPT_SYSTEME` (extraction.py) doit rester fixe et
   au-dessus de 1024 tokens pour que le cache s'active ; le log
   `cache_read_input_tokens` sert à le vérifier.
+- **Schéma d'extraction** : les champs de `EtudeExtraite` n'ont pas de valeur
+  par défaut — au-delà d'une quinzaine de champs optionnels, l'API renvoie une
+  erreur 400 « Schema is too complex ». Tout nouveau champ suit cette règle.
 - **Deux dédoublonnages distincts** (interne au run / contre Notion) partagent
   les fonctions de normalisation de `dedoublonnage.py` : ne pas les dupliquer.
 - **Un échec isolé n'interrompt pas le run** (écriture d'une fiche, URL morte).
