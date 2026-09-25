@@ -2,6 +2,7 @@
 
 Veille hebdomadaire automatisée des publications scientifiques sur le lien entre bruit et
 santé, alimentant une base Notion "Études" sans intervention humaine. Voir
+`docs/workflow-veille.md` pour le schéma du circuit complet d'un document,
 `docs/plan-veille-bruit-sante-diagbruit.md` pour le cadrage complet et
 `docs/etape-N-conception-technique.md` pour le détail d'implémentation de chaque étape.
 
