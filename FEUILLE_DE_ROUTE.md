@@ -40,8 +40,12 @@ Gardez-le court : quelques lignes par section suffisent.
         6 gardées dont le favori (5 avec `a_verifier`), 2 écartées avec motif.
         A révélé une erreur 400 « Schema is too complex » (corrigée : champs
         d'extraction sans valeur par défaut).
-  - [ ] Remplir `priorite` / qualification pour les 102 fiches déjà en base
-        (elles ont été écrites avant ces colonnes).
+  - [x] Remplir la qualification des 102 fiches déjà en base
+        (`analyse_relecture/qualifier_base_existante.py`, 25/09) — `favori`,
+        `statut`, `fichier` vérifiés intacts. Résultat : Haute 32, A examiner
+        38, Faible 32 ; 28 fiches `a_verifier`. 16 favoris en Faible, dont 14
+        faute de contenu lisible (11 ont un `fichier` → la régénération à
+        partir du texte intégral devrait les faire remonter).
   - [ ] Diagnostiquer les 2 échecs d'extraction (`ValidationError`) sur des
         pages Inserm en français.
   - [x] Ajouter les colonnes de qualification à la base Notion
