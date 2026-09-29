@@ -2,6 +2,10 @@
 
 *Document de cadrage détaillé de l'étape 1 du plan de veille bruit & santé de diagBruit (voir `plan-veille-bruit-sante-diagbruit.md`).*
 
+> **Document historique.** Il décrit le schéma initial de la base (août 2026). Des colonnes
+> ont été ajoutées depuis (`priorite`, `a_verifier`, `type_document`…). La description à
+> jour de toutes les colonnes est dans `guide-utilisateur.md`.
+
 **Entrée** : aucune — étape de conception initiale, exécutée une seule fois, hors de la boucle hebdomadaire.
 
 ## Principe

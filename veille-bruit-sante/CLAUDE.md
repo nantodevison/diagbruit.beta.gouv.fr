@@ -4,7 +4,10 @@ Consignes de travail pour ce sous-projet. Le cadrage complet est dans
 `docs/plan-veille-bruit-sante-diagbruit.md`, le détail de chaque étape dans
 `docs/etape-N-*.md`, et le **schéma validé du workflow** (du scan à la mise à
 disposition des favoris) dans `docs/workflow-veille.md` — à tenir à jour quand
-le circuit change.
+le circuit change. Le **guide d'utilisation** de la base Notion (routine de
+relecture, sens de chaque colonne, vues conseillées) est dans
+`docs/guide-utilisateur.md` : toute colonne ajoutée ou modifiée doit y être
+décrite.
 
 ## Objectif
 

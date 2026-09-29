@@ -14,6 +14,13 @@ Gardez-le court : quelques lignes par section suffisent.
       Forme à définir d'abord : périmètre, support, fréquence.
 
 ## Prochaines étapes
+- [ ] **Rendre le run automatique** : aujourd'hui il se lance à la main
+      (`python main.py`), car GitHub ne déclenche la tâche planifiée du lundi
+      que depuis `main`, qui n'a ni le workflow ni le code de la veille.
+      Il faut fusionner la branche dans `main` et configurer les 3 secrets
+      (ANTHROPIC_API_KEY, NOTION_API_KEY, NOTION_DATABASE_ID) sur le dépôt.
+      Point à décider : le workflow se lance aussi à chaque push sur `main`
+      touchant la veille, donc un run payant à chaque fusion.
 - [ ] **Analyse de la relecture manuelle** — premier parcours de la base Notion
       fait, publications les plus importantes taguées « favoris ».
   - [x] Exporter la base en CSV (`analyse_relecture/exporter_base.py`) :
