@@ -27,6 +27,9 @@ Entrée (dans `output/`, voir `--output-dir`) :
     etape3_{dept}.csv — relu pour `extrait_significatif`/`contexte_documentaire`/
                          `nature_occurrence`, absents du contrat de l'étape 4
 
+Options : `--limit N` (test sur N groupes, sorties partielles), `--regenerer`
+(ignore le cache disque `etape5_{dept}_cache_llm.jsonl`, voir `_CacheLlm`).
+
 Sortie (dans le même dossier) :
     etape5_{dept}_a_completer.gpkg           — une géométrie par ligne, `message_synthese`
                                                 proposé ; à relire en Phase 3
@@ -41,6 +44,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import hashlib
 import itertools
 import json
 import os
@@ -206,6 +210,81 @@ def _lire_etape3(chemin: Path) -> dict[tuple[str, str], dict[str, str]]:
         return {(l["id_gpu"], l["id_occurrence"]): l for l in csv.DictReader(fichier) if l.get("id_occurrence")}
 
 
+class _CacheLlm:
+    """Cache disque des générations LLM, un fichier JSONL par département
+    (`etape5_{dept}_cache_llm.jsonl`).
+
+    Clé = empreinte du modèle + ton de voix + prompt + schéma : un prompt
+    modifié produit donc une nouvelle clé, jamais une réponse périmée. Une
+    ligne est ajoutée (et vidée sur disque) dès qu'une génération réussit —
+    un plantage à mi-parcours ne fait perdre que l'appel en cours, et une
+    relance ne repaie que ce qui manque. Les échecs ne sont jamais mis en
+    cache.
+    """
+
+    def __init__(self, chemin: Path, relire: bool = True):
+        self.chemin = chemin
+        self._entrees: dict[str, str] = {}
+        if relire and chemin.exists():
+            with chemin.open(encoding="utf-8") as fichier:
+                for ligne in fichier:
+                    ligne = ligne.strip()
+                    if not ligne:
+                        continue
+                    try:
+                        entree = json.loads(ligne)
+                        self._entrees[entree["cle"]] = entree["valeur"]
+                    except (json.JSONDecodeError, KeyError):
+                        # Dernière ligne tronquée par un arrêt brutal : ignorée.
+                        continue
+
+    @staticmethod
+    def cle(prompt: str, schema: dict, champ: str) -> str:
+        contenu = json.dumps(
+            [MODELE_REDACTION, TON_DE_VOIX, prompt, schema, champ], sort_keys=True, ensure_ascii=False
+        )
+        return hashlib.sha256(contenu.encode("utf-8")).hexdigest()
+
+    def lire(self, cle: str) -> str | None:
+        return self._entrees.get(cle)
+
+    def ecrire(self, cle: str, valeur: str) -> None:
+        self._entrees[cle] = valeur
+        with self.chemin.open("a", encoding="utf-8") as fichier:
+            fichier.write(json.dumps({"cle": cle, "valeur": valeur}, ensure_ascii=False) + "\n")
+
+
+@dataclass
+class _CompteurUsage:
+    """Cumul de `response.usage` sur le run, pour mesurer l'effet du cache."""
+
+    appels: int = 0
+    reutilises_disque: int = 0
+    entree_non_cachee: int = 0
+    cache_ecrit: int = 0
+    cache_lu: int = 0
+    sortie: int = 0
+
+    def ajouter(self, usage) -> None:
+        self.appels += 1
+        self.entree_non_cachee += usage.input_tokens or 0
+        self.cache_ecrit += getattr(usage, "cache_creation_input_tokens", 0) or 0
+        self.cache_lu += getattr(usage, "cache_read_input_tokens", 0) or 0
+        self.sortie += usage.output_tokens or 0
+
+    def resume(self) -> str:
+        return (
+            f"{self.appels} appel(s) LLM, {self.reutilises_disque} réutilisé(s) depuis le cache disque. "
+            f"Tokens d'entrée : {self.entree_non_cachee} non cachés, {self.cache_ecrit} écrits en cache, "
+            f"{self.cache_lu} lus depuis le cache ; {self.sortie} en sortie."
+        )
+
+
+# Initialisés par `preparer()` ; jamais None pendant un appel de génération.
+_cache_llm: _CacheLlm | None = None
+_usage = _CompteurUsage()
+
+
 @retry(
     retry=retry_if_exception_type(
         (anthropic.RateLimitError, anthropic.APIConnectionError, anthropic.InternalServerError)
@@ -215,13 +294,38 @@ def _lire_etape3(chemin: Path) -> dict[tuple[str, str], dict[str, str]]:
     reraise=True,
 )
 def _appeler_claude(prompt: str, schema: dict) -> anthropic.types.Message:
+    # Le ton de voix (~1 750 tokens, identique pour les trois types d'appel)
+    # est placé seul en tête de `system`, avec un point de cache : c'est ce
+    # préfixe stable qui est relu à ~10 % du prix à chaque appel suivant. Tout
+    # ce qui varie (occurrence, message à synthétiser, titre) reste dans le
+    # message utilisateur, après le point de cache.
     return client.messages.create(
         model=MODELE_REDACTION,
         max_tokens=800,
         thinking={"type": "disabled"},
         output_config={"format": {"type": "json_schema", "schema": schema}},
+        system=[{"type": "text", "text": TON_DE_VOIX, "cache_control": {"type": "ephemeral"}}],
         messages=[{"role": "user", "content": prompt}],
     )
+
+
+def _generer(prompt: str, schema: dict, champ: str) -> str:
+    """Génère `champ` pour `prompt`, en passant d'abord par le cache disque."""
+    cle = _CacheLlm.cle(prompt, schema, champ)
+    if _cache_llm is not None:
+        valeur = _cache_llm.lire(cle)
+        if valeur is not None:
+            _usage.reutilises_disque += 1
+            return valeur
+    try:
+        response = _appeler_claude(prompt, schema)
+    except anthropic.APIError as exc:
+        raise _ErreurRedaction(f"appel API échoué : {exc}") from exc
+    _usage.ajouter(response.usage)
+    valeur = _extraire_champ(response, champ)
+    if _cache_llm is not None:
+        _cache_llm.ecrire(cle, valeur)
+    return valeur
 
 
 def _extraire_champ(response: anthropic.types.Message, champ: str) -> str:
@@ -242,9 +346,7 @@ def _construire_prompt_occurrence(donnees_etape4: pd.Series, donnees_etape3: dic
 message à l'intention d'un porteur de projet ou d'un professionnel de
 l'urbanisme qui consulte le diagnostic bruit d'une parcelle. Le message
 résume UNE règle issue d'un document d'urbanisme, extraite du passage
-ci-dessous. Respecte le ton de voix suivant :
-
-{TON_DE_VOIX}
+ci-dessous. Respecte le ton de voix défini dans les consignes système.
 
 Nature de la règle : {nature or "non précisée"} — "prescription" est une
 obligation, "recommandation" est un conseil non obligatoire : formule le
@@ -273,9 +375,7 @@ def _construire_prompt_synthese(messages_occurrence: list[str]) -> str:
 décrivent tous la MÊME règle d'urbanisme liée au bruit — un opérateur humain
 a déjà vérifié qu'ils se recouvrent (même secteur, même objectif). Combine-les
 en un seul message cohérent, sans redite ni simple juxtaposition. Respecte le
-ton de voix suivant :
-
-{TON_DE_VOIX}
+ton de voix défini dans les consignes système.
 
 Messages à combiner :
 {liste}
@@ -288,9 +388,7 @@ def _construire_prompt_titre(message_synthese: str) -> str:
     return f"""Tu rédiges, pour diagBruit, un titre court (quelques mots, pas une
 phrase complète) qui résume le message ci-dessous — destiné à identifier ce
 message dans une liste (titre d'une alerte, d'une fiche). Respecte le ton de
-voix suivant :
-
-{TON_DE_VOIX}
+voix défini dans les consignes système.
 
 Message à résumer :
 "{message_synthese}"
@@ -301,30 +399,17 @@ localisation si elle y figure) sans en reprendre toutes les nuances."""
 
 
 def _generer_titre(message_synthese: str) -> str:
-    prompt = _construire_prompt_titre(message_synthese)
-    try:
-        response = _appeler_claude(prompt, SCHEMA_TITRE)
-    except anthropic.APIError as exc:
-        raise _ErreurRedaction(f"appel API échoué : {exc}") from exc
-    return _extraire_champ(response, "titre_propose")
+    return _generer(_construire_prompt_titre(message_synthese), SCHEMA_TITRE, "titre_propose")
 
 
 def _generer_message_occurrence(donnees_etape4: pd.Series, donnees_etape3: dict[str, str]) -> str:
     prompt = _construire_prompt_occurrence(donnees_etape4, donnees_etape3)
-    try:
-        response = _appeler_claude(prompt, SCHEMA_MESSAGE_OCCURRENCE)
-    except anthropic.APIError as exc:
-        raise _ErreurRedaction(f"appel API échoué : {exc}") from exc
-    return _extraire_champ(response, "message_occurrence")
+    return _generer(prompt, SCHEMA_MESSAGE_OCCURRENCE, "message_occurrence")
 
 
 def _generer_message_synthese(messages_occurrence: list[str]) -> str:
     prompt = _construire_prompt_synthese(messages_occurrence)
-    try:
-        response = _appeler_claude(prompt, SCHEMA_MESSAGE_SYNTHESE)
-    except anthropic.APIError as exc:
-        raise _ErreurRedaction(f"appel API échoué : {exc}") from exc
-    return _extraire_champ(response, "message_synthese")
+    return _generer(prompt, SCHEMA_MESSAGE_SYNTHESE, "message_synthese")
 
 
 @dataclass
@@ -449,7 +534,17 @@ def _traiter_groupe_occurrence_locale(
     )
 
 
-def preparer(code_departement: str, dossier_sortie: str | Path = "output") -> Path:
+def preparer(
+    code_departement: str,
+    dossier_sortie: str | Path = "output",
+    limite: int | None = None,
+    regenerer: bool = False,
+) -> Path:
+    """`limite` : ne traite que les N premiers groupes `occurrence_locale`
+    (test à faible coût) — les fichiers de sortie sont alors partiels.
+    `regenerer` : ignore le cache disque en lecture (les nouvelles générations
+    y sont quand même écrites, et remplacent les anciennes)."""
+    global _cache_llm
     dossier = Path(dossier_sortie)
     chemin_gpkg = dossier / f"etape4_{code_departement}.gpkg"
     chemin_etape3 = dossier / f"etape3_{code_departement}.csv"
@@ -458,6 +553,8 @@ def preparer(code_departement: str, dossier_sortie: str | Path = "output") -> Pa
         raise GpkgIntrouvable(str(chemin_gpkg))
     if not chemin_etape3.exists():
         raise Etape3CsvIntrouvable(str(chemin_etape3))
+
+    _cache_llm = _CacheLlm(dossier / f"etape5_{code_departement}_cache_llm.jsonl", relire=not regenerer)
 
     gdf = gpd.read_file(chemin_gpkg, layer="geometries")
     index_etape3 = _lire_etape3(chemin_etape3)
@@ -497,7 +594,10 @@ def preparer(code_departement: str, dossier_sortie: str | Path = "output") -> Pa
     eligibles = gdf[gdf["nature_zone"].apply(_texte) == NATURE_ZONE_ELIGIBLE].copy()
     eligibles["_cle_groupe"] = eligibles.apply(_cle_groupe, axis=1)
 
-    for cle_groupe, groupe in eligibles.groupby("_cle_groupe"):
+    for numero_groupe, (cle_groupe, groupe) in enumerate(eligibles.groupby("_cle_groupe")):
+        if limite is not None and numero_groupe >= limite:
+            print(f"--limit {limite} atteint : les sorties ci-dessous sont partielles.")
+            break
         lignes_groupe = [ligne for _, ligne in groupe.iterrows()]
         meneurs = [ligne for ligne in lignes_groupe if _cle(ligne) == cle_groupe]
         if not meneurs:
@@ -590,6 +690,7 @@ def preparer(code_departement: str, dossier_sortie: str | Path = "output") -> Pa
         f"{len(resultats_synthese)} synthèse(s) écrite(s) dans {chemin_a_completer}, "
         f"{len(lignes_occurrences)} message(s) individuel(s) dans {chemin_occurrences}."
     )
+    print(_usage.resume())
     return chemin_a_completer
 
 
@@ -607,6 +708,18 @@ def _parser() -> argparse.ArgumentParser:
         default="output",
         help="Dossier de lecture/écriture des fichiers (défaut : output/).",
     )
+    parser.add_argument(
+        "--limit",
+        type=int,
+        default=None,
+        help="Ne traite que les N premiers groupes occurrence_locale (test à faible coût). "
+        "Les fichiers de sortie sont alors partiels et écrasent ceux d'un run complet précédent.",
+    )
+    parser.add_argument(
+        "--regenerer",
+        action="store_true",
+        help="Ignore le cache disque etape5_{dept}_cache_llm.jsonl et regénère tous les textes (payant).",
+    )
     return parser
 
 
@@ -615,7 +728,7 @@ def main(argv: list[str] | None = None) -> int:
 
     print(f"Étape 5, phase 2 — département {args.dept}")
     try:
-        preparer(args.dept, dossier_sortie=args.output_dir)
+        preparer(args.dept, dossier_sortie=args.output_dir, limite=args.limit, regenerer=args.regenerer)
     except GpkgIntrouvable as exc:
         print(f"Arrêt : etape4_{args.dept}.gpkg introuvable ({exc}).", file=sys.stderr)
         return 1

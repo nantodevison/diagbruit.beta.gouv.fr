@@ -30,6 +30,7 @@ poc-urbanisme-plu/
     ├── etape5_{dept}_occurrences.csv              # Phase 2 — messages individuels + citations sources, pour la Phase 3
     ├── etape5_{dept}_documents_par_synthese.csv   # Phase 2 — un document par ligne, clé étrangère vers la synthèse
     ├── etape5_{dept}_erreurs.csv                  # Phase 2 — échecs isolés d'appel LLM ou de jointure vers etape3, si non vide
+    ├── etape5_{dept}_cache_llm.jsonl              # Phase 2 — cache disque des générations LLM (voir "Coût LLM") ; supprimable sans risque
     ├── etape5_export_occurrences_{horodatage}.csv # Phase 3 — export(s) de outil_validation.html, le plus récent fait foi
     ├── etape5_export_syntheses_{horodatage}.csv   # Phase 3 — idem, requis pour la Phase 4
     └── etape5_{dept}.gpkg                         # Phase 4 — contrat pour l'étape 6 (couche unique "messages") ;
@@ -84,6 +85,18 @@ Lit `etape4_{dept}.gpkg`. Pour chaque géométrie finale (un meneur et ses éven
 **Documents concernés** : un groupe fusionné peut porter sur plusieurs `id_gpu` distincts (voir `etape-4-conception-technique.md`, "Mécanisme de fusion" — la cohérence de fusion ne vérifie jamais l'égalité d'`id_gpu`), donc la liste des documents concernés par une synthèse a une cardinalité variable. Plutôt qu'une colonne texte structurée (JSON) dans `etape5_{dept}_a_completer.gpkg` — ce qui aurait introduit le premier champ imbriqué du pipeline, jusqu'ici toujours resté plat — un fichier compagnon dédié, `etape5_{dept}_documents_par_synthese.csv` : un document par ligne (`id_geometrie_synthese`, `id_gpu`, `nature` = `type_piece_source`, `lien_web_document`, `reference_precise`), `id_geometrie_synthese` étant l'`id_geometrie` du meneur du groupe. Cohérent avec le reste du pipeline ("une information, une colonne", déjà tenu partout ailleurs) et directement lisible dans un tableur — au prix d'une jointure de plus pour reconstituer la liste complète d'un groupe, ce qui est un compromis jugé acceptable. Choix qui simplifie aussi, en anticipation, la conception de l'outil de validation (Phase 3) : un CSV plat par groupe se prête mieux à un affichage HTML tabulaire que du JSON à parser.
 
 `etape5_{dept}_a_completer.gpkg` ne porte donc, pour chaque géométrie finale, que `message_synthese_llm` et les identifiants — jamais la liste des documents elle-même.
+
+### Coût LLM : prompt caching et cache disque
+
+Constat sur le 067 hors Eurométropole (156 occurrences, aucun groupe fusionné, soit 312 appels : un message et un titre par occurrence) : le texte du ton de voix (~1 750 tokens) représente environ les deux tiers de l'entrée d'un appel de message et 80 % de celle d'un appel de titre, et il était renvoyé en entier à chaque appel. Deux mécanismes réduisent le coût sans toucher à la qualité :
+
+- **Prompt caching** : `TON_DE_VOIX` est placé seul en tête de `system`, avec `cache_control: ephemeral`, identique pour les trois types d'appel (message, synthèse, titre). Les consignes propres à chaque appel restent dans le message utilisateur, qui renvoie au ton de voix "défini dans les consignes système". Les lectures de cache sont facturées à ~10 % du prix normal. Ce préfixe dépasse le minimum cacheable de Sonnet 5 (1 024 tokens). Le texte du ton de voix lui-même n'est ni résumé ni raccourci — voir "Ton de voix" dans `etape-5-redaction-messages-diagbruit.md`. **À vérifier lors d'un premier run** : la ligne de synthèse affichée en fin d'exécution doit montrer des tokens "lus depuis le cache" non nuls dès le deuxième appel ; sinon, un invalidateur silencieux (par exemple le schéma de sortie structurée, différent selon le type d'appel) empêche le cache de servir.
+- **Cache disque** (`etape5_{dept}_cache_llm.jsonl`) : chaque génération réussie est ajoutée au fichier dès son obtention, avec pour clé une empreinte du modèle, du ton de voix, du prompt complet et du schéma. Un plantage à mi-parcours ou une relance ne repaie que ce qui manque ; un prompt modifié (par exemple un nouveau texte dans `ton_de_voix.py`) change la clé et ne réutilise donc jamais une réponse périmée. Les échecs ne sont pas mis en cache. `--regenerer` ignore le cache en lecture (et le met à jour) ; supprimer le fichier a le même effet.
+- **`--limit N`** : ne traite que les N premiers groupes `occurrence_locale`, pour tester à faible coût. Les fichiers de sortie sont alors partiels et écrasent ceux d'un run complet précédent — ne pas l'utiliser dans un dossier dont les sorties ont déjà été relues ou exportées en Phase 3.
+
+En fin d'exécution, `preparer_messages.py` affiche le cumul des tokens (non cachés, écrits en cache, lus depuis le cache, en sortie) et le nombre d'appels réutilisés depuis le disque.
+
+**Envisagé et écarté** : réduire le contexte transmis (gain d'environ 15 % de l'entrée, au risque de perdre la localisation portée par le contexte), fusionner le titre dans l'appel du message (gain marginal une fois le cache en place, et écart avec la conception "titre généré à partir de la synthèse"), confier les titres à un modèle plus petit (économie de quelques centimes, et seuil de cache plus élevé), utiliser l'API Batch (−50 %, mais exécution asynchrone pour une économie de l'ordre de 0,3 $ par département — à reconsidérer si le volume passe à plusieurs milliers d'occurrences).
 
 ## Correction humaine : natif + correction, jamais de cascade
 
