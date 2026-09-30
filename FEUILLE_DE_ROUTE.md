@@ -9,16 +9,39 @@ Gardez-le court : quelques lignes par section suffisent.
 ## En cours
 - [x] Créer la documentation spécifique au projet de veille documentaire
       (`veille-bruit-sante/CLAUDE.md` + mention dans le `CLAUDE.md` racine)
-- [ ] **Prochaine étape : construction de l'artefact de synthèse** des
-      documents cochés favori (dernière étape de `docs/workflow-veille.md`).
-      Forme à définir d'abord : périmètre, support, fréquence.
+- [x] Cadrer l'artefact de synthèse (30/09) → `docs/etape-5-artefact-synthese-diagbruit.md`
+- [x] Choisir le support (30/09) : hybride, vue Notion « À trier » + page
+      HTML publique (GitHub Pages du fork) pour le contenu validé.
+- [x] Premier jet du socle (30/09) → `veille-bruit-sante/socle/etat-connaissances.yaml` :
+      7 effets, 2 pistes émergentes, glossaire, 17 références. Chiffres
+      vérifiés par script dans les sources (citation exacte conservée).
+- [ ] **Prochaine étape : reprendre la validation du socle à l'étape 4**
+      (étapes 0 à 3 validées : échelle des niveaux, cardiovasculaire,
+      sommeil, gêne). Questions ouvertes de l'étape 4 (apprentissages enfant) :
+      - chercher et vérifier la revue OMS cognition (Clark et Paunovic, 2018) ;
+      - mettre en avant le demi-million d'enfants (AEE 2025, vérifié), étude
+        CE2 en simple référence ?
+      - nouvelle phrase « pourquoi c'est important » (sans appel à l'action) ?
+      Puis : métabolique, santé mentale, auditif, chiffres européens et pistes
+      émergentes.
+  - [ ] Vérifier « ×3 à ×5 de personnes fortement gênées par 10 dB » (revue
+        OMS gêne, texte sur PMC) et l'ajouter à l'étape 3.
+  - [ ] Vérifier les valeurs guides OMS 2018 (PDF) : créer le `.venv` de la
+        veille et y installer `pypdf`.
+  - [ ] Renseigner à la main `domaine_sante` = gêne sur la fiche OMS gêne
+        (le LLM proposait « santé mentale »).
+- [ ] Puis la conception technique (`docs/etape-5-conception-technique.md`).
 
 ## Prochaines étapes
+- [ ] **Passer le run à 15 jours**, le lundi, 6 h UTC (données prêtes avant
+      8 h à Paris) — cron hebdomadaire, le run ne fait rien une semaine sur deux.
 - [ ] **Rendre le run automatique** : aujourd'hui il se lance à la main
       (`python main.py`), car GitHub ne déclenche la tâche planifiée du lundi
       que depuis `main`, qui n'a ni le workflow ni le code de la veille.
-      Il faut fusionner la branche dans `main` et configurer les 3 secrets
-      (ANTHROPIC_API_KEY, NOTION_API_KEY, NOTION_DATABASE_ID) sur le dépôt.
+      Il faut fusionner la branche dans le `main` **du fork**
+      (`nantodevison/…`, décidé le 30/09), y configurer les 3 secrets
+      (ANTHROPIC_API_KEY, NOTION_API_KEY, NOTION_DATABASE_ID), activer les
+      tâches planifiées (désactivées par défaut sur un fork) et GitHub Pages.
       Point à décider : le workflow se lance aussi à chaque push sur `main`
       touchant la veille, donc un run payant à chaque fusion.
 - [x] **Case `ajout_manuel`** (29/09) : cochée automatiquement (auteur Notion
@@ -68,7 +91,9 @@ Gardez-le court : quelques lignes par section suffisent.
   - [ ] Coût : la réflexion (thinking) de Sonnet 5 est active par défaut sur
         l'extraction et représente environ la moitié du coût. Mesurer si
         `effort: low` ou thinking désactivé garde la qualité.
-  - [ ] Nettoyer les étiquettes domaine_sante / source_bruit des 102 fiches.
+  - [ ] Nettoyer les étiquettes domaine_sante / source_bruit des 102 fiches
+        — **prérequis de l'artefact** (rattachement de chaque document à un
+        effet du socle).
   - [ ] Canal web : donner à chaque source son propre contexte (aujourd'hui
         la synthèse globale est partagée par toutes).
   - [x] Régénérer `resume`, `resultat_cle` et la qualification à partir du
@@ -84,11 +109,10 @@ Gardez-le court : quelques lignes par section suffisent.
           (risque d'études indexées tardivement jamais retrouvées) ;
     - [ ] comparer favoris / non-favoris pour en tirer des critères de
           recherche et d'extraction pour le LLM (`PROMPT_SYSTEME`).
-  - [ ] Produire une première version de l'artefact de synthèse
-        (forme à préciser : périmètre, support, fréquence).
 
 ## Plus tard / idées
-- …
+- (suggestion) `regenerer_resumes --estimer` écrit la case `ajout_manuel` dans
+  Notion avant d'estimer : le documenter, ou le déplacer hors du mode estimation.
 
 ## Décisions récentes
 <!-- Une ligne par décision : date — décision — raison en quelques mots -->
@@ -117,3 +141,19 @@ Gardez-le court : quelques lignes par section suffisent.
   choix de l'utilisateur. `candidat_favori` est retiré, devenu redondant.
 - 2026-09-25 — Ne rien écarter silencieusement — conséquence directe du
   choix « rappel avant précision ».
+- 2026-09-30 — Artefact en deux visions (état des connaissances fondé sur
+  un socle validé ; sorties récentes « À trier » / « Retenus ») — deux
+  usages et deux publics : le tri par le mainteneur, les actualités pour l'équipe.
+- 2026-09-30 — Rythme de 15 jours, lundi 8 h (Paris), pour la veille comme
+  pour l'artefact — fréquence jugée suffisante, coût réduit.
+- 2026-09-30 — Support hybride : « À trier » en vue Notion, état des
+  connaissances + « Retenus » en page HTML publique sur GitHub Pages du
+  fork — rendu visuel pour le contenu validé, rien de non relu en public.
+- 2026-09-30 — La veille tourne sur le fork, pas sur le dépôt `betagouv` —
+  secrets, planification et Pages au même endroit, sans droits d'organisation.
+- 2026-09-30 — Le socle décrit les effets sur la santé, pas les moyens d'y
+  remédier — le contenu reste factuel ; les recommandations d'action (isolation,
+  aménagement) n'y ont pas leur place.
+- 2026-09-30 — Chiffres du socle vérifiés par script (téléchargement + recherche
+  de texte, sans LLM), citation exacte conservée — une extraction LLM ne suffit
+  pas : « 112 à 150 millions d'exposés » était introuvable dans le rapport AEE.
