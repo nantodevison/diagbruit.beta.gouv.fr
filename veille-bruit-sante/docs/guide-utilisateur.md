@@ -48,6 +48,18 @@ Tu as déposé des PDF ? Lance ensuite `python -m analyse_relecture.regenerer_re
 réécrit le résumé de ces fiches à partir du texte intégral (payant : lance d'abord
 `--estimer`, gratuit, pour connaître le coût).
 
+### Ajouter un document à la main
+
+Tu peux créer une fiche toi-même (un rapport trouvé par ailleurs, par exemple) : remplis
+`titre` et ce que tu connais (auteurs, année, organisme, lien), dépose le PDF dans
+`fichier`, puis lance `python -m analyse_relecture.regenerer_resumes` pour obtenir le
+résumé et la priorité. Le modèle a pour consigne de ne jamais écarter un document que tu as
+retenu : s'il ne traite le bruit qu'en passant, le résumé le dira.
+
+Tu n'as rien d'autre à faire : la case **`ajout_manuel`** est cochée automatiquement (au
+début du run, ou en lançant `regenerer_resumes`, qui lit l'auteur de la fiche). Elle
+garantit que ta fiche ne décale pas la recherche du run suivant.
+
 ## 3. Les colonnes de la base
 
 Le script n'écrit **jamais** dans les colonnes que tu remplis toi-même (`favori`,
@@ -100,7 +112,8 @@ Le script n'écrit **jamais** dans les colonnes que tu remplis toi-même (`favor
 | `url_source` | D'où vient le lien : API scientifique (fiable), recherche web, ou proposé par le modèle (à vérifier). Vide sur les fiches d'août 2026. |
 | `url_not_real` | Le lien semble mort ou renvoie vers la page d'accueil du site. |
 | `auteurs` | Premier auteur (et « et al. »). |
-| `date_ajout` | Date de création de la fiche (automatique). Le run suivant cherche à partir de la plus récente. |
+| `date_ajout` | Date de création de la fiche (automatique). Le run suivant cherche à partir de la plus récente, **fiches ajoutées à la main exceptées**. |
+| `ajout_manuel` | Fiche créée à la main dans Notion, et non par le run. Cochée automatiquement (Notion enregistre qui a créé chaque fiche). Ces fiches sont ignorées pour calculer la date de départ du run suivant, et leur provenance est considérée comme reconnue pour la priorité, puisque tu les as choisies. |
 
 ## 4. Les vues Notion à créer une fois
 

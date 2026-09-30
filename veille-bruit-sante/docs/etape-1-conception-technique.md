@@ -50,6 +50,8 @@ veille-bruit-sante/
 
 `main.py` calcule la date de départ de la recherche hebdomadaire (voir `etape-2-recherche-extraction-diagbruit.md`) par un appel à l'API Notion en tout début de run : la date `date_ajout` la plus récente parmi les fiches existantes de la base "Études". Base vide (premier run) → date de départ = aujourd'hui moins 10 ans.
 
+**Correctif du 29/09/2026 — fiches ajoutées à la main :** une fiche créée à la main dans Notion fait avancer la `date_ajout` la plus récente ; la période entre le run précédent et cet ajout n'était alors jamais cherchée, sans aucun signal (constaté sur un rapport ajouté le 29/09, qui aurait fait partir le run suivant du 29/09 au lieu du 26/08). En début de run, `notion_utils.marquer_ajouts_manuels` coche la case `ajout_manuel` de toute fiche dont l'auteur Notion (`created_by`) n'est pas l'intégration du script ; le calcul de la date de départ ignore ensuite ces fiches. La détection est automatique : l'utilisateur n'a rien à cocher.
+
 **Pourquoi ne pas stocker cette date dans un fichier local (`last_run.json` ou équivalent) :** GitHub Actions recrée une machine vierge à chaque exécution (voir `etape-4-automatisation-diagbruit.md`) — un fichier écrit pendant un run n'existe plus au run suivant, sauf à le committer dans le dépôt à chaque run (mécanisme fragile, source de conflits git, hors de propos pour un simple horodatage déjà disponible ailleurs). La base Notion est la seule mémoire persistante du projet ; s'appuyer sur elle évite toute duplication d'état.
 
 ## Décision 4 — Création de la base Notion : script ponctuel, pas manuel

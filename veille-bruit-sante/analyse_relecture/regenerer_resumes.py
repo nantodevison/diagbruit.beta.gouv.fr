@@ -3,7 +3,9 @@ texte intégral (ajouté à la main par l'utilisateur) — voir docs/workflow-ve
 étape « Régénération du résumé à partir du texte intégral ».
 
 Écrit UNIQUEMENT `resume`, `resultat_cle` et les 7 colonnes de qualification. `favori`,
-`statut`, `fichier` et les autres colonnes ne sont jamais envoyés à Notion.
+`statut`, `fichier` et les autres colonnes ne sont jamais envoyés à Notion. Un résumé vide
+ne remplace jamais le résumé existant. Les documents traités ici ayant été retenus par
+l'utilisateur, le modèle a pour consigne de ne pas les classer hors périmètre.
 
     python -m analyse_relecture.regenerer_resumes --estimer     # télécharge + compte, gratuit
     python -m analyse_relecture.regenerer_resumes --limit 1     # petit essai, payant
@@ -32,7 +34,7 @@ from analyse_relecture.qualifier_base_existante import (
 from analyse_relecture.recuperer_contenus import ENTETES, MOTIF_PMCID, _ExtracteurTexte
 from etape2_recherche_extraction import extraction, qualification
 from etape3_integration_notion.ecriture import _proprietes
-from notion_utils import resoudre_data_source_id
+from notion_utils import marquer_ajouts_manuels, resoudre_data_source_id
 
 DOSSIER_FICHIERS = test.DOSSIER_EXPORT / "fichiers"
 CHEMIN_RESULTATS = test.DOSSIER_EXPORT / "regeneration.jsonl"
@@ -78,6 +80,7 @@ def lister_fiches_avec_fichier(notion: Client, data_source_id: str) -> list:
                 "annee": _texte(p["annee"]), "revue": _texte(p["revue"]),
                 "doi_url": _texte(p["doi_url"]),
                 "favori": p["favori"]["checkbox"],
+                "ajout_manuel": (p.get("ajout_manuel") or {}).get("checkbox", False),
             })
         if not reponse.get("has_more"):
             return fiches
@@ -128,10 +131,23 @@ def telecharger(fiche: dict) -> dict:
             "source": {"type": "text", "media_type": "text/plain", "data": texte}}
 
 
+# Toute fiche traitée ici a été retenue par l'utilisateur : il y a déposé le texte intégral
+# (favori) ou l'a créée lui-même (ajout manuel). Le filtre « hors périmètre » du prompt n'a
+# donc pas lieu d'être : constaté le 29/09/2026 sur un rapport parlementaire général de
+# prévention, écarté sans résumé alors que l'utilisateur l'avait mis en favori. Placée dans
+# le message et non dans PROMPT_SYSTEME, pour ne pas toucher au prompt caché du run.
+CONSIGNE_DOCUMENT_RETENU = (
+    "\n\nImportant : ce document a ete retenu par l'utilisateur de la veille. Ne le classe "
+    "pas hors perimetre (hors_perimetre doit valoir false). Redige le resume et le "
+    "resultat_cle sur ce que le document apporte au sujet du lien entre bruit et sante ; si "
+    "le bruit n'y occupe qu'une place mineure, dis-le explicitement dans le resume."
+)
+
+
 def _messages(fiche: dict, document: dict) -> list:
     source = {**fiche, "resume_brut": "le document joint ci-dessus (texte integral)."}
-    return [{"role": "user", "content": [document,
-                                         {"type": "text", "text": extraction._construire_prompt(source)}]}]
+    texte = extraction._construire_prompt(source) + CONSIGNE_DOCUMENT_RETENU
+    return [{"role": "user", "content": [document, {"type": "text", "text": texte}]}]
 
 
 def _systeme() -> list:
@@ -206,8 +222,11 @@ def regenerer(client: Anthropic, notion: Client, fiches: list, limite: int) -> N
             etude["doi_url"] = fiche["doi_url"] or etude["doi_url"]
             etude["url_fichier"] = fiche["url_fichier"]
             etude["a_verifier"] = extraite.contenu_insuffisant
+            etude["ajout_manuel"] = fiche["ajout_manuel"]
             qualification.qualifier([etude], test.DATE_DEPUIS)
             if etude["hors_perimetre"]:
+                # Malgré la consigne : on le signale, sans rien écarter ni effacer.
+                print(f"    jugé hors périmètre malgré la consigne : {etude.get('motif_exclusion')}")
                 etude["priorite"] = qualification.FAIBLE
             par_url[fiche["url_fichier"]] = etude
         cout_total += cout
@@ -221,6 +240,11 @@ def regenerer(client: Anthropic, notion: Client, fiches: list, limite: int) -> N
             print(f"{numero:3} NON ECRIT (contenu jugé insuffisant) {fiche['titre'][:50]}")
             continue
         proprietes = {k: v for k, v in _proprietes(etude).items() if k in COLONNES_ECRITES}
+        # Garde-fou : un résumé ou résultat vide ne remplace jamais le texte existant
+        # (cas d'un document jugé hors périmètre, qui revient sans résumé).
+        for champ in ("resume", "resultat_cle"):
+            if not (etude.get(champ) or "").strip():
+                proprietes.pop(champ, None)
         if COLONNES_INTERDITES & proprietes.keys():
             raise RuntimeError("Tentative d'écriture d'une colonne manuelle : arrêt.")
         _mettre_a_jour(notion, fiche["page_id"], proprietes)
@@ -237,6 +261,9 @@ def main() -> None:
 
     notion = Client(auth=os.environ["NOTION_API_KEY"])
     data_source_id = resoudre_data_source_id(notion, os.environ["NOTION_DATABASE_ID"])
+    # Une fiche créée à la main est le cas typique de ce script : on la marque d'abord,
+    # pour que sa priorité en tienne compte (provenance choisie par l'utilisateur).
+    marquer_ajouts_manuels(notion, data_source_id)
     fiches = lister_fiches_avec_fichier(notion, data_source_id)
     client = Anthropic()
     if args.estimer:

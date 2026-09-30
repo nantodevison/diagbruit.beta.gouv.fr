@@ -21,6 +21,11 @@ Gardez-le court : quelques lignes par section suffisent.
       (ANTHROPIC_API_KEY, NOTION_API_KEY, NOTION_DATABASE_ID) sur le dépôt.
       Point à décider : le workflow se lance aussi à chaque push sur `main`
       touchant la veille, donc un run payant à chaque fusion.
+- [x] **Case `ajout_manuel`** (29/09) : cochée automatiquement (auteur Notion
+      de la fiche ≠ intégration), ignorée pour la date de départ du run
+      (vérifié : le prochain run repart bien du 26/08). `regenerer_resumes`
+      ne classe plus hors périmètre un document retenu, et ne remplace plus
+      un résumé par du vide.
 - [ ] **Analyse de la relecture manuelle** — premier parcours de la base Notion
       fait, publications les plus importantes taguées « favoris ».
   - [x] Exporter la base en CSV (`analyse_relecture/exporter_base.py`) :

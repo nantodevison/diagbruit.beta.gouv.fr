@@ -55,9 +55,14 @@ def domaine_autorise(url: Optional[str]) -> bool:
 
 
 def provenance_reconnue(etude: dict) -> bool:
-    """Canal API scientifique (revues indexées par OpenAlex / Europe PMC) ou URL d'un
-    domaine de la liste blanche."""
-    return etude.get("canal") == "api" or domaine_autorise(etude.get("doi_url"))
+    """Canal API scientifique (revues indexées par OpenAlex / Europe PMC), URL d'un
+    domaine de la liste blanche, ou fiche ajoutée à la main : l'utilisateur l'a choisie
+    lui-même, sa provenance n'a pas à être contrôlée."""
+    return (
+        etude.get("canal") == "api"
+        or domaine_autorise(etude.get("doi_url"))
+        or bool(etude.get("ajout_manuel"))
+    )
 
 
 def source_fiable(etude: dict) -> bool:

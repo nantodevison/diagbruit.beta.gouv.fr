@@ -107,6 +107,10 @@ possible, et à chaque push sur `main` touchant ce dossier).
 - **Rien n'est écarté silencieusement** : toute exclusion (échec, hors
   périmètre, doublon) est journalisée avec le titre et la raison ; un contenu
   trop pauvre est écrit avec `a_verifier` plutôt qu'exclu.
+- **Fiches ajoutées à la main** : repérées automatiquement (`ajout_manuel`,
+  via l'auteur Notion de la page), ignorées pour la date de départ du run,
+  jamais classées hors périmètre par `regenerer_resumes` (document retenu
+  par l'utilisateur). Un résumé vide ne remplace jamais un résumé existant.
 - **Rappel avant précision** : l'utilisateur préfère trier plus de documents
   que manquer un favori potentiel. La `priorite` informe, la case `favori`
   (manuelle) décide.

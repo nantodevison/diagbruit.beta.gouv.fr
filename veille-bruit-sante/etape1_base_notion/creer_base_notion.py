@@ -66,6 +66,13 @@ PROPRIETES_QUALIFICATION = {
     "a_verifier": {"checkbox": {}},
 }
 
+# Fiche créée à la main dans Notion (et non par le run). Cochée automatiquement en début
+# de run (notion_utils.marquer_ajouts_manuels) : ces fiches sont ignorées pour calculer la
+# date de départ de la recherche, et considérées comme retenues par l'utilisateur.
+PROPRIETES_ORIGINE = {
+    "ajout_manuel": {"checkbox": {}},
+}
+
 # Colonnes retirées du schéma : supprimées d'une base existante par la migration.
 # candidat_favori (case automatique) a été remplacée par `priorite` le 25/09/2026.
 PROPRIETES_OBSOLETES = ("candidat_favori",)
@@ -83,6 +90,7 @@ PROPRIETES = {
     "resume": {"rich_text": {}},
     "resultat_cle": {"rich_text": {}},
     **PROPRIETES_QUALIFICATION,
+    **PROPRIETES_ORIGINE,
     "date_ajout": {"created_time": {}},
     "statut": {"select": {"options": [
         {"name": "🆕 Nouveau"}, {"name": "✅ Lu"},
@@ -123,7 +131,8 @@ def ajouter_proprietes_qualification(notion: Client, data_source_id: str) -> Non
     # Dans l'API Notion, passer None pour une propriété la supprime de la base.
     a_supprimer = {nom: None for nom in PROPRIETES_OBSOLETES if nom in existantes}
     notion.data_sources.update(
-        data_source_id=data_source_id, properties={**PROPRIETES_QUALIFICATION, **a_supprimer},
+        data_source_id=data_source_id,
+        properties={**PROPRIETES_QUALIFICATION, **PROPRIETES_ORIGINE, **a_supprimer},
     )
 
 

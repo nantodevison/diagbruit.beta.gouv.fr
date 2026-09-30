@@ -1,4 +1,5 @@
-"""Résolution database_id -> data_source_id.
+"""Outils Notion partagés : résolution database_id -> data_source_id, et repérage des
+fiches ajoutées à la main (marquer_ajouts_manuels).
 
 Depuis la mise à jour de l'API Notion (version 2025-09-03), une base ("database") peut
 contenir plusieurs "data sources" ; le schéma de colonnes et les pages vivent sur le data
@@ -33,3 +34,27 @@ def resoudre_data_source_id(notion: Client, identifiant: str) -> str:
     if not data_sources:
         raise RuntimeError(f"Aucun data source trouve pour la base Notion {identifiant}")
     return data_sources[0]["id"]
+
+
+def marquer_ajouts_manuels(notion: Client, data_source_id: str) -> int:
+    """Coche `ajout_manuel` sur toute fiche créée à la main dans Notion, c'est-à-dire par
+    quelqu'un d'autre que l'intégration du script. Notion enregistre l'auteur de chaque
+    page (`created_by`) : la détection est automatique, l'utilisateur n'a rien à cocher.
+
+    N'écrit que la colonne `ajout_manuel`, et seulement quand elle n'est pas déjà cochée.
+    Retourne le nombre de fiches nouvellement marquées. Voir etape-1-conception-technique.md,
+    Décision 3 (date de départ de la recherche)."""
+    id_integration = notion.users.me()["id"]
+    nb_marquees, curseur = 0, None
+    while True:
+        reponse = notion.data_sources.query(
+            data_source_id=data_source_id, start_cursor=curseur, page_size=100,
+            filter={"property": "ajout_manuel", "checkbox": {"equals": False}},
+        )
+        for page in reponse["results"]:
+            if page["created_by"]["id"] != id_integration:
+                notion.pages.update(page_id=page["id"], properties={"ajout_manuel": {"checkbox": True}})
+                nb_marquees += 1
+        if not reponse.get("has_more"):
+            return nb_marquees
+        curseur = reponse.get("next_cursor")
