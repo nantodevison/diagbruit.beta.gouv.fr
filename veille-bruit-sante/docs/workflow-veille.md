@@ -1,12 +1,13 @@
 # Workflow de la veille bruit & santé
 
-*Validé le 25/09/2026. Décrit le circuit complet d'un document, du scan hebdomadaire
-jusqu'à sa mise à disposition. Les étapes en pointillés sont décidées mais pas encore
-codées (voir `FEUILLE_DE_ROUTE.md` à la racine du dépôt).*
+*Validé le 25/09/2026, mis à jour le 30/09/2026 (cadrage de l'artefact, voir
+`etape-5-artefact-synthese-diagbruit.md`). Décrit le circuit complet d'un document, du
+scan tous les 15 jours jusqu'à sa mise à disposition. Les étapes en pointillés sont
+décidées mais pas encore codées (voir `FEUILLE_DE_ROUTE.md` à la racine du dépôt).*
 
 ```mermaid
 flowchart TD
-    GA["⏰ Lancement hebdomadaire<br/>GitHub Actions, lundi 6 h UTC"] --> DATE["Date de départ<br/>= dernière date_ajout dans Notion"]
+    GA["⏰ Lancement tous les 15 jours<br/>GitHub Actions, lundi 6 h UTC<br/>(prêt avant 8 h à Paris)"] --> DATE["Date de départ<br/>= dernière date_ajout dans Notion"]
     DATE --> RECH{{"Recherche de documents"}}
     RECH --> WEB["Recherche web<br/>web_search, domaines de la liste blanche"]
     RECH --> API["API scientifiques<br/>OpenAlex, Europe PMC"]
@@ -24,16 +25,19 @@ flowchart TD
     QUALIF --> URL["Vérification de l'URL<br/>url_not_real"]
     URL --> NOTION[("Base Notion « Études »<br/>statut 🆕 Nouveau")]
 
-    NOTION --> TRI["👤 Relecture manuelle<br/>tri par priorité"]
+    NOTION --> ATRIER["🗂️ Vue Notion « À trier »<br/>documents non lus + aide du LLM"]
+    ATRIER --> TRI["👤 Relecture manuelle dans Notion<br/>tri par priorité"]
     TRI -->|"coché favori"| FAV["⭐ Favori"]
     TRI -->|"non coché"| LU["✅ Lu, conservé en base"]
     FAV --> FICHIER["👤 Ajout du texte intégral<br/>colonne fichier, si trouvé"]
     FICHIER --> REGEN["Régénération du résumé<br/>à partir du texte intégral"]
-    FAV --> ART["📄 Mise à disposition<br/>via artefact de synthèse"]
-    REGEN --> ART
+    FAV --> RETENUS["📄 Page HTML — section « Retenus »<br/>pour l'équipe, piste d'actualité"]
+    REGEN --> RETENUS
+    SOCLE["📘 Socle « état des connaissances »<br/>fichier du dépôt, validé à la main"] --> ETAT["📄 Page HTML — état des connaissances<br/>par effet sur la santé"]
+    RETENUS -.->|"verdict : confirme / nuance /<br/>contredit / sujet absent"| ETAT
 
     classDef aFaire stroke-dasharray: 5 5
-    class FICHIER,REGEN,ART aFaire
+    class ATRIER,RETENUS,SOCLE,ETAT aFaire
 ```
 
 ## Principes
