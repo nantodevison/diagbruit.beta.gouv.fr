@@ -48,7 +48,11 @@ schéma de colonnes et les pages vivent sur le data source, pas sur la base elle
 `docs/etape-3-conception-technique.md` (Décision 1 et 3). `NOTION_DATABASE_ID` reste
 inchangé pour l'utilisateur — c'est toujours l'ID de base copié depuis l'URL Notion.
 
-Reste à vérifier en priorité, non encore couvert par un run complet réussi :
+Dernier run complet réussi : 27/08/2026 (110 fiches écrites), **avant** l'ajout de la
+qualification, de la priorité à 3 niveaux et du repérage des ajouts manuels : le code
+actuel n'a pas encore été relancé en entier.
+
+Reste à vérifier en priorité, non couvert par ce run :
 
 - le format exact des blocs renvoyés par l'outil `web_search`
   (`etape2_recherche_extraction/recherche_web.py` suppose des champs `title`/`url` sur

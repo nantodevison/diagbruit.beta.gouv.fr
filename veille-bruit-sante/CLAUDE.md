@@ -120,7 +120,8 @@ possible, et à chaque push sur `main` touchant ce dossier).
 
 ## Points ouverts connus
 
-- Pas encore de run complet réussi de bout en bout (voir README, « Statut »).
+- Dernier run complet réussi le 27/08/2026, avant la qualification : le code
+  actuel n'a pas encore été relancé de bout en bout (voir README, « Statut »).
 - Format exact des résultats `web_search` à confirmer sur un vrai appel.
 - Exemples du `PROMPT_SYSTEME` marqués BROUILLON, à relire.
 - Pas d'option `--limit` pour tester sur quelques études.
