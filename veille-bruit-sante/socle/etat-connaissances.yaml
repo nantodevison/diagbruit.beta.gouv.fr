@@ -10,7 +10,8 @@
 #   rattachent par leur effet (colonne domaine_sante).
 #
 # Comment le relire ?
-#   - Un bloc par effet sur la santé (section « effets »).
+#   - Un bloc par effet sur la santé (section « effets »), un encadré « À ne pas
+#     confondre » (effets auditifs) et des pistes émergentes.
 #   - Chaque chiffre porte une « verification » :
 #       a_faire  : repris d'une fiche Notion (donc extrait par le LLM) ou de
 #                  connaissances générales ; à contrôler dans le document source ;
@@ -30,12 +31,12 @@
 #   validations et des révisions. Incrémenter « version » et « date_revision ».
 # =============================================================================
 
-version: "0.1"
-statut: brouillon            # brouillon | valide
+version: "1.0"
+statut: valide               # brouillon | valide
 date_redaction: 2026-09-30
-date_revision: null          # date de la dernière révision validée
+date_revision: 2026-10-02    # date de la dernière révision validée
 redige_par: premier jet Claude, à partir de l'export de la base Notion du 30/09/2026
-valide_par: null             # à renseigner à la validation
+valide_par: Martin Schoreisz # validation effet par effet, 30/09 et 02/10/2026
 
 # -----------------------------------------------------------------------------
 # Échelle des niveaux de preuve
@@ -64,9 +65,19 @@ niveaux_de_preuve:
 # -----------------------------------------------------------------------------
 # Chiffres clés à l'échelle européenne (tous effets confondus)
 # -----------------------------------------------------------------------------
+# mise_en_avant validée le 02/10/2026 : la part d'Européens exposés et les décès
+# ; les années de vie (peu parlantes) et le coût passent dans le détail.
 chiffres_europe:
+  - libelle: Européens exposés à un bruit des transports nocif pour la santé
+    valeur: "plus d'1 sur 5 (seuils européens), près d'1 sur 3 (seuils de l'OMS)"
+    mise_en_avant: true
+    source: aee-2025-synthese
+    origine: source_directe
+    verification: fait
+    citation: "over 20% of Europeans — more than one in five — are exposed to harmful transport noise levels. When measured against stricter World Health Organization (WHO) recommendations, this figure rises to over 30%, or nearly one in three citizens."
   - libelle: Décès prématurés par an liés au bruit des transports (Europe, 2021)
     valeur: "73 000"
+    mise_en_avant: true
     source: aee-2025-synthese
     origine: fiche_notion
     verification: fait
@@ -78,6 +89,7 @@ chiffres_europe:
       chiffres, peut-être une version antérieure : ne pas le reprendre.
   - libelle: Personnes exposées au-delà de 55 dB Lden (seuil de la directive européenne)
     valeur: "92 millions (route), 18 millions (train), 2,6 millions (avion)"
+    mise_en_avant: false
     source: aee-2025-synthese
     origine: source_directe
     verification: fait
@@ -88,12 +100,14 @@ chiffres_europe:
       de l'OMS, la part d'Européens exposés dépasse 30 % (« près d'un sur trois »).
   - libelle: Années de vie en bonne santé perdues chaque année
     valeur: "1,5 million"
+    mise_en_avant: false
     source: aee-2025-synthese
     origine: fiche_notion
     verification: fait
     citation: "results in the loss of 1.5 million healthy life years annually in Europe"
   - libelle: Coût économique annuel
     valeur: "au moins 100 milliards d'euros (environ 0,6 % du PIB)"
+    mise_en_avant: false
     source: aee-2025-synthese
     origine: fiche_notion
     verification: fait
@@ -104,33 +118,46 @@ chiffres_europe:
 # santé est établi. Exprimées avec les indicateurs des cartes de bruit, donc
 # directement comparables aux données utilisées par diagBruit.
 # -----------------------------------------------------------------------------
+# Vérifié le 02/10/2026 dans le résumé exécutif officiel (PDF déposé dans la
+# fiche Notion, lu par script). force : « forte » ou « conditionnelle », selon
+# la qualité des preuves jugée par l'OMS.
 valeurs_guides_oms_2018:
   source: oms-2018-lignes-directrices
   valeurs:
     - source_bruit: Trafic routier
       lden_db: 53
       lnight_db: 45
+      force: forte
       origine: fiche_notion
-      verification: a_faire
+      verification: fait
+      citation: "the GDG strongly recommends reducing noise levels produced by road traffic below 53 decibels (dB) Lden […] during night time below 45 dB Lnight"
     - source_bruit: Trafic ferroviaire
       lden_db: 54
       lnight_db: 44
+      force: forte
       origine: fiche_notion
-      verification: a_faire
+      verification: fait
+      citation: "reducing noise levels produced by railway traffic below 54 dB Lden […] during night time below 44 dB Lnight"
     - source_bruit: Trafic aérien
       lden_db: 45
       lnight_db: 40
+      force: forte
       origine: fiche_notion
-      verification: a_faire
+      verification: fait
+      citation: "reducing noise levels produced by aircraft below 45 dB Lden […] during night time below 40 dB Lnight"
     - source_bruit: Éoliennes
       lden_db: 45
-      lnight_db: null      # pas de recommandation nocturne de l'OMS, à confirmer
+      lnight_db: null      # aucune recommandation de nuit : preuves trop faibles
+      force: conditionnelle
       origine: connaissance_generale
-      verification: a_faire
+      verification: fait
+      citation: "conditionally recommends reducing noise levels produced by wind turbines below 45 dB Lden […] No recommendation is made for average night noise exposure Lnight of wind turbines. The quality of evidence of night-time exposure to wind turbine noise is too low to allow a recommendation."
     - source_bruit: Loisirs (concerts, casques…)
-      valeur: "70 dB LAeq sur 24 h, moyenne annuelle"
+      valeur: "70 dB LAeq sur 24 h, moyenne annuelle de toutes les sources de loisirs"
+      force: conditionnelle
       origine: connaissance_generale
-      verification: a_faire
+      verification: fait
+      citation: "conditionally recommends reducing the yearly average from all leisure noise sources combined to 70 dB LAeq,24h"
 
 # -----------------------------------------------------------------------------
 # Effets sur la santé
@@ -260,7 +287,7 @@ effets:
         mise_en_avant: false
         source: oms-2018-lignes-directrices
         origine: fiche_notion
-        verification: a_faire     # document PDF, voir valeurs_guides_oms_2018
+        verification: fait        # voir les citations de valeurs_guides_oms_2018
         # Décision du 30/09/2026 : seules les valeurs OMS 2018 sont citées
         # (la valeur guide unique de 2009, 40 dB, est écartée).
     references: [oms-2018-revue-sommeil, oms-2018-lignes-directrices, anses-2013, aee-2025-synthese]
@@ -318,27 +345,44 @@ effets:
     nom: Apprentissages chez l'enfant
     niveau_preuve: demontre
     justification_niveau: >-
-      L'ANSES (2013) retient les troubles de l'apprentissage scolaire parmi les
-      quatre effets à relation dose-effet solide, surtout pour le bruit aérien
-      autour des écoles. À confirmer : l'appréciation exacte de l'OMS 2018, dont
-      la revue sur la cognition n'est pas dans la base.
+      La revue de l'OMS (2018) juge les preuves de qualité modérée pour l'effet
+      du bruit des avions sur la compréhension en lecture et la mémoire à long
+      terme, et faibles à très faibles pour la route, le train et les autres
+      capacités (attention, raisonnement). L'ANSES (2013) retient les troubles
+      de l'apprentissage scolaire parmi les quatre effets à relation dose-effet
+      solide, surtout pour le bruit aérien autour des écoles.
+    # Niveau de preuve détaillé (validé le 02/10/2026).
+    sous_effets:
+      - nom: Lecture et mémoire, bruit des avions
+        terme_technique: compréhension en lecture, mémoire à long terme
+        niveau_preuve: demontre
+      - nom: Autres capacités, bruit de la route et du train
+        terme_technique: attention, fonctions exécutives
+        niveau_preuve: debattu
     en_bref: >-
       Les enfants exposés au bruit, en particulier celui des avions à l'école,
       apprennent moins bien à lire et retiennent moins bien ce qu'ils lisent.
     chiffres_cles:
       - texte: >-
-          Une étude française sur des élèves de CE2 associe une exposition accrue
-          au bruit à de moins bonnes performances scolaires.
-        source: etude-ce2-2014
-        origine: fiche_notion
-        verification: a_faire
-        attention: "Pas de chiffre dans la fiche : récupérer l'ordre de grandeur dans l'étude."
-    references: [anses-2013, etude-ce2-2014, anses-aerien-2020]
+          Plus d'un demi-million d'enfants en Europe ont des difficultés de
+          lecture dues au bruit des transports.
+        mise_en_avant: true
+        source: aee-2025-synthese
+        origine: source_directe
+        verification: fait
+        citation: "It is estimated that over half a million children in Europe experience reading difficulties […] due to transport noise."
+    references: [oms-2018-revue-cognition, anses-2013, etude-ce2-2014, anses-aerien-2020, aee-2025-synthese]
     pourquoi_important: >-
-      Les écoles et crèches sont des bâtiments sensibles : l'effet sur les
-      apprentissages justifie une attention particulière à leur exposition.
+      Les enfants sont particulièrement sensibles au bruit : l'effet touche les
+      apprentissages, à un âge où ils sont déterminants.
     points_de_vigilance:
-      - "LACUNE : revue OMS 2018 sur la cognition absente de la base, à ajouter."
+      - >-
+        L'AEE attribue le demi-million d'enfants au bruit des transports en
+        général, alors que les preuves solides de l'OMS portent surtout sur les
+        avions : ne pas écrire que la route nuit à la lecture de 500 000 enfants.
+      - >-
+        La revue OMS sur la cognition (Clark et Paunovic) a été ajoutée au socle
+        le 02/10/2026 ; elle est à ajouter à la main dans la base Notion.
     alias_domaine_sante: [effets cognitifs chez l'enfant, troubles cognitifs chez l'enfant, développement cognitif, développement cognitif de l'enfant, développement cognitif chez l'enfant, fonctions cognitives chez l'enfant, cognition chez l'enfant, performance scolaire, cognitif, Cognition, troubles cognitifs, fonctions cognitives, santé cognitive]
 
   - id: metabolique
@@ -347,35 +391,53 @@ effets:
     justification_niveau: >-
       L'OMS (2018) jugeait les preuves de qualité faible à très faible. Depuis,
       l'AEE intègre le diabète de type 2 dans ses estimations de cas attribuables
-      au bruit, et de nouvelles cohortes (dont une française en 2026) vont dans
-      le même sens.
+      au bruit, et une cohorte française de 2026 (E3N, 18 926 femmes) confirme le
+      lien pour le bruit routier, pas pour le train ni l'avion.
     en_bref: >-
       Le bruit routier semble augmenter le risque de diabète de type 2, sans doute
       via le stress et un sommeil dégradé. Le lien est de mieux en mieux étayé
       mais pas encore établi avec certitude.
     chiffres_cles:
       - texte: 23 000 nouveaux cas de diabète de type 2 par an en Europe attribués au bruit des transports (2021).
+        mise_en_avant: true
         source: aee-2025-synthese
         origine: fiche_notion
         verification: fait
         citation: "23,000 cases of type 2 diabetes"
+      # Décision du 02/10/2026 : chiffres du modèle principal (résumé de
+      # l'étude), les plus prudents. Remplace la « cohorte danoise » de la revue
+      # de 2018, invérifiable dans sa source.
       - texte: >-
-          Cohorte danoise : +8 % de risque de diabète de type 2 par 10 dB de bruit
-          routier au domicile.
-        source: revue-diabete-2018
-        origine: fiche_notion
-        verification: a_faire
-        attention: >-
-          Texte intégral inaccessible au script (éditeur MDPI, erreur 403) et
-          chiffre absent du résumé. Le résumé confirme seulement que le bruit est
-          associé à un risque accru, avec des preuves « limitées » qui ne
-          permettent pas de conclure à une causalité.
+          Dans une cohorte de femmes françaises, chaque hausse de 10 dB du bruit
+          routier augmente le risque de diabète de type 2 de 8 %, et de 12 % pour
+          le bruit la nuit.
+        mise_en_avant: true
+        source: cohorte-diabete-fr-2026
+        origine: source_directe
+        verification: fait
+        citation: "A 10 dB(A) increase in road traffic noise exposure was associated with a moderate increase in T2D risk (Lden: HR = 1.08, 95 %CI: 1.00, 1.18; Ln: HR = 1.12, 95 %CI: 1.01, 1.25). Adjustment for NO2 and PM2.5 slightly increased the estimated HRs."
+      - texte: >-
+          Environ 223 000 cas de surpoids chez l'enfant sont liés à des niveaux de
+          bruit élevés en Europe.
+        mise_en_avant: false
+        source: aee-2025-synthese
+        origine: source_directe
+        verification: fait
+        citation: "High noise levels are also linked to approximately 223,000 cases of overweight children."
+        # Décision du 02/10/2026 : figure ici et dans le regard transversal « Enfants ».
     references: [oms-2018-revue-cardio, revue-diabete-2018, cohorte-diabete-fr-2026, aee-2025-synthese]
     pourquoi_important: >-
-      Le diabète est une maladie chronique en forte progression ; y voir
-      contribuer le bruit élargit l'enjeu au-delà du seul inconfort.
+      Le diabète est une maladie chronique répandue ; y voir contribuer le bruit
+      élargit l'enjeu au-delà du seul inconfort.
     points_de_vigilance:
       - Présenter comme « probable », jamais comme « démontré ».
+      - >-
+        L'étude E3N ne porte que sur des femmes : écrire « dans une cohorte de
+        femmes françaises », pas « en France ».
+      - >-
+        La fiche Notion de l'étude E3N cite +21 % : c'est le modèle ajusté sur le
+        dioxyde d'azote, pour le bruit de nuit (texte intégral, p. 5 et 8), donc
+        l'estimation la plus haute. Le socle retient le modèle principal.
     alias_domaine_sante: [métabolique, effets métaboliques, troubles métaboliques, maladies métaboliques, santé métabolique, diabète de type 2, metabolic effects]
 
   - id: sante_mentale
@@ -384,40 +446,88 @@ effets:
     justification_niveau: >-
       L'OMS (2018) conclut à des preuves faibles à modérées pour la qualité de
       vie et le bien-être, sans relation dose-effet robuste pour la santé mentale
-      proprement dite. Des études récentes (difficultés émotionnelles chez
-      l'enfant, Inserm 2026) relancent le sujet.
+      proprement dite. La cohorte française ELFE (Inserm, 2026) apporte un
+      signal récent solide chez l'enfant pour le bruit routier, mais ses auteurs
+      demandent qu'il soit reproduit dans d'autres cohortes.
     en_bref: >-
       Le bruit dégrade le bien-être et la qualité de vie. Son rôle dans la
       dépression ou l'anxiété est étudié, mais pas encore établi.
-    chiffres_cles: []
-    references: [oms-2018-revue-sante-mentale, inserm-enfants-2026]
+    # Décision du 02/10/2026 : pour un effet « débattu », le chiffre mis en
+    # avant est un chiffre d'exposition, pas un nombre de personnes malades.
+    chiffres_cles:
+      - texte: >-
+          Parmi les enfants nés en France en 2011 (cohorte ELFE), un tiers
+          vivaient dès la naissance avec un bruit routier d'au moins 60 dB(A) à
+          leur domicile.
+        mise_en_avant: true
+        source: inserm-enfants-2026
+        origine: source_directe
+        verification: fait
+        citation: "At age 2 months, […] 2662 (33·6%) were exposed to high levels (≥60 dB[A])."
+      - texte: >-
+          Selon une estimation de l'AEE, environ 115 000 enfants en Europe
+          présentent des troubles du comportement dus au bruit des transports.
+        mise_en_avant: false
+        source: aee-2025-synthese
+        origine: source_directe
+        verification: fait
+        citation: "about 115,000 experience behavioral issues due to transport noise."
+    references: [oms-2018-revue-sante-mentale, inserm-enfants-2026, aee-2025-synthese]
     pourquoi_important: >-
-      Sujet émergent, suivi de près par la recherche : chaque nouvelle étude
-      solide peut faire évoluer ce niveau de preuve.
+      C'est un sujet émergent : parmi les études suivies, une seule, solide,
+      relie le niveau de bruit à la santé mentale, et elle ne concerne que les
+      enfants.
     points_de_vigilance:
-      - Ne pas citer de chiffre tant que les synthèses ne concordent pas.
+      - >-
+        ELFE : effet du bruit routier persistant dans la petite enfance sur les
+        difficultés émotionnelles et relationnelles à 10 ans et demi ; aucun
+        effet pour le bruit aérien. Une seule étude : ne pas la présenter comme
+        un effet établi.
+      - >-
+        La conclusion d'ELFE appelle à réduire le bruit routier : recommandation
+        non relayée (le socle décrit les effets, pas les remèdes).
+      - >-
+        L'AEE écrit que le bruit « pourrait » contribuer à des milliers de cas de
+        dépression et de démence : garder ce conditionnel si on le cite.
     alias_domaine_sante: [santé mentale, Sante mentale, effets sur la santé mentale, santé mentale infantile, troubles émotionnels et comportementaux, stress, stress perçu, psychologique, bien-être, bien-être général, bien-être psychologique, qualité de vie, santé perçue / qualité de vie, consommation de médicaments psychotropes, cortisol salivaire, système endocrinien]
 
-  - id: auditif
-    nom: Effets auditifs
-    niveau_preuve: demontre
-    justification_niveau: >-
-      Les pertes auditives dues à des niveaux sonores élevés sont établies de
-      longue date. Pour le bruit environnemental, les niveaux en jeu restent
-      généralement en dessous des seuils d'atteinte auditive : l'enjeu concerne
-      surtout les loisirs bruyants.
-    en_bref: >-
-      Les sons très forts (concerts, écouteurs) abîment l'oreille de façon
-      irréversible. Le bruit de la circulation, lui, agit surtout par d'autres
-      voies (stress, sommeil).
-    chiffres_cles: []
-    references: [oms-2018-lignes-directrices]
-    pourquoi_important: >-
-      Utile pour distinguer les effets auditifs, bien connus du public, des effets
-      extra-auditifs, moins connus et pourtant majoritaires.
-    points_de_vigilance:
-      - "Effet hors du cœur de la veille (bruit professionnel exclu, loisirs peu couverts) : peu de documents dans la base."
-    alias_domaine_sante: [acouphènes, effets auditifs, santé auditive, surdité professionnelle]
+# -----------------------------------------------------------------------------
+# Encadré « À ne pas confondre » — effets auditifs
+# -----------------------------------------------------------------------------
+# Décision du 02/10/2026 : les effets auditifs ne sont pas un effet du socle au
+# même titre que les autres (le bruit des transports chez soi en est rarement la
+# cause), mais ils restent l'effet du bruit le plus connu : on les mentionne dans
+# un encadré à part, affiché en tête de la vision « état des connaissances ».
+encadre_a_ne_pas_confondre:
+  id: auditif
+  titre: "À ne pas confondre : le bruit qui abîme l'oreille et le bruit qui nuit à la santé"
+  niveau_preuve: demontre      # pour les sons très forts ou très prolongés
+  texte: >-
+    Les atteintes de l'audition (perte d'audition, acouphènes) sont liées à des
+    sons très forts ou très prolongés : écouteurs, concerts, certains métiers.
+    C'est l'effet du bruit le plus connu. Le bruit des transports perçu chez soi
+    est en général différent : moins intense, mais présent jour et nuit. Ses
+    effets sur la santé passent surtout par le stress et le sommeil. Des
+    exceptions existent (sirènes, passages très proches), mais elles restent
+    minoritaires.
+  appuis:
+    - affirmation: Les atteintes de l'audition sont liées au bruit des loisirs et aux écouteurs.
+      source: oms-2018-lignes-directrices
+      origine: source_directe
+      verification: fait
+      citation: "the GDG conditionally recommends following existing guidelines and legal regulations to limit the risk of increases in hearing impairment from leisure noise […] a large number of people may be exposed to and at risk of hearing impairment through the use of personal listening devices."
+    - affirmation: >-
+        Le bruit des transports chez soi est en général moins intense mais
+        permanent ; ses effets passent surtout par le stress et le sommeil.
+      origine: connaissance_generale
+      verification: a_faire
+      note: >-
+        Cohérent avec le reste du socle (cardiovasculaire, sommeil), mais aucun
+        document de la base ne le formule en ces termes. L'OMS n'émet aucune
+        recommandation de protection de l'audition pour le bruit des transports.
+  # La valeur guide associée (loisirs, 70 dB LAeq,24h) est dans valeurs_guides_oms_2018.
+  references: [oms-2018-lignes-directrices]
+  alias_domaine_sante: [acouphènes, effets auditifs, santé auditive, surdité professionnelle]
 
 # -----------------------------------------------------------------------------
 # Pistes en cours d'étude : suivies par la veille, pas présentées comme des
@@ -431,13 +541,25 @@ pistes_emergentes:
       risque de biais élevé : non concluant à ce jour.
     references: [meta-cancer-2025]
     alias_domaine_sante: [cancer]
+  # Ajoutée le 02/10/2026 sur la base du rapport AEE 2025.
+  - id: demence
+    nom: Démence
+    etat: >-
+      L'Agence européenne pour l'environnement estime que le bruit pourrait
+      contribuer à des milliers de cas de démence ; le lien reste à établir.
+    citation: "According to new research, noise could also contribute to thousands of cases of depression and dementia."
+    verification: fait
+    references: [aee-2025-synthese]
+    alias_domaine_sante: [démence, maladie d'Alzheimer, déclin cognitif]
+
+# Thèmes retirés du socle, dont les étiquettes restent valables dans Notion : les
+# documents correspondants sont conservés et tagués, mais pas affichés.
+# Grossesse et naissance retirées le 02/10/2026 : seule source, une revue
+# parapluie (2023) aux preuves faibles à très faibles, qui mêle bruit
+# environnemental et bruit professionnel (hors périmètre de la veille).
+themes_hors_socle:
   - id: grossesse
     nom: Grossesse et naissance
-    etat: >-
-      Une revue parapluie (2023) associe l'exposition élevée au bruit à des issues
-      de grossesse défavorables (prématurité, faible poids de naissance), avec des
-      preuves jugées de qualité très faible.
-    references: [umbrella-2023]
     alias_domaine_sante: [issues de grossesse, faible poids de naissance, prématurité, "petit poids pour l'âge gestationnel", nouveau-nés, santé néonatale]
 
 # Étiquettes de la colonne domaine_sante qui ne désignent pas un effet précis
@@ -476,6 +598,13 @@ references:
     role: reference
     lien: https://doi.org/10.3390/ijerph14121539
     texte_integral: https://pmc.ncbi.nlm.nih.gov/articles/PMC5750957/
+  oms-2018-revue-cognition:
+    titre: "WHO Environmental Noise Guidelines for the European Region: A Systematic Review on Environmental Noise and Cognition"
+    organisme: OMS Europe (Clark, Paunovic)
+    annee: 2018
+    role: reference
+    lien: https://doi.org/10.3390/ijerph15020285
+    texte_integral: https://pmc.ncbi.nlm.nih.gov/articles/PMC5858354/
   oms-2018-revue-sante-mentale:
     titre: "WHO Environmental Noise Guidelines — Systematic Review on Environmental Noise and Quality of Life, Wellbeing and Mental Health"
     organisme: OMS Europe
