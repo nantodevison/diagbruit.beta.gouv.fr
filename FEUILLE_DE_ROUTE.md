@@ -15,22 +15,23 @@ Gardez-le court : quelques lignes par section suffisent.
 - [x] Premier jet du socle (30/09) → `veille-bruit-sante/socle/etat-connaissances.yaml` :
       7 effets, 2 pistes émergentes, glossaire, 17 références. Chiffres
       vérifiés par script dans les sources (citation exacte conservée).
-- [ ] **Prochaine étape : reprendre la validation du socle à l'étape 4**
-      (étapes 0 à 3 validées : échelle des niveaux, cardiovasculaire,
-      sommeil, gêne). Questions ouvertes de l'étape 4 (apprentissages enfant) :
-      - chercher et vérifier la revue OMS cognition (Clark et Paunovic, 2018) ;
-      - mettre en avant le demi-million d'enfants (AEE 2025, vérifié), étude
-        CE2 en simple référence ?
-      - nouvelle phrase « pourquoi c'est important » (sans appel à l'action) ?
-      Puis : métabolique, santé mentale, auditif, chiffres européens et pistes
-      émergentes.
+- [x] Validation du socle (30/09 et 02/10) → version 1.0, validée par Martin
+      Schoreisz : 6 effets (cardiovasculaire, sommeil, gêne, apprentissages
+      de l'enfant, métabolique, santé mentale), un encadré « À ne pas
+      confondre » (effets auditifs), 2 pistes émergentes (cancer, démence) ;
+      grossesse retirée. 27 chiffres et valeurs guides vérifiés dans leur source.
+  - [x] Valeurs guides OMS 2018 vérifiées (résumé exécutif) ; `.venv` de la
+        veille créé avec les dépendances du projet et `pypdf`.
+  - [x] Revues OMS gêne et cognition ajoutées à la base et qualifiées
+        (0,27 $ + 0,15 $) ; `domaine_sante` renseigné à la main.
   - [ ] Vérifier « ×3 à ×5 de personnes fortement gênées par 10 dB » (revue
-        OMS gêne, texte sur PMC) et l'ajouter à l'étape 3.
-  - [ ] Vérifier les valeurs guides OMS 2018 (PDF) : créer le `.venv` de la
-        veille et y installer `pypdf`.
-  - [ ] Renseigner à la main `domaine_sante` = gêne sur la fiche OMS gêne
-        (le LLM proposait « santé mentale »).
-- [ ] Puis la conception technique (`docs/etape-5-conception-technique.md`).
+        OMS gêne, texte sur PMC) et l'ajouter à l'effet gêne.
+  - [ ] Fiche OMS cognition dans Notion : `sens_conclusion` « Non concluant »
+        à revoir (facultatif), titre à remettre sur une seule ligne.
+- [ ] **Prochaine étape : conception technique** (`docs/etape-5-conception-technique.md`) :
+      nettoyage de `domaine_sante` (toutes les étiquettes sont déjà classées
+      dans le socle), colonnes `verdict` et `piste d'actualité`, run à 15 jours,
+      script de génération de la page HTML et publication sur GitHub Pages.
 
 ## Prochaines étapes
 - [ ] **Passer le run à 15 jours**, le lundi, 6 h UTC (données prêtes avant
@@ -157,3 +158,13 @@ Gardez-le court : quelques lignes par section suffisent.
 - 2026-09-30 — Chiffres du socle vérifiés par script (téléchargement + recherche
   de texte, sans LLM), citation exacte conservée — une extraction LLM ne suffit
   pas : « 112 à 150 millions d'exposés » était introuvable dans le rapport AEE.
+- 2026-10-02 — Les chiffres affichés concernent les gens (personnes touchées,
+  hausse de risque) ; les chiffres de spécialiste (nombre d'études) restent
+  internes — ton « compréhensible par un non-spécialiste ».
+- 2026-10-02 — Effets auditifs en encadré « À ne pas confondre » plutôt qu'en
+  effet du socle — effet le plus connu, mais rarement causé par le bruit des
+  transports chez soi.
+- 2026-10-02 — Grossesse retirée du socle, démence ajoutée en piste émergente —
+  la seule source sur la grossesse mêle bruit professionnel et preuves très faibles.
+- 2026-10-02 — Étude E3N (diabète) : chiffres du modèle principal (+8 % / +12 %),
+  pas les +21 % de la fiche Notion — plus prudents, et ce sont ceux du résumé.
