@@ -18,7 +18,8 @@ Fournir des informations **factuelles et compréhensibles par un non-spécialist
 - un **glossaire** court explique les termes techniques (Lden, Lnight, risque relatif, méta-analyse, cohorte…) ;
 - une **mention de limites** accompagne le contenu : « synthèse de veille, pas une expertise sanitaire » ;
 - tout est rédigé en **français**, même quand les sources sont en anglais ;
-- le contenu décrit les **effets du bruit sur la santé**, pas les moyens d'y remédier (isolation, aménagement…) : pas de recommandation d'action dans le socle (décision du 30/09/2026).
+- le contenu décrit les **effets du bruit sur la santé**, pas les moyens d'y remédier (isolation, aménagement…) : pas de recommandation d'action dans le socle (décision du 30/09/2026) ;
+- les chiffres affichés **concernent les gens** (personnes touchées, hausse de risque) ; les chiffres de spécialiste (nombre d'études, qualité méthodologique) servent à justifier les niveaux de preuve mais ne sont pas mis en avant (décision du 02/10/2026).
 
 ## Vision 1 — État des connaissances
 
@@ -32,6 +33,7 @@ Un rendu **plutôt visuel** (sans que ce soit obligatoire) qui répond à la que
   - les 2 ou 3 études les plus emblématiques et les moins controversées, avec leur lien ;
   - une phrase « pourquoi c'est important », réutilisable dans une actualité.
 - **Premier jet** : rédigé une fois à partir des textes de référence déjà présents dans la base, puis validé. Le socle est ensuite **révisé ponctuellement**, quand une étude marquante le justifie.
+- **Regards transversaux** (validé le 02/10/2026) : en plus de la lecture par effet, la page propose des angles de vue qui rassemblent des éléments du socle sans les dupliquer. Premier angle : **« Enfants »** (apprentissages avec le bruit des avions, santé mentale de l'enfant avec le bruit routier d'après la cohorte ELFE, chiffres AEE sur les enfants : difficultés de lecture, troubles du comportement, surpoids).
 - Le socle est un **fichier versionné dans le dépôt** (YAML ou Markdown) : chaque validation ou révision passe par un commit, donc elle est tracée.
 
 ## Vision 2 — Sorties récentes
