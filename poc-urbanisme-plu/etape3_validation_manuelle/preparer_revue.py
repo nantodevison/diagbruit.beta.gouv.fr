@@ -107,6 +107,17 @@ def _doublons_probables(lignes: list[dict[str, str | int]]) -> dict[str, str]:
     dépasse `SEUIL_SIMILARITE_DOUBLON`. Comparaison par paire à l'intérieur
     de chaque document (coût négligeable : quelques dizaines d'occurrences
     au plus par document).
+
+    Exclut les paires dont `zone_reglementaire_mentionnee` diffère (et est
+    renseigné des deux côtés) — ajouté le 09/09/2026 avec l'éclatement d'une
+    occurrence multi-zones en plusieurs lignes à l'étape 2
+    (`etape2_analyse_reglements/synthese.py`, `_eclater_par_zone`) : des
+    lignes ainsi éclatées partagent quasiment le même `extrait_significatif`
+    par construction (même passage source), ce qui les rendrait sinon
+    systématiquement suggérées comme doublons probables l'une de l'autre
+    alors que ce sont des occurrences distinctes à conserver, une par zone —
+    voir `docs/etape-3-conception-technique.md`, "Détection automatique des
+    doublons probables".
     """
     par_document: dict[str, list[dict[str, str | int]]] = {}
     for ligne in lignes:
@@ -118,10 +129,14 @@ def _doublons_probables(lignes: list[dict[str, str | int]]) -> dict[str, str]:
             nature = candidate.get("nature_sonore_zone")
             if not nature:
                 continue
+            zone_candidate = str(candidate.get("zone_reglementaire_mentionnee", "")).strip()
             meilleur_id: str | None = None
             meilleur_score = SEUIL_SIMILARITE_DOUBLON
             for j, autre in enumerate(occurrences_document):
                 if i == j or autre.get("nature_sonore_zone") != nature:
+                    continue
+                zone_autre = str(autre.get("zone_reglementaire_mentionnee", "")).strip()
+                if zone_candidate and zone_autre and zone_candidate != zone_autre:
                     continue
                 score = SequenceMatcher(
                     None,

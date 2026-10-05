@@ -9,8 +9,17 @@ Lit `etape3_{dept}.csv` (module `csv` de la bibliothèque standard,
   significatifs, communes RNU, trous de couverture, occurrences à portée
   administrative), via `sources_gpu.py`.
 - `occurrences_a_georeferencer` — une ligne par occurrence à portée
-  `zone_specifique`, tous les attributs déjà remplis, géométrie laissée
-  vide pour tracé manuel dans QGIS (Phase 2).
+  `zone_specifique`. Ajouté le 09/09/2026 : une géométrie candidate est
+  d'abord recherchée automatiquement dans la couche `zone-urba` du GPU
+  (`sources_gpu.recuperer_zones_urba`/`trouver_geometrie_zone`), à partir de
+  `zone_reglementaire_mentionnee` ; en cas de succès, la ligne arrive dans
+  cette couche avec sa géométrie déjà remplie et `geometrie_origine =
+  "zone_urba_auto"` — à vérifier d'un coup d'œil en Phase 2, pas à tracer
+  depuis rien. Sans correspondance (zone non trouvée, non numérisée pour ce
+  document, ou champ vide), la géométrie reste vide et
+  `geometrie_origine = ""`, exactement comme avant ce changement : tracé
+  manuel intégral. Voir `docs/etape-4-construction-geometries-diagbruit.md`,
+  "Sources de géométrie".
 
 Usage :
     python -m etape4_geometries.preparer_geometries --dept 033
@@ -21,6 +30,11 @@ Entrée (dans `output/`, voir `--output-dir`) :
 Sortie (dans le même dossier) :
     etape4_{dept}_a_completer.gpkg — à ouvrir dans QGIS pour la Phase 2
     etape4_{dept}_erreurs.csv      — échecs d'appel API Carto GPU, si non vide
+
+Ajouté le 14/09/2026 (incident réel, département 067 hors Eurométropole) :
+refuse de s'exécuter si `etape4_{dept}_a_completer.gpkg` existe déjà — voir
+`docs/etape-4-conception-technique.md`, "Sécurité : refus si le fichier de
+sortie existe déjà".
 """
 
 from __future__ import annotations
@@ -36,7 +50,13 @@ import geopandas as gpd
 from shapely.geometry import MultiPolygon, shape
 from shapely.geometry.base import BaseGeometry
 
-from .sources_gpu import ResultatGeometrie, recuperer_geometrie_commune, recuperer_geometrie_document
+from .sources_gpu import (
+    ResultatGeometrie,
+    recuperer_geometrie_commune,
+    recuperer_geometrie_document,
+    recuperer_zones_urba,
+    trouver_geometrie_zone,
+)
 
 PORTEE_ZONE_SPECIFIQUE = "zone_specifique"
 CRS_SORTIE = "EPSG:4326"
@@ -79,8 +99,20 @@ COLONNES_ATTRIBUTS = [
     "statut_verification_finale",
     "fusionne_avec_id_gpu",
     "fusionne_avec_id_occurrence",
+    "geometrie_origine",
+    "statut_geometrie",
     "date_traitement",
 ]
+
+# Ajouté le 09/09/2026 : traçabilité de la source de chaque géométrie — voir
+# docstring du module et docs/etape-4-conception-technique.md, "Contrat de
+# données". "document"/"municipality" pour geometries_administratives (jamais
+# relue à la main) ; "zone_urba_auto"/"" pour occurrences_a_georeferencer
+# (respectivement "à vérifier d'un coup d'œil" et "à tracer intégralement").
+ORIGINE_DOCUMENT = "document"
+ORIGINE_MUNICIPALITY = "municipality"
+ORIGINE_ZONE_URBA_AUTO = "zone_urba_auto"
+ORIGINE_MANUELLE = ""
 
 COLONNES_ERREURS = ["identifiant", "source", "message", "date_traitement"]
 
@@ -89,10 +121,16 @@ class Etape3CsvIntrouvable(Exception):
     pass
 
 
+class Etape4GpkgDejaExistant(Exception):
+    """`etape4_{dept}_a_completer.gpkg` existe déjà — voir "Sécurité :
+    refus si le fichier de sortie existe déjà" dans
+    `docs/etape-4-conception-technique.md`."""
+
+
 @dataclass
 class ErreurGeometrie:
     identifiant: str
-    source: str  # "document", "municipality" ou "aucune_source"
+    source: str  # "document", "municipality", "zone-urba" ou "aucune_source"
     message: str
 
 
@@ -101,7 +139,7 @@ def _lire_etape3(chemin: Path) -> list[dict[str, str]]:
         return list(csv.DictReader(fichier))
 
 
-def _attributs(ligne: dict[str, str], id_geometrie: int, date_traitement: str) -> dict:
+def _attributs(ligne: dict[str, str], id_geometrie: int, date_traitement: str, geometrie_origine: str) -> dict:
     return {
         "id_geometrie": id_geometrie,
         "id_gpu": ligne.get("id_gpu", ""),
@@ -126,6 +164,13 @@ def _attributs(ligne: dict[str, str], id_geometrie: int, date_traitement: str) -
         # fusion").
         "fusionne_avec_id_gpu": "",
         "fusionne_avec_id_occurrence": "",
+        "geometrie_origine": geometrie_origine,
+        # Ajouté le 14/09/2026 : vide ici, renseigné par l'opérateur dans
+        # QGIS en Phase 2 (valeur "rejeté") pour écarter proprement une
+        # occurrence de occurrences_a_georeferencer jugée hors périmètre en
+        # la traçant — voir etape-4-conception-technique.md, "Mécanisme de
+        # rejet".
+        "statut_geometrie": "",
         "date_traitement": date_traitement,
     }
 
@@ -172,6 +217,30 @@ def _resoudre_geometries_administratives(
     return geometries_par_partition, geometries_par_commune, erreurs
 
 
+def _resoudre_zones_urba(
+    lignes_a_georeferencer: list[dict[str, str]],
+) -> tuple[dict[str, list[dict]], list[ErreurGeometrie]]:
+    """Récupère, une seule fois par `partition_gpu` distincte (jamais par
+    occurrence, voir `sources_gpu.py`), l'ensemble des zones de la couche
+    `zone-urba` référencées par les occurrences à portée `zone_specifique` —
+    même logique de dédoublonnage que `_resoudre_geometries_administratives`.
+    Une erreur d'appel API part dans `erreurs` (source "zone-urba") ; une
+    partition sans aucune zone numérisée dans le GPU n'est PAS une erreur
+    (liste vide, simplement aucune correspondance possible plus loin) — voir
+    docstring du module."""
+    erreurs: list[ErreurGeometrie] = []
+    partitions_uniques = sorted({l["partition_gpu"] for l in lignes_a_georeferencer if l.get("partition_gpu")})
+
+    zones_par_partition: dict[str, list[dict]] = {}
+    for partition_gpu in partitions_uniques:
+        features, erreur = recuperer_zones_urba(partition_gpu)
+        zones_par_partition[partition_gpu] = features
+        if erreur:
+            erreurs.append(ErreurGeometrie(partition_gpu, "zone-urba", erreur))
+
+    return zones_par_partition, erreurs
+
+
 def _construire_geodataframe(
     lignes_attributs: list[dict], geometries: list[BaseGeometry | None]
 ) -> gpd.GeoDataFrame:
@@ -183,9 +252,24 @@ def _construire_geodataframe(
 def preparer(code_departement: str, dossier_sortie: str | Path = "output") -> Path:
     dossier = Path(dossier_sortie)
     chemin_etape3 = dossier / f"etape3_{code_departement}.csv"
+    chemin_sortie = dossier / f"etape4_{code_departement}_a_completer.gpkg"
 
     if not chemin_etape3.exists():
         raise Etape3CsvIntrouvable(str(chemin_etape3))
+
+    # Ajouté le 14/09/2026 (incident réel, département 067 hors Eurométropole) :
+    # la couche occurrences_a_georeferencer est écrite plus bas en mode "a"
+    # (append) — voulu pour une première écriture dans un fichier tout juste
+    # créé, mais qui empile silencieusement une deuxième copie complète de
+    # cette couche si le fichier existe déjà, sans jamais l'écraser. Un
+    # relancement de ce script (ex. après correction d'etape3_{dept}.csv)
+    # sur un etape4_{dept}_a_completer.gpkg déjà présent a produit exactement
+    # ce doublon en conditions réelles. Voir "Sécurité : refus si le fichier
+    # de sortie existe déjà" dans docs/etape-4-conception-technique.md — la
+    # suppression du fichier doit être un geste volontaire de l'opérateur,
+    # jamais un effet de bord silencieux de ce script.
+    if chemin_sortie.exists():
+        raise Etape4GpkgDejaExistant(str(chemin_sortie))
 
     lignes = _lire_etape3(chemin_etape3)
     date_traitement = date.today().isoformat()
@@ -207,8 +291,10 @@ def preparer(code_departement: str, dossier_sortie: str | Path = "output") -> Pa
 
         if partition_gpu:
             resultat = geometries_par_partition.get(partition_gpu)
+            origine = ORIGINE_DOCUMENT
         elif code_insee:
             resultat = geometries_par_commune.get(code_insee)
+            origine = ORIGINE_MUNICIPALITY
         else:
             erreurs.append(
                 ErreurGeometrie(_identifiant_ligne(ligne), "aucune_source", "ni partition_gpu ni code_insee_commune renseignés")
@@ -223,25 +309,47 @@ def preparer(code_departement: str, dossier_sortie: str | Path = "output") -> Pa
             continue
 
         compteur_id += 1
-        attributs_admin.append(_attributs(ligne, compteur_id, date_traitement))
+        attributs_admin.append(_attributs(ligne, compteur_id, date_traitement, origine))
         geometries_admin.append(shape(resultat.geometrie_geojson))
 
+    # Ajouté le 09/09/2026 : tentative de correspondance automatique dans la
+    # couche zone-urba avant de retomber sur le tracé manuel intégral — voir
+    # docstring du module et docs/etape-4-construction-geometries-diagbruit.md,
+    # "Sources de géométrie". zones_urba_erreurs (appels API échoués) est
+    # fusionné à erreurs ; une zone simplement non trouvée (partition sans
+    # zone-urba, code absent, champ vide) n'y figure jamais — c'est le
+    # fonctionnement normal du repli, pas une panne à investiguer.
+    zones_par_partition, zones_urba_erreurs = _resoudre_zones_urba(lignes_a_georeferencer_brutes)
+    erreurs.extend(zones_urba_erreurs)
+
     attributs_a_georeferencer: list[dict] = []
+    geometries_a_georeferencer: list[BaseGeometry] = []
     for ligne in lignes_a_georeferencer_brutes:
+        partition_gpu = ligne.get("partition_gpu", "")
+        zone_mentionnee = (ligne.get("zone_reglementaire_mentionnee") or "").strip()
+
+        geometrie: BaseGeometry = MultiPolygon()
+        origine = ORIGINE_MANUELLE
+        if partition_gpu and zone_mentionnee:
+            features_zone_urba = zones_par_partition.get(partition_gpu, [])
+            resultat_zone = trouver_geometrie_zone(features_zone_urba, zone_mentionnee)
+            if not resultat_zone.erreur:
+                geometrie = shape(resultat_zone.geometrie_geojson)
+                origine = ORIGINE_ZONE_URBA_AUTO
+
         compteur_id += 1
-        attributs_a_georeferencer.append(_attributs(ligne, compteur_id, date_traitement))
+        attributs_a_georeferencer.append(_attributs(ligne, compteur_id, date_traitement, origine))
+        geometries_a_georeferencer.append(geometrie)
 
     geodf_administratives = _construire_geodataframe(attributs_admin, geometries_admin)
-    geodf_a_georeferencer = _construire_geodataframe(
-        attributs_a_georeferencer, 
-        # Un MultiPolygon() vide plutôt que None : pyogrio a besoin d'un objet
-        # shapely réel (même vide) pour rattacher le type "MultiPolygon" forcé
-        # par geometry_type à l'écriture — une colonne 100% None ne lui laisse
-        # rien à quoi l'accrocher, d'où le "Unknown" malgré le paramètre.
-        [MultiPolygon()] * len(attributs_a_georeferencer),
-        )
+    # geometries_a_georeferencer : une géométrie réelle pour toute
+    # correspondance zone-urba trouvée ci-dessus, un MultiPolygon() vide
+    # sinon (repli tracé manuel) — jamais None : pyogrio a besoin d'un objet
+    # shapely réel (même vide) pour rattacher le type "MultiPolygon" forcé
+    # par geometry_type à l'écriture — une colonne 100% None ne lui laisse
+    # rien à quoi l'accrocher, d'où le "Unknown" malgré le paramètre.
+    geodf_a_georeferencer = _construire_geodataframe(attributs_a_georeferencer, geometries_a_georeferencer)
 
-    chemin_sortie = dossier / f"etape4_{code_departement}_a_completer.gpkg"
     print("Types réellement présents dans geometries_admin :", {g.geom_type for g in geometries_admin})
     geodf_administratives.to_file(
         chemin_sortie,
@@ -279,12 +387,15 @@ def preparer(code_departement: str, dossier_sortie: str | Path = "output") -> Pa
             )
         print(f"{len(erreurs)} erreur(s) de récupération de géométrie, listée(s) dans {chemin_erreurs}.")
 
+    n_zone_urba_auto = sum(1 for a in attributs_a_georeferencer if a["geometrie_origine"] == ORIGINE_ZONE_URBA_AUTO)
     print(
         f"{len(attributs_admin)} géométrie(s) automatique(s) écrite(s) dans la couche "
-        f"'{COUCHE_ADMINISTRATIVE}', {len(attributs_a_georeferencer)} occurrence(s) à tracer "
-        f"manuellement dans la couche '{COUCHE_A_GEOREFERENCER}' de {chemin_sortie}."
+        f"'{COUCHE_ADMINISTRATIVE}', {len(attributs_a_georeferencer)} occurrence(s) dans la couche "
+        f"'{COUCHE_A_GEOREFERENCER}' de {chemin_sortie} — dont {n_zone_urba_auto} déjà géoréférencée(s) "
+        "automatiquement via la couche zone-urba (à vérifier), "
+        f"{len(attributs_a_georeferencer) - n_zone_urba_auto} à tracer manuellement."
     )
-    print("Ouvrez ce fichier dans QGIS pour la Phase 2 (tracé manuel).")
+    print("Ouvrez ce fichier dans QGIS pour la Phase 2.")
     return chemin_sortie
 
 
@@ -313,6 +424,16 @@ def main(argv: list[str] | None = None) -> int:
         preparer(args.dept, dossier_sortie=args.output_dir)
     except Etape3CsvIntrouvable as exc:
         print(f"Arrêt : etape3_{args.dept}.csv introuvable ({exc}).", file=sys.stderr)
+        return 1
+    except Etape4GpkgDejaExistant as exc:
+        print(
+            f"Arrêt : {exc} existe déjà. Le relancer sans le supprimer empilerait une deuxième copie "
+            "de la couche 'occurrences_a_georeferencer' par-dessus la première (voir "
+            "docs/etape-4-conception-technique.md, \"Sécurité : refus si le fichier de sortie existe "
+            "déjà\"). Si aucun tracé manuel (Phase 2) n'a été fait dessus, supprimez-le volontairement "
+            "puis relancez.",
+            file=sys.stderr,
+        )
         return 1
     return 0
 

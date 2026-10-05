@@ -254,6 +254,13 @@ def generer(code_departement: str, dossier_sortie: str | Path = "output") -> Pat
         titre_propose = _texte(ligne.get("titre_propose"))
 
         nom_fichier_geometrie = f"{id_geometrie}.geojson"
+        # Volontairement sans alert_slug ici (voir docs/etape-7-conception-technique.md,
+        # "Correctif requis avant le prochain dépôt", ajouté le 11/09/2026) :
+        # alert_slug_propose n'est le plus souvent qu'une proposition mécanique
+        # incomplète à ce stade, la valeur finale n'étant connue qu'après la
+        # complétion manuelle en Phase 2 (outil_validation.html), qui ne
+        # réécrit jamais ce fichier. alert_slug est ajouté au .geojson par
+        # inserer.py (étape 7), juste avant le dépôt sur Box.
         geodf_ligne = gpd.GeoDataFrame([{"id_geometrie": id_geometrie}], geometry=[ligne.geometry], crs=gdf.crs)
         geodf_ligne.to_file(dossier_geometries / nom_fichier_geometrie, driver="GeoJSON")
 

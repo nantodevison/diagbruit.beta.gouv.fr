@@ -68,6 +68,19 @@ class DocumentTrouve:
     niveau_couverture: str  # NIVEAU_EPCI ou NIVEAU_COMMUNE
     code_insee_utilise: str  # code (actuel ou ancien) sous lequel le document a été trouvé
     statut: str  # STATUT_DOCUMENT_TROUVE ou STATUT_PSMV_ADDITIONNEL
+    # Ajouté le 11/09/2026 (constat en réel, département 067 hors
+    # Eurométropole) : valeur exacte du champ `name` de
+    # `document/{id}/details`, qui EST la valeur attendue par le paramètre
+    # `partition` de la couche `document` de l'API Carto GPU (ex.
+    # "DU_246700488", ou "DU_200067783_A" pour un document scindé en
+    # plusieurs parties). Jusqu'ici, l'étape 3 (`synthese_finale.py`)
+    # reconstruisait cette valeur par supposition à partir de
+    # niveau_couverture/code_siren_epci/code_insee_commune/statut — correct
+    # dans le cas courant (un seul document par EPCI/commune), mais faux pour
+    # un document multi-parties (suffixe "_A"/"_B" jamais reconstruit),
+    # provoquant un "aucune géométrie renvoyée" silencieux à l'étape 4. Capturer
+    # la valeur telle quelle ici, à la source, évite toute reconstruction.
+    partition_gpu: str
 
 
 @dataclass
@@ -203,6 +216,7 @@ def _construire_document_trouve(
         niveau_couverture=niveau_couverture,
         code_insee_utilise=code_insee_utilise,
         statut=statut,
+        partition_gpu=details.get("name", ""),
     )
 
 

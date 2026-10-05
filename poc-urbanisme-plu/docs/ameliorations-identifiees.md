@@ -45,36 +45,33 @@ fonctionnement retenu plutôt que ses limites.*
 
 **Piste de correction** : élargir la liste de motifs de `resolution_pieces.py` (par exemple au rapport de présentation) si des cas réels montrent des règles liées au bruit absentes du périmètre actuel.
 
-## `preparer_geometries.py` n'est pas sûr à relancer après le début de l'édition manuelle (Phase 2)
+## Correspondance automatique `zone-urba` : ambiguïté chiffre/romain non couverte
 
 **Étape concernée : 4.**
 
-**Contexte** : `preparer_geometries.py` régénère `etape4_{dept}_a_completer.gpkg` entièrement à partir de `etape3_{dept}.csv` à chaque exécution. La couche `geometries_administratives` est écrite avec `mode="w"` (remplacement propre). La couche `occurrences_a_georeferencer`, elle, est écrite avec `mode="a"` — un choix qui a du sens pour une écriture initiale dans un fichier tout juste créé, mais qui devient dangereux dès que le fichier existe déjà avec des données.
+**Contexte** : `sources_gpu.trouver_geometrie_zone` (ajouté le 09/09/2026, voir `etape-4-construction-geometries-diagbruit.md`, "Sources de géométrie") compare `zone_reglementaire_mentionnee` au `libelle` de chaque zone de la partition après normalisation (espaces retirés, casse uniforme, préfixe descriptif "secteur"/"zone" retiré depuis le 25/09/2026 — voir `sources_gpu._normaliser_code_zone`).
 
-**Problème, vérifié empiriquement** : `mode="a"` sur une couche déjà existante n'écrase pas son contenu, il **empile** une nouvelle copie complète par-dessus. Concrètement, pour un opérateur qui a déjà commencé à tracer dans QGIS puis relance `preparer_geometries.py` :
-- une occurrence déjà tracée se retrouve dupliquée dans la couche (une version tracée, une version vierge fraîchement régénérée, mêmes `id_gpu`/`id_occurrence`) ;
-- une occurrence que l'opérateur aurait supprimée de la couche réapparaît, puisqu'elle est toujours présente dans `etape3_{dept}.csv` et que le script ne sait pas qu'elle a été délibérément retirée.
+**Problème** : les phases d'urbanisation future (AU) sont couramment écrites avec un chiffre dans le règlement ("1AUh", "2AU"...) mais numérisées avec un chiffre romain dans la couche `zone-urba` du GPU ("IAUB", "IIAU"...) — une convention cartographique différente de la convention rédactionnelle, pas une erreur de saisie d'un côté ou de l'autre. Constaté en explorant des données réelles (département 067 hors Eurométropole et Eurométropole de Strasbourg).
 
-Le seul palliatif actuel est purement opérationnel : ne jamais relancer `preparer_geometries.py` une fois la Phase 2 commencée, et en cas de relancement accidentel, nettoyer la couche `occurrences_a_georeferencer` à la main.
+**Impact** : pas une perte de donnée — une zone non trouvée retombe simplement sur le tracé manuel intégral, exactement comme si elle n'avait jamais été tentée automatiquement (voir "Correspondance automatique de zone (`zone-urba`)" dans `etape-4-conception-technique.md`). Le seul coût est un taux de correspondance automatique plus faible que le maximum atteignable pour les zones AU spécifiquement.
 
-**Pistes de correction envisageables, non retenues pour l'instant** :
-- Rendre `preparer_geometries.py` idempotent vis-à-vis d'un fichier déjà existant : avant d'écrire, lire la couche `occurrences_a_georeferencer` existante (si le fichier est déjà là), ne réécrire/ajouter que les lignes dont l'`id_occurrence` n'y figure pas encore, et laisser intactes celles déjà présentes (tracées ou non). Réglerait le cas d'un relancement après ajout de nouvelles occurrences en amont (étape 3 relue), sans toucher au travail déjà fait dans QGIS.
-- Refuser purement et simplement de s'exécuter si `etape4_{dept}_a_completer.gpkg` existe déjà, avec un message explicite invitant à supprimer le fichier volontairement avant de relancer — plus simple à implémenter, mais oblige à perdre tout le travail de Phase 2 en cas de besoin réel de régénération.
-- Passer `mode="w"` pour les deux couches — empêcherait l'empilement, mais écraserait alors silencieusement tout travail de Phase 2 déjà fait, ce n'est pas mieux, juste un mode de défaillance différent.
+**Piste de correction, non retenue pour l'instant** : ajouter une tentative de correspondance secondaire qui convertit la séquence de chiffres en tête du code en son équivalent romain (et inversement) avant de comparer — recherche à deux passes (exacte, puis normalisée chiffre/romain) plutôt qu'une normalisation unique plus permissive, pour ne pas risquer de faire correspondre par erreur deux codes qui se ressemblent sans être la même convention. À mesurer sur un usage réel avant d'investir dans cette piste.
 
-**Accepté pour ce POC** : la discipline opérationnelle ("ne jamais relancer après le début de la Phase 2") suffit tant que le pipeline n'est utilisé que par un seul opérateur averti. À corriger avant tout usage à plusieurs opérateurs ou sur plusieurs départements en parallèle, où l'erreur devient plus probable et plus coûteuse à détecter.
+**Piste de correction pour le problème 1 (chiffre/romain), non retenue pour l'instant** : ajouter une tentative de correspondance secondaire qui convertit la séquence de chiffres en tête du code en son équivalent romain (et inversement) avant de comparer — recherche à deux passes (exacte, puis normalisée chiffre/romain) plutôt qu'une normalisation unique plus permissive, pour ne pas risquer de faire correspondre par erreur deux codes qui se ressemblent sans être la même convention. À mesurer sur un usage réel avant d'investir dans cette piste.
 
-## Pas de mécanisme de rejet pour les occurrences à géométrie manuelle
+## `geometrie_origine = "zone_urba_auto"` peut devenir trompeur après un tracé manuel correctif
 
 **Étape concernée : 4.**
 
-**Contexte** : contrairement à l'étape 3 (bouton "✕ Rejeter" dans `outil_validation.html`, tracé dans `etape3_{dept}_rejetees.csv`, jamais une suppression silencieuse), l'étape 4 n'offre aucun moyen propre d'écarter une occurrence de la couche `occurrences_a_georeferencer` qu'un opérateur juge finalement hors périmètre en la traçant : la seule option disponible est de supprimer la ligne directement dans QGIS.
+**Contexte** : une géométrie trouvée automatiquement dans la couche `zone-urba` (voir ci-dessus) porte `geometrie_origine = "zone_urba_auto"` dans `occurrences_a_georeferencer`, pour signaler à l'opérateur qu'elle mérite une vérification plutôt qu'un tracé depuis rien. Si cette vérification en Phase 2 (QGIS) révèle que la correspondance automatique est en réalité fausse (mauvais code recopié en étape 2/3, zone homonyme d'un autre secteur du même document) et que l'opérateur retrace entièrement la géométrie, rien dans le processus ne l'invite à remettre `geometrie_origine` à jour.
 
-**Problème** : une suppression directe dans le GeoPackage ne laisse aucune trace. `etape3_{dept}.csv` continue de lister l'occurrence comme validée ; rien dans `etape4_{dept}.gpkg`, `_non_traitees.csv` ou `_erreurs.csv` ne permet de savoir plus tard qu'elle a été délibérément écartée plutôt qu'oubliée ou perdue par erreur — et aucune vérification de cohérence n'existe entre le nombre de lignes d'`etape3_{dept}.csv` et la somme des sorties de l'étape 4 pour détecter l'écart.
+**Problème** : la colonne `geometrie_origine` du livrable final (`etape4_{dept}.gpkg`) peut donc afficher `"zone_urba_auto"` sur une géométrie en réalité tracée à la main et déjà vérifiée — l'information n'est plus fausse au sens fonctionnel (la géométrie elle-même est correcte), mais la traçabilité de son origine l'est.
 
-**Piste de correction envisageable, non retenue pour l'instant** : un champ ou statut renseigné par l'opérateur dans QGIS plutôt qu'une suppression, exploité par `synthese_geometries.py` pour écrire une ligne dans un `etape4_{dept}_rejetees.csv` dédié plutôt que de perdre la trace.
+**Impact** : cosmétique pour une géométrie individuelle déjà corrigée par un opérateur attentif. Devient gênant seulement à l'usage d'un futur audit qui voudrait s'appuyer sur `geometrie_origine` pour mesurer, a posteriori, le taux de correspondances automatiques jamais reprises manuellement (la métrique serait alors sous-estimée, pas surestimée : une correction manuelle réelle continuerait de compter comme automatique).
 
-**Accepté pour ce POC**, reporté à une prochaine session de conception dédiée.
+**Piste de correction envisageable, non retenue pour l'instant** : un contrôle en Phase 3 (`synthese_geometries.py`) qui comparerait la géométrie finale à la géométrie initialement récupérée par `zone-urba` (à conserver quelque part pour la comparaison) et rétrograderait `geometrie_origine` à `"manuelle"` si elles diffèrent significativement — ajoute une notion de comparaison géométrique qui n'existe nulle part ailleurs dans le pipeline, pour un bénéfice jugé secondaire face à la discipline opérationnelle déjà en place ailleurs dans ce POC (ex. `nature_sonore_zone`, corrigible sans trace de la valeur d'origine, voir `etape-4-conception-technique.md`, "Contrat de données").
+
+**Accepté pour ce POC**, cohérent avec le principe déjà retenu pour `nature_sonore_zone`.
 
 ## Pas de mise en forme (gras, listes) capturée lors de la correction manuelle des messages
 

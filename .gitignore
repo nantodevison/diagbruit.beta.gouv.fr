@@ -75,6 +75,7 @@ dmypy.json
 # Docker
 *.pid
 *.bak
+*.bak-*
 *.swp
 docker-compose.override.yml
 

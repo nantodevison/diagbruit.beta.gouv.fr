@@ -12,6 +12,16 @@ Une commune donne une ligne par document trouvé (DU et PSMV se cumulent sans
 jamais se remplacer — une commune peut donc apparaître sur deux lignes) ; une
 commune RNU confirmé ou en trou de couverture donne une seule ligne, sans
 document, pour que chaque commune du département reste traçable dans le CSV.
+
+`partition_gpu` (ajouté le 11/09/2026, constat en réel département 067 hors
+Eurométropole) : valeur exacte du champ `name` de `document/{id}/details`
+côté GPU (voir `documents_urbanisme.py`, `DocumentTrouve.partition_gpu`) —
+c'est la valeur attendue telle quelle par le paramètre `partition` de la
+couche `document` de l'API Carto GPU à l'étape 4, y compris son éventuel
+suffixe de document multi-parties ("_A"/"_B"). Remplace la reconstruction
+par supposition encore présente dans `etape3_validation_manuelle/synthese_finale.py`
+pour un `etape1_{dept}.csv` généré avant cet ajout (repli, voir ce module).
+Vide sur une ligne RNU/trou de couverture (pas de document).
 """
 
 from __future__ import annotations
@@ -34,6 +44,7 @@ COLONNES_SYNTHESE = [
     "nom_document",
     "nature_document",
     "id_gpu",
+    "partition_gpu",
     "date_approbation",
     "niveau_couverture",
     "date_traitement",
@@ -73,6 +84,7 @@ def _lignes_synthese(resultats: list[ResultatCommune], date_traitement: str) -> 
                     "nom_document": "",
                     "nature_document": "",
                     "id_gpu": "",
+                    "partition_gpu": "",
                     "date_approbation": "",
                     "niveau_couverture": "",
                     "date_traitement": date_traitement,
@@ -92,6 +104,7 @@ def _lignes_synthese(resultats: list[ResultatCommune], date_traitement: str) -> 
                     "nom_document": document.nom_document,
                     "nature_document": document.nature_document,
                     "id_gpu": document.id_gpu,
+                    "partition_gpu": document.partition_gpu,
                     "date_approbation": document.date_approbation or "",
                     "niveau_couverture": document.niveau_couverture,
                     "date_traitement": date_traitement,

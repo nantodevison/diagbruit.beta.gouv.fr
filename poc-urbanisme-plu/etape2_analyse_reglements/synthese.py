@@ -47,6 +47,18 @@ claire, ou règle limitée à l'infrastructure de transport — voir
 invisible sans relire le code ; nécessaire pour comprendre *pourquoi* le
 modèle a tranché comme il l'a fait sur un cas litigieux.
 
+`zone_reglementaire_mentionnee` (mis à jour le 09/09/2026, récupération
+automatique des zones PLU à l'étape 4) : reste une colonne à valeur unique
+dans `etape2_{dept}.csv` — le contrat de données ne change pas — mais
+`classification.py` produit désormais `zones_reglementaires_mentionnees`,
+une liste (une règle peut citer plusieurs zones, ex. "UA, UB et N").
+`_eclater_par_zone` ci-dessous convertit chaque occurrence classifiée en
+une ou plusieurs lignes de sortie, une par zone, avant l'attribution des
+`id_occurrence` — jamais une chaîne à zones multiples dans une seule ligne.
+Une occurrence sans zone identifiée (liste vide — administrative, ou
+zone_specifique dont le modèle n'a rien pu extraire) donne toujours
+exactement une ligne, comme avant ce changement.
+
 Pour la liste exhaustive des valeurs possibles de chaque colonne
 (`type_piece_source`, `reference_type`, `nature_occurrence`,
 `nature_juridique_piece`, `nature_sonore_zone`, `statut_verification`,
@@ -130,7 +142,16 @@ def _contexte_documentaire(occurrence: OccurrenceClassifiee) -> str:
     return " ".join(morceau for morceau in morceaux if morceau).strip()
 
 
-def _ligne_occurrence(occurrence: OccurrenceClassifiee, id_occurrence: str, date_traitement: str) -> dict:
+def _eclater_par_zone(occurrence: OccurrenceClassifiee) -> list[str]:
+    """Une entrée par ligne de sortie à produire pour cette occurrence : une
+    par zone citée (`zones_reglementaires_mentionnees`), ou une chaîne vide
+    unique si aucune zone n'est identifiée (portée administrative, ou
+    zone_specifique dont le modèle n'a rien pu extraire) — jamais aucune
+    ligne. Voir docstring du module, "zone_reglementaire_mentionnee"."""
+    return occurrence.zones_reglementaires_mentionnees or [""]
+
+
+def _ligne_occurrence(occurrence: OccurrenceClassifiee, zone: str, id_occurrence: str, date_traitement: str) -> dict:
     piece = occurrence.passage.piece
     statut = STATUT_A_VERIFIER if occurrence.passage.tag_exclusion else STATUT_VALIDE
     return {
@@ -141,7 +162,7 @@ def _ligne_occurrence(occurrence: OccurrenceClassifiee, id_occurrence: str, date
         "reference_type": occurrence.passage.reference_type,
         "reference_precise": occurrence.passage.reference_precise,
         "numero_page": occurrence.passage.numero_page,
-        "zone_reglementaire_mentionnee": occurrence.zone_reglementaire_mentionnee or "",
+        "zone_reglementaire_mentionnee": zone,
         "portee_geometrique": occurrence.portee_geometrique or "",
         "extrait_significatif": occurrence.extrait_significatif or "",
         "contexte_documentaire": _contexte_documentaire(occurrence),
@@ -194,9 +215,10 @@ def _lignes_synthese(
     compteurs_par_piece: dict[str, int] = {}
     for occurrence in occurrences_retenues:
         nom_fichier = occurrence.passage.piece.nom_fichier
-        compteurs_par_piece[nom_fichier] = compteurs_par_piece.get(nom_fichier, 0) + 1
-        id_occurrence = f"{compteurs_par_piece[nom_fichier]}_{nom_fichier}"
-        lignes.append(_ligne_occurrence(occurrence, id_occurrence, date_traitement))
+        for zone in _eclater_par_zone(occurrence):
+            compteurs_par_piece[nom_fichier] = compteurs_par_piece.get(nom_fichier, 0) + 1
+            id_occurrence = f"{compteurs_par_piece[nom_fichier]}_{nom_fichier}"
+            lignes.append(_ligne_occurrence(occurrence, zone, id_occurrence, date_traitement))
 
     pieces_avec_occurrence = {_cle_piece(o.passage.piece) for o in occurrences_retenues}
     for extraction in extractions:

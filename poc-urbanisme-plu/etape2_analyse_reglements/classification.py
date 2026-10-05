@@ -70,6 +70,21 @@ différentes de valoir "faible". Plutôt que d'ajouter une colonne dédiée, la
 consigne exige que `justification` précise laquelle des deux s'applique —
 voir `docs/ameliorations-identifiees.md` pour la piste d'un champ séparé si
 ce choix s'avère gênant à l'usage.
+
+Mise à jour du 09/09/2026 (récupération automatique des zones PLU à l'étape
+4) : `zone_reglementaire_mentionnee` (une chaîne unique, potentiellement
+"UA, UB et N" ou "Uh - Ur" en sortie de modèle) devient
+`zones_reglementaires_mentionnees`, une **liste** de codes. Nécessaire pour
+que l'étape 4 puisse plus tard chercher automatiquement chaque code dans la
+couche `zone-urba` de l'API Carto GPU (voir `sources_gpu.py`) : un champ
+texte libre unique mélangeant plusieurs codes ("UA, UB et N") n'est pas
+exploitable tel quel pour une recherche exacte. `synthese.py` (phase 5)
+éclate ensuite chaque occurrence à plusieurs zones en autant de lignes du
+CSV de sortie qu'il y a de codes — une seule zone réglementaire par ligne de
+`etape2_{dept}.csv`, contrat repris tel quel jusqu'à l'étape 4 (voir
+`docs/etape-2-conception-technique.md` et
+`docs/etape-4-construction-geometries-diagbruit.md`, "Sources de
+géométrie").
 """
 
 from __future__ import annotations
@@ -125,14 +140,18 @@ SCHEMA_CLASSIFICATION = {
                 {"type": "null"},
             ]
         },
-        "zone_reglementaire_mentionnee": {"type": ["string", "null"]},
+        # Renommé le 09/09/2026 (liste plutôt que chaîne unique) : voir le
+        # docstring du module, "Mise à jour du 09/09/2026". Une liste vide
+        # (jamais null) quand aucune zone n'est identifiable — y compris pour
+        # portee_geometrique="administrative" ou retenu=false.
+        "zones_reglementaires_mentionnees": {"type": "array", "items": {"type": "string"}},
         # Ajouté le 17/08/2026, suite à la conception de l'étape 4 : portée
         # géométrique de la règle, qui pilote directement le choix entre
         # géométrie automatique (contour administratif) et tracé manuel à
-        # l'étape 4. Distinct de zone_reglementaire_mentionnee ci-dessus :
-        # celui-ci dit QUELLE zone est citée dans le texte (libre, informatif),
-        # portee_geometrique dit QUEL PROCESSUS DE GÉOMÉTRIE appliquer
-        # (contrôlé, exploité directement par le code de l'étape 4).
+        # l'étape 4. Distinct de zones_reglementaires_mentionnees ci-dessus :
+        # celui-ci dit QUELLES zones sont citées dans le texte (libre,
+        # informatif), portee_geometrique dit QUEL PROCESSUS DE GÉOMÉTRIE
+        # appliquer (contrôlé, exploité directement par le code de l'étape 4).
         "portee_geometrique": {
             "anyOf": [
                 {"type": "string", "enum": ["administrative", "zone_specifique"]},
@@ -160,7 +179,7 @@ SCHEMA_CLASSIFICATION = {
         "retenu",
         "nature_occurrence",
         "nature_sonore_zone",
-        "zone_reglementaire_mentionnee",
+        "zones_reglementaires_mentionnees",
         "portee_geometrique",
         "justification",
         "extrait_significatif",
@@ -176,7 +195,7 @@ class OccurrenceClassifiee:
     retenu: bool
     nature_occurrence: str | None
     nature_sonore_zone: str | None
-    zone_reglementaire_mentionnee: str | None
+    zones_reglementaires_mentionnees: list[str]
     portee_geometrique: str | None
     justification: str
     extrait_significatif: str | None
@@ -254,13 +273,28 @@ Si retenu=true, détermine aussi la portée géométrique de la règle
 - "administrative" : la règle s'applique à l'ensemble du zonage couvert par
   le document, à l'ensemble d'une commune, ou à l'ensemble d'un EPCI — le
   contour administratif déjà connu suffit à la localiser.
-- "zone_specifique" : la règle ne s'applique qu'à une zone réglementaire
-  précise (ex. une zone "UA", un secteur identifié) qui n'a pas de contour
-  automatiquement disponible et devra être tracée manuellement.
+- "zone_specifique" : la règle ne s'applique qu'à une ou plusieurs zones
+  réglementaires précises (ex. une zone "UA", un secteur identifié) dont le
+  contour n'est pas automatiquement disponible.
 Si le passage ne précise aucune limite spatiale propre (silence total sur la
 portée), pars du principe que la règle s'applique à l'ensemble du document
 ("administrative") plutôt que de la classer par défaut en "zone_specifique".
 Si retenu=false, mets portee_geometrique à null.
+
+Si portee_geometrique="zone_specifique", remplis aussi
+zones_reglementaires_mentionnees : la liste des zones auxquelles la règle
+s'applique, un élément de liste par zone (jamais une seule chaîne du type
+"UA, UB et N" ou "Uh - Ur" : sépare-les). Pour chaque zone, recopie le code
+exactement tel qu'écrit dans le texte (ex. "UA", "1AUh", "N", "Ac") — jamais
+une paraphrase ni une description — car ce code sert ensuite à une recherche
+automatique dans les données cartographiques officielles du zonage. Si le
+texte ne nomme la zone que par une description (ex. "secteur affecté par le
+bruit le long de la RD1420", qui n'est pas une zone de zonage réglementaire
+U/AU/N/A) plutôt que par un code, mets cette description telle quelle comme
+unique élément de la liste : elle ne matchera probablement aucune zone du
+zonage officiel, mais reste utile pour le tracé manuel de repli. Si
+portee_geometrique n'est pas "zone_specifique" (administrative, ou
+retenu=false), laisse zones_reglementaires_mentionnees à une liste vide.
 
 Si retenu=true, remplis extrait_significatif : une **citation verbatim**,
 copiée exactement (aucune reformulation, aucun résumé) depuis le contexte
@@ -343,7 +377,7 @@ def classifier_passage(passage: PassageRetenu) -> OccurrenceClassifiee:
         retenu=donnees["retenu"],
         nature_occurrence=donnees["nature_occurrence"],
         nature_sonore_zone=donnees["nature_sonore_zone"],
-        zone_reglementaire_mentionnee=donnees["zone_reglementaire_mentionnee"],
+        zones_reglementaires_mentionnees=[z for z in donnees["zones_reglementaires_mentionnees"] if z and z.strip()],
         portee_geometrique=donnees["portee_geometrique"],
         justification=donnees["justification"],
         extrait_significatif=_extraire_citation_verifiee(donnees, passage),
