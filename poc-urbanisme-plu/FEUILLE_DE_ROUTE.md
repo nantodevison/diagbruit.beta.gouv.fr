@@ -7,12 +7,16 @@ Gardez-le court : quelques lignes par section suffisent.
 -->
 
 ## En cours
-- [ ] Étape 5 (rédaction des messages), département 067 hors Eurométropole : Phase 1 (contrôle de
-      similarité, 46 paires restantes, faux positifs liés à portee_geometrique=administrative) et
-      Phase 2 (408 synthèses, fusion 12_67101/7_67101 appliquée) terminées. Reste la Phase 3
-      (relecture manuelle) à faire.
+- [ ] Étape 5 (rédaction des messages), département 067 hors Eurométropole : Phases 1 et 2
+      terminées, Phase 3 (relecture manuelle) en cours. Relecture SUSPENDUE pour les 15 documents
+      mêlant portée administrative et zonale : beaucoup de doublons viennent d'une portée
+      `administrative` erronée (voir docs/diagnostic-portee-administrative-067.md).
 
 ## Prochaines étapes
+- [ ] Vérifier sur PDF la portée des occurrences des groupes A puis B du diagnostic
+      (commencer par Heiligenberg), après avoir regardé comment l'étape 4 gère un changement de
+      portée et l'annulation d'une fusion.
+- [ ] Dorlisheim : annuler la fusion 12_67101 / 7_67101 et rattacher 3 → UA, 7 → UC, 12 → 1AU.
 - [ ] Relecture manuelle dans outil_validation.html (étape 5, Phase 3) — attention particulière à
       l'occurrence page 69 (Villé, secteur 1, risque de reformulation) et à 2_67239 (PADD 67239,
       mention "axes routiers" à vérifier contre le contexte documentaire).
@@ -32,6 +36,9 @@ Gardez-le court : quelques lignes par section suffisent.
 
 ## Décisions récentes
 <!-- Une ligne par décision : date — décision — raison en quelques mots -->
+- 2026-10-07 — La décision du 2026-09-29 de fusionner 12_67101 et 7_67101 est remise en cause :
+  le PDF montre deux zones distinctes (7 = UC p.35, 12 = 1AU p.88), il faut les séparer, pas les
+  fusionner.
 - 2026-09-29 — Ne pas fusionner les occurrences 67188 (zones Ur/Uh/Uhe/Ue/Ut) ni 67308/67443 —
   le message actuel affiche déjà la zone concernée, une fusion ferait perdre cette distinction.
 - 2026-09-29 — Fusionner uniquement 12_67101 et 7_67101 (étape 4) : citation de 7_67101 tronquée,
