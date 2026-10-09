@@ -19,6 +19,7 @@ poc-urbanisme-plu/
 │   ├── __init__.py                      # vide, comme les modules précédents
 │   ├── sources_gpu.py                   # aide partagée : appels API Carto GPU (couches document/municipality/zone-urba)
 │   ├── preparer_geometries.py           # Phase 1 — auto : remplit geometries_administratives, prépare occurrences_a_georeferencer
+│   ├── controle_portee.py               # entre Phase 1 et Phase 2 — lecture seule : liste les portées administratives suspectes
 │   ├── controle_qualite.py              # aide partagée : validité OGC et type de géométrie (pas le CRS, vérifié séparément — voir Phase 3)
 │   ├── synthese_geometries.py           # Phase 3 — fusionne + contrôle qualité + vérification/reprojection CRS → etape4_{dept}.gpkg
 │   └── modele_validation_manuelle.qgz   # projet QGIS de fond de carte pour la Phase 2 — voir "Phase 2 — Édition manuelle (QGIS)"
@@ -27,6 +28,7 @@ poc-urbanisme-plu/
     ├── etape2_{dept}.csv
     ├── etape3_{dept}.csv
     ├── etape4_{dept}_a_completer.gpkg       # sortie de preparer_geometries.py ; édité manuellement dans QGIS (Phase 2)
+    ├── etape4_{dept}_portee_a_verifier.csv  # sortie de controle_portee.py — liste de relecture, réécrite à chaque exécution
     ├── etape4_{dept}.gpkg                   # sortie de synthese_geometries.py — contrat pour l'étape 5/6 (couche unique "geometries")
     ├── etape4_{dept}_non_traitees.csv       # occurrences jamais géoréférencées, si non vide
     ├── etape4_{dept}_rejetees.csv           # occurrences écartées par l'opérateur (statut_geometrie), si non vide
@@ -37,6 +39,8 @@ Comme l'étape 3, l'étape 4 n'a pas de `main.py` unique : le travail manuel dan
 
 ```
 python -m etape4_geometries.preparer_geometries --dept 033
+python -m etape4_geometries.controle_portee --dept 033
+# relire etape4_033_portee_a_verifier.csv (niveaux "forte" et "moyenne" en priorité)
 # ouvrir etape4_033_a_completer.gpkg dans QGIS, compléter la couche occurrences_a_georeferencer
 python -m etape4_geometries.synthese_geometries --dept 033
 ```
@@ -192,6 +196,62 @@ Un échec (document introuvable dans le GPU, timeout persistant après les tenta
 `preparer()` vérifie donc désormais, avant tout appel réseau, si `etape4_{dept}_a_completer.gpkg` existe déjà et lève `Etape4GpkgDejaExistant` si c'est le cas — `main()` l'affiche sur `stderr` avec un message explicite et retourne `1`, sans écrire ni modifier quoi que ce soit. La suppression du fichier doit toujours être un geste volontaire de l'opérateur (après vérification qu'aucun tracé manuel de la Phase 2 n'y a été fait), jamais un effet de bord silencieux de ce script.
 
 Parmi les trois pistes envisagées à l'origine pour ce problème (voir l'historique dans `ameliorations-identifiees.md` avant le 14/09/2026), c'est la plus simple qui a été retenue — refuser plutôt que fusionner intelligemment (idempotence par `id_occurrence`) ou écraser silencieusement (`mode="w"` pour les deux couches, qui aurait perdu tout travail de Phase 2 déjà fait) : un POC à un seul opérateur n'a pas besoin de plus qu'un garde-fou explicite, et un message clair reste plus sûr qu'une fusion automatique jamais testée en conditions réelles.
+
+## Contrôle de la portée administrative (`controle_portee.py`)
+
+*Ajouté le 09/10/2026, suite au diagnostic des doublons de messages du 067 hors Eurométropole — voir `diagnostic-portee-administrative-067.md`.*
+
+**Besoin** : la portée géométrique (`portee_geometrique`) est décidée une seule fois, par le LLM, à l'étape 2. Le prompt lui demande de choisir `administrative` quand le passage ne précise aucune limite spatiale — or le passage analysé est court, et l'en-tête de zone (« ZONE UC », « Art. 2-UC ») se trouve souvent une page plus haut, ou a été rendu illisible par l'OCR. Une règle propre à une zone est alors classée `administrative`, et sa géométrie devient le contour de tout le document. Aucune étape ne rattrape cette erreur :
+
+- étape 3 : la portée est modifiable dans `outil_validation.html`, mais rien n'attire l'attention sur une portée `administrative` douteuse (le seul contrôle porte sur le cas inverse : une portée `zone_specifique` doit nommer sa zone) ;
+- étape 4 : la couche `geometries_administratives` n'est pas relue en Phase 2, puisque sa géométrie (le contour du document) est juste. C'est l'*interprétation* de la règle qui est fausse, pas la géométrie.
+
+Conséquence observée sur le 067 : une même règle appliquée à toute la commune en plus de sa zone, d'où des messages en double pour un même bâtiment à l'étape 5.
+
+**Principe retenu** : un script en **lecture seule**, lancé entre la Phase 1 et la Phase 2, qui liste **toutes** les vraies règles de `geometries_administratives` (`nature_zone == "occurrence_locale"` — les lignes RNU, trou de couverture, document non significatif n'ont rien à interpréter) avec un niveau de suspicion. Toutes, et pas seulement les suspectes, pour que la liste serve de support de relecture complet, avec le contexte entier de chaque règle. Le script ne modifie jamais le gpkg : la correction reste une décision humaine, prise dans le PDF.
+
+**Les cinq indices** (calculés dans `evaluer()`) :
+
+| Indice | Ce qu'il détecte | Champ lu |
+|---|---|---|
+| C5 | une zone est mentionnée alors que la portée est administrative (sauf « toutes les zones… ») — contradiction directe | `zone_reglementaire_mentionnee` |
+| C2 | la référence ressemble à un article de zone : « Article AU5 », « au6 », « Art. 2-UC » | `reference_precise` |
+| C3 | la justification du LLM parle d'une zone : « de la zone », « dans la zone », « zone UA » | `justification` |
+| C4 | le texte autour du passage nomme une zone : « zone UC », « secteur 1AU », « Art. 2-UC » | `contexte_documentaire` (relu dans `etape3_{dept}.csv`) |
+| C1 | le même document a aussi des occurrences `zone_specifique` | couche `occurrences_a_georeferencer` |
+
+**Combinaison en niveaux** :
+
+```mermaid
+flowchart TD
+    A["Occurrence de la couche<br/>geometries_administratives"] --> B{"nature_zone =<br/>occurrence_locale ?"}
+    B -- non --> X["Ignorée<br/>(RNU, trou de couverture,<br/>document non significatif)"]
+    B -- oui --> C{"C5 zone mentionnée<br/>ou C2 référence d'article de zone ?"}
+    C -- oui --> F["1 - forte"]
+    C -- non --> D{"Pièce = règlement écrit<br/>et (C3 justification<br/>ou C4 contexte) ?"}
+    D -- oui --> M["2 - moyenne"]
+    D -- non --> E{"C1 document mixte<br/>(admin + zone_specifique) ?"}
+    E -- oui --> L["3 - faible"]
+    E -- non --> N["4 - aucun signal"]
+    F --> S[("etape4_{dept}_portee_a_verifier.csv<br/>trié par niveau puis document")]
+    M --> S
+    L --> S
+    N --> S
+```
+
+Pourquoi cet ordre :
+- **forte** : la donnée elle-même contredit la portée (une zone est nommée, ou l'article cité est un article de zone) ;
+- **moyenne** : un indice dans le texte, limité au règlement écrit — c'est la pièce où une règle propre à une zone est la plus probable ; dans un PADD ou une OAP, « la zone » désigne souvent un secteur de projet, pas une zone du PLU ;
+- **faible** : seul le mélange des deux portées dans un même document — critère du diagnostic du 07/10, utile mais trop large seul (38 occurrences sur 52 dans le 067) ;
+- **aucun signal** : surtout des PADD et des OAP, où une portée administrative est habituellement légitime.
+
+**Mesure sur le 067 hors Eurométropole** (52 occurrences) : 22 fortes, 6 moyennes, 13 faibles, 11 sans signal. Les documents du groupe A du diagnostic ressortent tous en « forte », sauf Dorlisheim (« moyenne » : sa référence est un simple « Article 2 »). Trois cas absents du diagnostic, parce que leur document n'est pas mixte, ressortent en « moyenne » : Bischoffsheim (g164), Ebersheim (g182), Berstett (g284). Faux positif connu : Weitbruch g273 (« Toutes les zones U, AU, A, N ») en « forte » à cause de sa référence « Article au6 » — acceptable pour une liste de vérification.
+
+**Limites assumées** : des expressions régulières, pas une lecture du sens. Elles ne voient pas un en-tête de zone absent du contexte extrait (cas de trois lignes de règlement du 067 sans aucun signal : Limersheim g223, Niederlauterbach g236/g237). Le niveau sert à ordonner la relecture, pas à s'en dispenser.
+
+**Sortie** : `etape4_{dept}_portee_a_verifier.csv`, réécrit à chaque exécution (simple rapport, relançable sans risque). Une ligne par occurrence, colonnes `niveau` (« 1 - forte » … « 4 - aucun signal », préfixées d'un chiffre pour qu'un tri alphabétique dans un tableur rende l'ordre de priorité), `criteres` (les indices relevés, en clair), puis de quoi relire sans rouvrir d'autre fichier : `id_geometrie`, `id_occurrence`, `communes`, `nom_document`, `type_piece_source`, `reference_precise`, `zone_reglementaire_mentionnee`, `nature_sonore_zone`, `justification`, `extrait_significatif`, `contexte_documentaire`, `lien_web_document`.
+
+**Correction d'une portée erronée (Phase 2, dans QGIS)** : la portée n'est lue qu'en Phase 1, pour choisir la couche et la source de géométrie ; ni la Phase 3, ni les étapes 5 à 7 ne la relisent. Corriger une portée revient donc à remplacer, dans `etape4_{dept}_a_completer.gpkg`, la géométrie de l'occurrence (contour du document) par celle de sa zone — la ligne peut rester dans `geometries_administratives`. Mettre aussi à jour `portee_geometrique` (→ `zone_specifique`) et `geometrie_origine` pour la traçabilité. Ne jamais relancer la Phase 1 pour cela (voir "Sécurité : refus si le fichier de sortie existe déjà") : tout le travail manuel serait perdu. `etape3_{dept}.csv` garde la portée d'origine — incohérence connue, sans effet sur la suite.
 
 ## Phase 2 — Édition manuelle (QGIS)
 
