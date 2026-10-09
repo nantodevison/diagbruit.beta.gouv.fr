@@ -77,8 +77,10 @@ COUCHE_A_GEOREFERENCER = "occurrences_a_georeferencer"
 # etape-4-conception-technique.md, "Contrat de données". `id_geometrie` est
 # ajoutée par ce module, toutes les autres sont reprises de etape3_{dept}.csv,
 # à l'exception de `fusionne_avec_id_gpu`/`fusionne_avec_id_occurrence`,
-# laissées vides ici et destinées à être renseignées par l'opérateur en
-# Phase 2 (voir "Mécanisme de fusion" dans etape-4-conception-technique.md).
+# `statut_geometrie` et `verification_portee`, laissées vides ici et
+# destinées à être renseignées par l'opérateur en Phase 2 (voir "Mécanisme de
+# fusion", "Mécanisme de rejet" et "Contrôle de la portée administrative"
+# dans etape-4-conception-technique.md).
 COLONNES_ATTRIBUTS = [
     "id_geometrie",
     "id_gpu",
@@ -101,6 +103,7 @@ COLONNES_ATTRIBUTS = [
     "fusionne_avec_id_occurrence",
     "geometrie_origine",
     "statut_geometrie",
+    "verification_portee",
     "date_traitement",
 ]
 
@@ -167,10 +170,18 @@ def _attributs(ligne: dict[str, str], id_geometrie: int, date_traitement: str, g
         "geometrie_origine": geometrie_origine,
         # Ajouté le 14/09/2026 : vide ici, renseigné par l'opérateur dans
         # QGIS en Phase 2 (valeur "rejeté") pour écarter proprement une
-        # occurrence de occurrences_a_georeferencer jugée hors périmètre en
-        # la traçant — voir etape-4-conception-technique.md, "Mécanisme de
-        # rejet".
+        # occurrence jugée hors périmètre ou en double — dans l'une ou
+        # l'autre couche depuis le 09/10/2026 — voir
+        # etape-4-conception-technique.md, "Mécanisme de rejet".
         "statut_geometrie": "",
+        # Ajouté le 09/10/2026 : vide ici, renseigné par l'opérateur dans
+        # QGIS ("confirmée", "corrigée" ou "rejetée") une fois la portée
+        # d'une occurrence de geometries_administratives vérifiée dans le
+        # PDF. Purement informatif (aucun traitement ne le lit, sauf
+        # controle_portee.py pour suivre l'avancement) — voir
+        # etape-4-conception-technique.md, "Contrôle de la portée
+        # administrative".
+        "verification_portee": "",
         "date_traitement": date_traitement,
     }
 

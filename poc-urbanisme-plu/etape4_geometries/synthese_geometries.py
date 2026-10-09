@@ -33,6 +33,10 @@ renseigne désormais `statut_geometrie = "rejeté"` (champ texte, à ajouter
 manuellement dans la couche s'il ne l'a pas déjà — voir Phase 1) sur la
 ligne à écarter ; cette étape la retire alors du livrable final et la trace
 dans `etape4_{dept}_rejetees.csv` plutôt que de la perdre silencieusement.
+Étendu le 09/10/2026 à `geometries_administratives` : une occurrence classée
+à tort en portée administrative, et en double d'une occurrence
+`zone_specifique` du même document, doit pouvoir être écartée de la même
+façon (voir "Contrôle de la portée administrative" dans la même doc).
 Filtrée avant toute autre logique (géométrie vide, fusion), mais après la
 construction de l'index de résolution des meneurs, pour qu'un groupe qui
 s'appuierait sur une occurrence rejetée comme meneur soit détecté et
@@ -150,6 +154,20 @@ def _est_rejetee(ligne: pd.Series) -> bool:
     return _valeur(ligne, "statut_geometrie") == STATUT_GEOMETRIE_REJETE
 
 
+def _separer_rejetees(gdf: gpd.GeoDataFrame) -> tuple[gpd.GeoDataFrame, gpd.GeoDataFrame]:
+    """Sépare une couche en (rejetées, restantes) selon `statut_geometrie`
+    (voir "Mécanisme de rejet" dans le docstring du module). La colonne peut
+    être absente d'un gpkg créé avant son ajout (ajoutée ensuite à la main
+    dans QGIS, ou pas encore) : `gdf.get()` renvoie alors None, traité comme
+    "aucun rejet" plutôt que comme une erreur."""
+    statut_geometrie = gdf.get("statut_geometrie")
+    if statut_geometrie is not None:
+        rejetee = statut_geometrie.fillna("").astype(str).str.strip() == STATUT_GEOMETRIE_REJETE
+    else:
+        rejetee = pd.Series(False, index=gdf.index)
+    return gdf[rejetee], gdf[~rejetee]
+
+
 def _index_par_occurrence(*gdfs: gpd.GeoDataFrame) -> dict[tuple[str, str], pd.Series]:
     """Index (id_gpu, id_occurrence) -> ligne, sur l'ensemble brut des deux
     couches (avant tout filtrage), pour que la résolution d'un meneur de
@@ -243,7 +261,8 @@ def synthetiser(code_departement: str, dossier_sortie: str | Path = "output") ->
     # (exclu pour géométrie vide, en erreur...), voir _verifier_fusion.
     index_par_occurrence = _index_par_occurrence(geodf_administratives, geodf_a_georeferencer)
 
-    # Mécanisme de rejet (ajouté le 14/09/2026, voir docstring du module) :
+    # Mécanisme de rejet (ajouté le 14/09/2026, étendu à
+    # geometries_administratives le 09/10/2026 — voir docstring du module) :
     # une occurrence statut_geometrie == "rejeté" est écartée avant toute
     # autre logique (géométrie vide, fusion) — un rejet est une décision
     # délibérée de l'opérateur, elle ne doit jamais se retrouver mélangée à
@@ -251,16 +270,16 @@ def synthetiser(code_departement: str, dossier_sortie: str | Path = "output") ->
     # la construction de index_par_occurrence ci-dessus : un meneur de
     # fusion rejeté doit rester trouvable pour que _verifier_fusion puisse
     # le détecter et invalider la fusion, plutôt que de le traiter comme
-    # "introuvable" (message trompeur). La colonne peut être absente
-    # (gpkg édité avant l'ajout de ce champ dans QGIS) : geodf.get() renvoie
-    # alors None, traité comme "aucun rejet".
-    statut_geometrie = geodf_a_georeferencer.get("statut_geometrie")
-    if statut_geometrie is not None:
-        rejetee = statut_geometrie.fillna("").astype(str).str.strip() == STATUT_GEOMETRIE_REJETE
-    else:
-        rejetee = pd.Series(False, index=geodf_a_georeferencer.index)
-    rejetees = geodf_a_georeferencer[rejetee]
-    restantes = geodf_a_georeferencer[~rejetee]
+    # "introuvable" (message trompeur).
+    rejetees_admin, administratives_restantes = _separer_rejetees(geodf_administratives)
+    rejetees_zone, restantes = _separer_rejetees(geodf_a_georeferencer)
+    # reindex : une couche à laquelle il manquerait une colonne (gpkg créé
+    # avant son ajout) ne doit pas faire échouer l'écriture du fichier
+    # d'audit — la colonne absente y est simplement vide.
+    rejetees = pd.concat(
+        [rejetees_admin.reindex(columns=COLONNES_ATTRIBUTS), rejetees_zone.reindex(columns=COLONNES_ATTRIBUTS)],
+        ignore_index=True,
+    )
 
     # Une géométrie vide n'est routée vers _non_traitees.csv que si
     # l'occurrence ne déclare aucune fusion : membre d'un groupe fusionné,
@@ -278,7 +297,7 @@ def synthetiser(code_departement: str, dossier_sortie: str | Path = "output") ->
 
     lignes_validees: list[dict] = []
     geometries_validees = []
-    for gdf in (geodf_administratives, georeferencees):
+    for gdf in (administratives_restantes, georeferencees):
         for _, ligne in gdf.iterrows():
             autorise_vide, erreur_fusion = _verifier_fusion(ligne, index_par_occurrence)
             if erreur_fusion:
@@ -334,7 +353,7 @@ def synthetiser(code_departement: str, dossier_sortie: str | Path = "output") ->
     # (_rejetees.csv), voir docstring du module.
     chemin_rejetees = dossier / f"etape4_{code_departement}_rejetees.csv"
     if not rejetees.empty:
-        rejetees[COLONNES_ATTRIBUTS].to_csv(chemin_rejetees, index=False, encoding="utf-8-sig")
+        rejetees.to_csv(chemin_rejetees, index=False, encoding="utf-8-sig")
         print(
             f"{len(rejetees)} occurrence(s) rejetée(s) par l'opérateur en Phase 2, listée(s) dans "
             f"{chemin_rejetees} — jamais une suppression silencieuse."

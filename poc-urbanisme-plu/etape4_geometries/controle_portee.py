@@ -9,7 +9,9 @@ n'est pas relue en Phase 2 (sa géométrie, le contour du document, est
 correcte) : une règle en réalité propre à une zone y passe donc inaperçue,
 et finit appliquée à toute la commune.
 
-Ce script ne corrige rien. Il liste toutes les occurrences réelles
+Ce script ne corrige rien, et peut être relancé à tout moment pendant la
+Phase 2 : il relit la colonne `verification_portee` saisie dans QGIS et
+affiche l'avancement de la relecture. Il liste toutes les occurrences réelles
 (`nature_zone == "occurrence_locale"`) de `geometries_administratives`, avec
 un niveau de suspicion calculé à partir de cinq indices, pour que
 l'opérateur sache lesquelles vérifier en priorité dans le PDF avant ou
@@ -80,8 +82,20 @@ NIVEAU_MOYENNE = "2 - moyenne"
 NIVEAU_FAIBLE = "3 - faible"
 NIVEAU_AUCUN = "4 - aucun signal"
 
+# Ajouté le 09/10/2026 : suivi de la vérification, saisi par l'opérateur
+# dans QGIS (colonne verification_portee de geometries_administratives) —
+# le CSV produit ici est réécrit à chaque exécution, la décision doit donc
+# vivre dans le gpkg, là où la correction est faite.
+VERIFICATION_CONFIRMEE = "confirmée"
+VERIFICATION_CORRIGEE = "corrigée"
+VERIFICATION_REJETEE = "rejetée"
+STATUT_GEOMETRIE_REJETE = "rejeté"  # même valeur que synthese_geometries.STATUT_GEOMETRIE_REJETE
+
 COLONNES_SORTIE = [
     "niveau",
+    "verification_portee",
+    "statut_geometrie",
+    "alerte",
     "criteres",
     "id_geometrie",
     "id_gpu",
@@ -90,6 +104,7 @@ COLONNES_SORTIE = [
     "nom_document",
     "type_piece_source",
     "reference_precise",
+    "numero_page",
     "zone_reglementaire_mentionnee",
     "nature_sonore_zone",
     "justification",
@@ -166,6 +181,21 @@ def evaluer(occurrence: dict, contexte: str, document_mixte: bool) -> tuple[str,
     return niveau, indices
 
 
+def alerte_saisie(verification: str, statut_geometrie: str) -> str:
+    """Repère une saisie incohérente entre les deux colonnes remplies à la
+    main dans QGIS. Seul `statut_geometrie = "rejeté"` retire réellement la
+    ligne du livrable (synthese_geometries.py) ; `verification_portee` n'est
+    qu'un suivi. Oublier l'un des deux est facile : on le signale ici plutôt
+    que de le découvrir à l'étape 5."""
+    if verification == VERIFICATION_REJETEE and statut_geometrie != STATUT_GEOMETRIE_REJETE:
+        return "verification_portee = rejetée mais statut_geometrie ≠ rejeté : la ligne restera dans le livrable"
+    if statut_geometrie == STATUT_GEOMETRIE_REJETE and verification not in ("", VERIFICATION_REJETEE):
+        return f"statut_geometrie = rejeté mais verification_portee = {verification}"
+    if verification and verification not in (VERIFICATION_CONFIRMEE, VERIFICATION_CORRIGEE, VERIFICATION_REJETEE):
+        return f"valeur inattendue « {verification} » (attendu : confirmée, corrigée ou rejetée)"
+    return ""
+
+
 def controler(code_departement: str, dossier_sortie: str | Path = "output") -> Path:
     dossier = Path(dossier_sortie)
     chemin_gpkg = dossier / f"etape4_{code_departement}_a_completer.gpkg"
@@ -198,11 +228,20 @@ def controler(code_departement: str, dossier_sortie: str | Path = "output") -> P
         contexte = ligne_etape3.get("contexte_documentaire", "") or ""
 
         niveau, indices = evaluer(occurrence, contexte, id_gpu in documents_avec_zone)
+        # occurrence.get() renvoie None si la colonne n'existe pas encore
+        # dans le gpkg (ajout manuel dans QGIS pas encore fait) : _texte()
+        # en fait une chaîne vide, soit "pas encore vérifiée".
+        verification = _texte(occurrence.get("verification_portee"))
+        statut_geometrie = _texte(occurrence.get("statut_geometrie"))
         lignes_sortie.append(
             {
-                "niveau": niveau,
-                "criteres": " ; ".join(indices),
                 **{colonne: _texte(occurrence.get(colonne)) for colonne in COLONNES_SORTIE if colonne in occurrence},
+                "niveau": niveau,
+                "verification_portee": verification,
+                "statut_geometrie": statut_geometrie,
+                "alerte": alerte_saisie(verification, statut_geometrie),
+                "criteres": " ; ".join(indices),
+                "numero_page": ligne_etape3.get("numero_page", ""),
                 "extrait_significatif": ligne_etape3.get("extrait_significatif", ""),
                 "contexte_documentaire": contexte,
             }
@@ -218,10 +257,15 @@ def controler(code_departement: str, dossier_sortie: str | Path = "output") -> P
         writer.writeheader()
         writer.writerows({colonne: ligne.get(colonne, "") for colonne in COLONNES_SORTIE} for ligne in lignes_sortie)
 
-    comptes = {n: sum(1 for l in lignes_sortie if l["niveau"] == n) for n in (NIVEAU_FORTE, NIVEAU_MOYENNE, NIVEAU_FAIBLE, NIVEAU_AUCUN)}
+    # Avancement par niveau : "vérifiées" = verification_portee renseignée.
     print(f"{len(lignes_sortie)} occurrence(s) à portée administrative examinée(s) :")
-    for niveau, nombre in comptes.items():
-        print(f"  {niveau} : {nombre}")
+    for niveau in (NIVEAU_FORTE, NIVEAU_MOYENNE, NIVEAU_FAIBLE, NIVEAU_AUCUN):
+        du_niveau = [l for l in lignes_sortie if l["niveau"] == niveau]
+        verifiees = sum(1 for l in du_niveau if l["verification_portee"])
+        print(f"  {niveau} : {len(du_niveau)} (dont {verifiees} vérifiée(s))")
+    alertes = [l for l in lignes_sortie if l["alerte"]]
+    for ligne in alertes:
+        print(f"  ⚠ g{ligne['id_geometrie']} : {ligne['alerte']}")
     print(f"Liste écrite dans {chemin_sortie} (aucun fichier d'entrée modifié).")
     return chemin_sortie
 

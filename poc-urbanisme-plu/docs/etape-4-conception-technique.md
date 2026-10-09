@@ -249,9 +249,45 @@ Pourquoi cet ordre :
 
 **Limites assumées** : des expressions régulières, pas une lecture du sens. Elles ne voient pas un en-tête de zone absent du contexte extrait (cas de trois lignes de règlement du 067 sans aucun signal : Limersheim g223, Niederlauterbach g236/g237). Le niveau sert à ordonner la relecture, pas à s'en dispenser.
 
-**Sortie** : `etape4_{dept}_portee_a_verifier.csv`, réécrit à chaque exécution (simple rapport, relançable sans risque). Une ligne par occurrence, colonnes `niveau` (« 1 - forte » … « 4 - aucun signal », préfixées d'un chiffre pour qu'un tri alphabétique dans un tableur rende l'ordre de priorité), `criteres` (les indices relevés, en clair), puis de quoi relire sans rouvrir d'autre fichier : `id_geometrie`, `id_occurrence`, `communes`, `nom_document`, `type_piece_source`, `reference_precise`, `zone_reglementaire_mentionnee`, `nature_sonore_zone`, `justification`, `extrait_significatif`, `contexte_documentaire`, `lien_web_document`.
+**Sortie** : `etape4_{dept}_portee_a_verifier.csv`, réécrit à chaque exécution (simple rapport, relançable sans risque). Une ligne par occurrence :
+- `niveau` (« 1 - forte » … « 4 - aucun signal », préfixé d'un chiffre pour qu'un tri alphabétique dans un tableur rende l'ordre de priorité) ;
+- `verification_portee` et `statut_geometrie`, relus dans le gpkg — l'avancement de la relecture (ajouté le 09/10/2026) ;
+- `alerte` : saisie incohérente entre ces deux colonnes (ex. `verification_portee = rejetée` sans `statut_geometrie = rejeté` : la ligne resterait dans le livrable), ou valeur inattendue ;
+- `criteres` : les indices relevés, en clair ;
+- de quoi relire sans rouvrir d'autre fichier : `id_geometrie`, `id_gpu`, `id_occurrence`, `communes`, `nom_document`, `type_piece_source`, `reference_precise`, `numero_page` (relu dans `etape3_{dept}.csv` — indispensable pour un PDF scanné, où une référence du type « Article AU5 » ne peut pas être cherchée), `zone_reglementaire_mentionnee`, `nature_sonore_zone`, `justification`, `extrait_significatif`, `contexte_documentaire`, `lien_web_document`.
 
-**Correction d'une portée erronée (Phase 2, dans QGIS)** : la portée n'est lue qu'en Phase 1, pour choisir la couche et la source de géométrie ; ni la Phase 3, ni les étapes 5 à 7 ne la relisent. Corriger une portée revient donc à remplacer, dans `etape4_{dept}_a_completer.gpkg`, la géométrie de l'occurrence (contour du document) par celle de sa zone — la ligne peut rester dans `geometries_administratives`. Mettre aussi à jour `portee_geometrique` (→ `zone_specifique`) et `geometrie_origine` pour la traçabilité. Ne jamais relancer la Phase 1 pour cela (voir "Sécurité : refus si le fichier de sortie existe déjà") : tout le travail manuel serait perdu. `etape3_{dept}.csv` garde la portée d'origine — incohérence connue, sans effet sur la suite.
+La console affiche aussi l'avancement par niveau (« dont N vérifiée(s) ») et les alertes : relancer le script en cours de relecture sert de point d'étape.
+
+**Pourquoi la décision vit dans le gpkg, pas dans le CSV** : le CSV est réécrit à chaque exécution — une annotation saisie dedans serait perdue. La décision est donc saisie dans `verification_portee`, dans QGIS, au moment même où la correction est faite ; le CSV n'en est qu'une vue.
+
+**Préparer un gpkg créé avant le 09/10/2026** (cas du 067) : ajouter à la main, dans QGIS (Propriétés de la couche → Champs → mode édition → Nouveau champ, type texte), `statut_geometrie` et `verification_portee` à `geometries_administratives`, et `verification_portee` à `occurrences_a_georeferencer`. Ne pas le faire par une requête SQL directe sur le fichier : les déclencheurs spatiaux du GeoPackage exigent des fonctions SpatiaLite (`ST_IsEmpty`…) absentes du `sqlite3` de Python — constaté le 09/10/2026.
+
+**Procédure de relecture et de correction (Phase 2, dans QGIS)** :
+
+```mermaid
+flowchart TD
+    A["Ligne du CSV<br/>(niveaux 1 et 2 d'abord)"] --> B["Ouvrir lien_web_document<br/>à numero_page"]
+    B --> C{"L'article est-il propre<br/>à une zone ?"}
+    C -- "non : vaut pour<br/>tout le document" --> OK["verification_portee = confirmée"]
+    C -- oui --> D{"Une occurrence zone_specifique<br/>du même document porte-t-elle<br/>déjà cette règle sur cette zone ?"}
+    D -- oui --> R["statut_geometrie = rejeté<br/>verification_portee = rejetée"]
+    D -- non --> G["Remplacer la géométrie par celle<br/>de la ou des zones (zone-urba ou tracé)<br/>portee_geometrique = zone_specifique<br/>geometrie_origine renseignée<br/>verification_portee = corrigée"]
+    R --> F{"La ligne est-elle meneur ou membre<br/>d'une fusion (fusionne_avec_*) ?"}
+    G --> F
+    F -- oui --> H["Revoir la fusion :<br/>vider fusionne_avec_* si les zones diffèrent"]
+    F -- non --> S["Enregistrer dans QGIS"]
+    H --> S
+    OK --> S
+    S --> T["Relancer controle_portee.py<br/>(avancement + alertes)"]
+```
+
+Points d'attention :
+- la portée n'est lue qu'en Phase 1, pour choisir la couche et la source de géométrie ; ni la Phase 3, ni les étapes 5 à 7 ne la relisent. Corriger une portée revient donc à remplacer la géométrie (contour du document) par celle de sa zone — la ligne peut rester dans `geometries_administratives`. `portee_geometrique` et `geometrie_origine` ne sont mis à jour que pour la traçabilité ;
+- ne jamais relancer la Phase 1 pour cela (voir "Sécurité : refus si le fichier de sortie existe déjà") : tout le travail manuel serait perdu ;
+- `etape3_{dept}.csv` garde la portée d'origine — incohérence connue, sans effet sur la suite ;
+- un meneur de fusion rejeté invalide la fusion de ses membres (voir "Mécanisme de fusion") : un membre qui a sa propre géométrie reste alors une occurrence indépendante, avec une erreur `fusion` dans `etape4_{dept}_erreurs.csv` tant que `fusionne_avec_*` n'est pas vidé.
+
+Une fois la relecture terminée : `synthese_geometries.py`, puis `preparer_messages.py` à l'étape 5 (le cache disque limite le coût aux seuls messages dont le contenu change), puis relecture de l'étape 5 pour les documents concernés.
 
 ## Phase 2 — Édition manuelle (QGIS)
 
@@ -275,7 +311,7 @@ Si, en traçant, l'opérateur constate que deux occurrences décrivent en réali
 
 ## Phase 3 — Synthèse (`synthese_geometries.py`)
 
-Lit `etape4_{dept}_a_completer.gpkg` (deux couches). Met d'abord de côté les occurrences `statut_geometrie == "rejeté"` (voir "Mécanisme de rejet" ci-dessous) — avant toute autre logique. Sépare ensuite le reste de `occurrences_a_georeferencer` en deux lots selon que la géométrie est renseignée ou non — sauf exception, voir plus bas. **Depuis le 09/09/2026**, "géométrie renseignée" couvre aussi bien une occurrence tracée à la main en Phase 2 qu'une occurrence pré-remplie automatiquement en Phase 1 (`geometrie_origine = "zone_urba_auto"`) et jamais rouverte par l'opérateur : la Phase 3 ne fait aucune différence entre les deux, elle ne regarde que la géométrie elle-même — voir "Contrat de données", `geometrie_origine`, pour la seule trace qui en reste dans le livrable final.
+Lit `etape4_{dept}_a_completer.gpkg` (deux couches). Met d'abord de côté les occurrences `statut_geometrie == "rejeté"`, dans les deux couches (voir "Mécanisme de rejet" ci-dessous) — avant toute autre logique. Sépare ensuite le reste de `occurrences_a_georeferencer` en deux lots selon que la géométrie est renseignée ou non — sauf exception, voir plus bas. **Depuis le 09/09/2026**, "géométrie renseignée" couvre aussi bien une occurrence tracée à la main en Phase 2 qu'une occurrence pré-remplie automatiquement en Phase 1 (`geometrie_origine = "zone_urba_auto"`) et jamais rouverte par l'opérateur : la Phase 3 ne fait aucune différence entre les deux, elle ne regarde que la géométrie elle-même — voir "Contrat de données", `geometrie_origine`, pour la seule trace qui en reste dans le livrable final.
 
 - **rejetée par l'opérateur** (`statut_geometrie == "rejeté"`) → écrites à part dans `etape4_{dept}_rejetees.csv`, exclues de la suite, quel que soit par ailleurs l'état de leur géométrie.
 - **géométrie vide, et aucune fusion déclarée** (parmi les occurrences restantes) → écrites à part dans `etape4_{dept}_non_traitees.csv` (attributs seuls, pas de géométrie à exporter), exclues de la suite — même logique que les occurrences non traitées de l'étape 3 : jamais silencieusement ignorées, toujours listées pour reprise.
@@ -352,9 +388,11 @@ Une fusion invalide part dans `etape4_{dept}_erreurs.csv` (source `"fusion"`). S
 
 **Besoin** : contrairement à l'étape 3 (bouton "✕ Rejeter" dans `outil_validation.html`, tracé dans `etape3_{dept}_rejetees.csv`), l'étape 4 n'offrait aucun moyen propre d'écarter une occurrence de `occurrences_a_georeferencer` jugée hors périmètre en la traçant — la seule option était de supprimer la ligne directement dans la table attributaire de QGIS, une suppression qui ne laisse aucune trace : `etape3_{dept}.csv` continuait de lister l'occurrence comme validée, et rien dans le livrable final ne permettait de savoir plus tard si elle avait été délibérément écartée ou simplement perdue par erreur.
 
-**Déclaration par l'opérateur (Phase 2)** : une nouvelle colonne, `statut_geometrie` (texte, présente dans les deux couches). Vide par défaut (écrite ainsi par `preparer_geometries.py`) ; l'opérateur y saisit `rejeté` (accentué, minuscules — comparaison stricte, voir `synthese_geometries.STATUT_GEOMETRIE_REJETE`) sur la ligne à écarter, dans QGIS, plutôt que de la supprimer.
+**Déclaration par l'opérateur (Phase 2)** : une nouvelle colonne, `statut_geometrie` (texte, présente dans les deux couches, et prise en compte dans les deux depuis le 09/10/2026 — voir plus bas). Vide par défaut (écrite ainsi par `preparer_geometries.py`) ; l'opérateur y saisit `rejeté` (accentué, minuscules — comparaison stricte, voir `synthese_geometries.STATUT_GEOMETRIE_REJETE`) sur la ligne à écarter, dans QGIS, plutôt que de la supprimer.
 
 **Traitement (Phase 3, `synthese_geometries.py`)** : une occurrence `statut_geometrie == "rejeté"` est filtrée avant toute autre logique (géométrie vide, fusion) — mais après la construction de l'index de résolution des meneurs de fusion (voir "Mécanisme de fusion" ci-dessus), pour qu'un groupe qui s'appuierait sur elle comme meneur soit détecté et invalidé plutôt que traité comme "meneur introuvable" (message trompeur qui suggérerait une erreur de saisie plutôt qu'un rejet délibéré). Elle est retirée du livrable final et tracée dans `etape4_{dept}_rejetees.csv` (mêmes colonnes que `_non_traitees.csv`, même logique de régénération à chaque exécution — supprimé s'il ne reste plus rien à y consigner) — jamais mélangée avec `_non_traitees.csv`, pour qu'un futur audit distingue "oublié" de "délibérément écarté".
+
+**Extension à `geometries_administratives` (09/10/2026)** : jusqu'à cette date, seul `occurrences_a_georeferencer` était filtrée — la documentation annonçait déjà la colonne « dans les deux couches », mais un `rejeté` saisi sur une ligne administrative restait sans effet. Le besoin est apparu avec le contrôle de la portée (voir "Contrôle de la portée administrative") : une règle classée à tort en portée administrative est parfois le double d'une occurrence `zone_specifique` du même document, et doit alors être écartée, pas recorrigée. Les deux couches passent désormais par la même fonction (`_separer_rejetees`), et `etape4_{dept}_rejetees.csv` rassemble les rejets des deux. Vérifié le 09/10/2026 sur une copie du 067 : le meneur de fusion g175 (Dorlisheim) rejeté part dans `_rejetees.csv`, et la fusion de son membre g176 est invalidée avec le message « le meneur référencé a été rejeté » — g176 reste dans le livrable, puisqu'elle a sa propre géométrie.
 
 **Compatibilité** : la colonne peut être absente d'un `etape4_{dept}_a_completer.gpkg` créé avant l'ajout de ce champ (ajouté manuellement dans QGIS sur un fichier en cours de traitement plutôt que par régénération complète, cas réel du 14/09/2026) — `geodf.get("statut_geometrie")` renvoie alors `None`, traité comme "aucun rejet", sans erreur.
 
@@ -379,7 +417,8 @@ Une fusion invalide part dans `etape4_{dept}_erreurs.csv` (source `"fusion"`). S
 | `statut_verification_finale` | reprise de `etape3_{dept}.csv` — `validé` / `corrigé` / `validé automatique` / `aucune occurrence trouvée`. |
 | `fusionne_avec_id_gpu`, `fusionne_avec_id_occurrence` | jamais reprises de `etape3_{dept}.csv` — vides à la sortie de `preparer_geometries.py`, renseignées par l'opérateur en Phase 2 pour désigner le meneur d'un groupe fusionné. Voir "Mécanisme de fusion" ci-dessus. |
 | `geometrie_origine` | ajoutée le 09/09/2026 — jamais reprise de `etape3_{dept}.csv`, écrite par `preparer_geometries.py` (Phase 1) : `"document"` / `"municipality"` pour `geometries_administratives` (jamais relue à la main, purement informatif) ; `"zone_urba_auto"` (correspondance automatique trouvée dans la couche `zone-urba`, géométrie déjà remplie mais à vérifier) ou `""` (aucune correspondance, tracé manuel intégral) pour `occurrences_a_georeferencer`. **Non maintenue à jour par la Phase 2** : un opérateur qui retrace intégralement une géométrie `"zone_urba_auto"` jugée fausse ne remet pas ce champ à jour dans QGIS (aucun contrôle ni consigne en ce sens) — discipline opérationnelle jugée suffisante pour ce POC, voir `ameliorations-identifiees.md`. |
-| `statut_geometrie` | ajoutée le 14/09/2026 — jamais reprise de `etape3_{dept}.csv`, vide à la sortie de `preparer_geometries.py`. Seule valeur exploitée : `rejeté`, renseignée par l'opérateur en Phase 2 sur une occurrence de `occurrences_a_georeferencer` jugée hors périmètre, pour l'écarter proprement du livrable final vers `etape4_{dept}_rejetees.csv` plutôt que de la supprimer sans trace. Voir "Mécanisme de rejet" ci-dessus. |
+| `statut_geometrie` | ajoutée le 14/09/2026 — jamais reprise de `etape3_{dept}.csv`, vide à la sortie de `preparer_geometries.py`. Seule valeur exploitée : `rejeté`, renseignée par l'opérateur en Phase 2 sur une occurrence jugée hors périmètre ou en double — dans l'une ou l'autre couche depuis le 09/10/2026 —, pour l'écarter proprement du livrable final vers `etape4_{dept}_rejetees.csv` plutôt que de la supprimer sans trace. Voir "Mécanisme de rejet" ci-dessus. |
+| `verification_portee` | ajoutée le 09/10/2026 — jamais reprise de `etape3_{dept}.csv`, vide à la sortie de `preparer_geometries.py`. Renseignée par l'opérateur en Phase 2, sur `geometries_administratives`, une fois la portée vérifiée dans le PDF : `confirmée`, `corrigée` ou `rejetée`. Purement informative : aucun traitement ne la lit, sauf `controle_portee.py` pour suivre l'avancement et signaler une saisie incohérente avec `statut_geometrie`. Voir "Contrôle de la portée administrative" ci-dessus. |
 | `date_traitement` | date d'écriture de la ligne par `preparer_geometries.py` (Phase 1), pour les deux couches — y compris pour une entité de `occurrences_a_georeferencer` : c'est donc la date de création de la ligne vide, avant tracé manuel, pas celle du tracé effectif. `synthese_geometries.py` (Phase 3) ne la modifie jamais : la valeur écrite en Phase 1 traverse la Phase 2 et la Phase 3 sans changer. Distincte de la `date_traitement` des étapes précédentes, conservée telle quelle par ailleurs. |
 
 ## Gestion des erreurs
