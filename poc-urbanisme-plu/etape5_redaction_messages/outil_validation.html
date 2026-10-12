@@ -127,6 +127,9 @@
     color: var(--couleur-texte-attenue);
   }
   .badge-corrige { background: #fbeecd; color: var(--couleur-corrige); }
+  /* Ajouté le 12/10/2026 : identifiant de géométrie (id_geometrie, étape 4),
+     le repère commun aux échanges sur le pipeline (« g308 »...). */
+  .badge-id { background: #dde7f5; color: var(--couleur-accent); font-family: monospace; }
   .lien-source { margin-left: auto; font-size: 0.8rem; }
   .lien-source a { color: var(--couleur-accent); }
 
@@ -266,7 +269,7 @@
 
   <div id="barre-outils" class="masque">
     <label for="recherche">Recherche</label>
-    <input type="text" id="recherche" placeholder="message, référence…">
+    <input type="text" id="recherche" placeholder="message, référence, g308…">
 
     <label for="filtre-correction">Afficher</label>
     <select id="filtre-correction">
@@ -500,6 +503,7 @@ function rendreOccurrence(occ) {
   return `
   <div class="carte ${corrigee ? "est-corrigee" : ""}" data-id="${echapperHTML(id)}" data-type="occurrence">
     <div class="ligne-badges">
+      ${occ.id_geometrie_synthese ? `<span class="badge badge-id" title="id_geometrie de la synthèse à laquelle appartient ce message (étape 4)">synthèse g${echapperHTML(occ.id_geometrie_synthese)}</span>` : ""}
       <span class="badge">${echapperHTML(occ.reference_precise || "référence inconnue")}</span>
       ${occ.nature_sonore_zone ? `<span class="badge">${echapperHTML(occ.nature_sonore_zone)}</span>` : ""}
       ${corrigee ? `<span class="badge badge-corrige">corrigé</span>` : ""}
@@ -552,6 +556,7 @@ function rendreSynthese(synth) {
   return `
   <div class="carte ${corrigee ? "est-corrigee" : ""}" data-id="${echapperHTML(id)}" data-type="synthese">
     <div class="ligne-badges">
+      <span class="badge badge-id" title="id_geometrie : identifiant de la géométrie (étape 4)">g${echapperHTML(synth.id_geometrie || "?")}</span>
       <span class="badge">${echapperHTML(synth.id_gpu || "(sans document)")}</span>
       ${corrigee ? `<span class="badge badge-corrige">corrigé</span>` : ""}
     </div>
@@ -583,13 +588,16 @@ function rendreSynthese(synth) {
 function correspondRechercheOccurrence(occ, terme) {
   if (!terme) return true;
   const t = terme.toLowerCase();
-  return [occ.message_occurrence, occ.reference_precise, occ.extrait_significatif].some(v => (v || "").toLowerCase().includes(t));
+  // "g" + id : permet de chercher « g308 » (voir badge-id).
+  return [occ.message_occurrence, occ.reference_precise, occ.extrait_significatif, "g" + (occ.id_geometrie_synthese || "")]
+    .some(v => (v || "").toLowerCase().includes(t));
 }
 
 function correspondRechercheSynthese(synth, terme) {
   if (!terme) return true;
   const t = terme.toLowerCase();
-  return [synth.message_synthese_llm, synth.id_gpu, synth.id_occurrence].some(v => (v || "").toLowerCase().includes(t));
+  return [synth.message_synthese_llm, synth.id_gpu, synth.id_occurrence, "g" + (synth.id_geometrie || "")]
+    .some(v => (v || "").toLowerCase().includes(t));
 }
 
 function correspondFiltre(corrigee, filtre) {
