@@ -1,0 +1,32 @@
+﻿id_geometrie,couche,action,partition,zones,preuve
+195,geometries_administratives,corriger,DU_67188,Ur,"p.16 Art. U1 : une seule case « interdits » pour les secteurs Uh-Ur-Uhe, Ue, Ut"
+196,geometries_administratives,corriger,DU_67188,Uh,idem p.16
+197,geometries_administratives,corriger,DU_67188,Uhe,idem p.16
+198,geometries_administratives,corriger,DU_67188,Ue,idem p.16
+199,geometries_administratives,corriger,DU_67188,Ut,idem p.16
+193,geometries_administratives,corriger,DU_67188,1AUh,"p.31 Art. AU5, SECTEUR 1AUh, ligne EMERGENCES ACOUSTIQUES"
+194,geometries_administratives,corriger,DU_67188,"Ab, Ac","p.35-36 Art. A5, « Ensemble de la zone A », ligne EMERGENCES ACOUSTIQUES"
+215,geometries_administratives,corriger,DU_67252,"1AUh, 1AUe, 2AUh, 2AUp, 2AUs","p.25 Art. AU1 : case « interdits » commune à 1AUh, 1AUe, 2AUh/2AUp/2AUs (1AUp a sa propre règle = g326)"
+216,geometries_administratives,corriger,DU_67252,"1AUe, 1AUh, 1AUp, 2AUh, 2AUp, 2AUs","p.30 Art. AU5, « Ensemble de la zone AU », ligne EMERGENCES ACOUSTIQUES"
+217,geometries_administratives,corriger,DU_67252,"Acr, Anc","p.35 Art. A5, « Ensemble de la zone A », ligne EMERGENCES ACOUSTIQUES"
+221,geometries_administratives,rejeter,,,"doublon de g331 : p.21 Art. U5 « Ensemble de la zone U », EMERGENCES ; g331 couvre 100 % des zones U"
+219,geometries_administratives,rejeter,,,doublon de g332 : p.30 Art. AU5 « Ensemble de la zone AU » ; g332 couvre 100 % des zones AU
+220,geometries_administratives,rejeter,,,doublon de g333 : p.35 Art. A5 « Ensemble de la zone A » ; g333 couvre 100 % des zones A
+262,geometries_administratives,rejeter,,,"doublon de g371 : p.23 Art. U5 « Ensemble de la zone U », EMERGENCES ; g371 couvre 100 % des zones U"
+261,geometries_administratives,rejeter,,,"doublon de g374 : p.41 Art. N5 « Ensemble de la zone N », EMERGENCES ; g374 couvre 100 % des zones N"
+260,geometries_administratives,corriger,DU_67443,1AUh,"p.31 Art. AU5, SECTEUR 1AUh, ligne EMERGENCES ACOUSTIQUES"
+372,occurrences_a_georeferencer,rejeter,,,même règle que g260 corrigée ; son tracé est en zone A (0 % de recouvrement avec 1AUh)
+273,geometries_administratives,confirmer,,,"EMERGENCES dans « Ensemble de la zone » U (p.21), AU (p.31), A (p.36), N (p.41) : vaut pour tout le document"
+275,geometries_administratives,corriger,DU_67523,1AUe,"p.25 Art. AU1 : case « interdits » commune à 1AUh, 1AUp, 1AUe ; 1AUh = g393 et 1AUp = g394 existent déjà"
+395,occurrences_a_georeferencer,rejeter,,,"p.25 Art. AU1 : la case « interdits » du secteur 2AUh est vide, la règle ne s'y applique pas"
+297,geometries_administratives,corriger,DU_67308,"Ue, Uh, Up, Ur, Us","p.21 Art. U5, « Ensemble de la zone U », EMERGENCES"
+298,geometries_administratives,corriger,DU_67308,1AUh,"p.27 Art. AU5, SECTEUR 1AUh, EMERGENCES"
+299,geometries_administratives,corriger,DU_67308,"Ac, Anc","p.31 Art. A5, ligne EMERGENCES étiquetée « A1 » (code absent du GPU : zone A entière retenue)"
+300,geometries_administratives,corriger,DU_67308,"Nb, Nh, Np, Nt","p.35 Art. N5, « Ensemble de la zone N », EMERGENCES"
+176,geometries_administratives,corriger,DU_67101,"UC, UC1",p.35 Art. 2-UC « dans la zone » ; UC1 est un secteur de UC (Art. 1-UC). Vider fusionne_avec_*
+175,geometries_administratives,corriger,DU_67101,"IAUa, IAUb, IAUc2, IAUc3, IAUd","p.88 Art. 2.3-1AU « différents secteurs 1AU » (1AU du règlement = IAU du GPU, cf. 1AUd/IAUd)"
+164,geometries_administratives,corriger,DU_67045,"IAU1, IAU2, IAU3",p.65 Art. 2 IAU ; p.63 « La zone IAU est divisée en 3 secteurs : IAU1 à IAU3 »
+182,geometries_administratives,corriger,DU_67115,UC,p.36 : talus/remblais sous l'Art. 11 UC (l'Art. 12 UC suit sur la même page)
+224,geometries_administratives,corriger,DU_67275,UA,"p.6 CHAPITRE 1 - ZONE UA, art. UA 2.2 (agricole) ; g353 = UA 1.2, règle différente"
+249,geometries_administratives,corriger,DU_67380,UA,"p.6 CHAPITRE 1 - ZONE UA, art. UA-1 1.2 (établissements) ; g357 = UA 2.2, règle différente"
+284,geometries_administratives,corriger,DU_200034635,"UB, UBa, UBa1, UBb, UBc, UBd","p.45 Chap. 2 zone UB, « Dispositions applicables aux communes de : Dingsheim, Durningen, Furdenheim, Gougenheim, Griesheim-sur-Souffel, Handschuheim, Hurtigheim, Ittenheim, Kienheim, Neugartheim-Ittlenheim, Pfulgriesheim, Rohr, Schnersheim, Truchtersheim, Wintzenheim-Kochersberg, Wiwersheim » (Berstett exclu)"
