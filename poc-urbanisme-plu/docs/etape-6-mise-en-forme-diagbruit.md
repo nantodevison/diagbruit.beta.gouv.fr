@@ -33,8 +33,27 @@ Deux pistes alternatives ont été écartées avant de retenir ce circuit :
 Format constaté sur les entrées réelles de la base : `alert-{Territoire sans espaces ni accents}-{terme métier court}`, par exemple `alert-BordeauxMetropole-lgv`, `alert-RennesMetropole-habillage-pac`, `alert-MetropoleEuropeenneLille-isolation-et-financement`.
 
 Deux parties, deux traitements très différents :
-- **La partie territoire** est mécanique : `Territoire` avec espaces et accents retirés, ligatures translittérées (`œ` → `oe`…), tout autre caractère hors du jeu admis par le champ Strapi `uid` (`A-Z a-z 0-9 - _ . ~`, règle de Strapi 5.13.0) remplacé par un tiret, casse d'origine conservée (ex. "Ville de Lille" → `VilledeLille`, "CC de l'Alsace Bossue" → `CCdel-AlsaceBossue`). Attention : Strapi n'applique cette règle qu'à la publication, pas au brouillon. Entièrement automatisable — c'est ce que produit `generer_export.py` (voir `etape-6-conception-technique.md`, "Contrat de données").
+- **La partie territoire** est mécanique : `Territoire` avec ligatures translittérées (`œ` → `oe`…) et accents retirés, puis **seuls `A-Z a-z 0-9` conservés** — espaces, apostrophes, tirets des noms composés et tout autre caractère sont supprimés, casse d'origine conservée (ex. "Ville de Lille" → `VilledeLille`, "CC de l'Alsace Bossue" → `CCdelAlsaceBossue`, "CC de Hanau-La Petite Pierre" → `CCdeHanauLaPetitePierre`). Raison (décision du 13/10/2026) : `-` est le séparateur du slug, un tiret à l'intérieur d'un nom empêcherait de le découper. C'est plus strict que le champ Strapi `uid`, qui admet `A-Z a-z 0-9 - _ . ~` (règle de Strapi 5.13.0, appliquée seulement à la publication, pas au brouillon). Entièrement automatisable — c'est ce que produit `generer_export.py` (voir `etape-6-conception-technique.md`, "Contrat de données").
 - **La partie "terme métier"** n'est **pas** une extraction ni un résumé du message ou de la description — c'est un terme technique du vocabulaire urbanisme/acoustique (`exhaussement`, `secteur-patrimonial-remarquable`, `speer3`, `pacte`...), qui n'apparaît parfois même pas dans le texte source. Exemple : la description "Réaliser des protections phoniques le long des voies bruyantes" donne le slug `exhaussement`, un terme absent du texte. Une génération automatique (LLM ou règle) risquerait de proposer un terme plausible mais faux : cette partie est donc laissée entièrement à la saisie de l'opérateur, dans `outil_validation.html` (voir `etape-6-conception-technique.md`, "Phase 2 — Outil de validation") — le script se limite à assembler la partie territoire, déjà calculée, en attente du terme métier.
+
+**Exception : les cas sans contenu métier (décision du 13/10/2026).** Pour les géométries sans règle bruit à nommer, le slug est rempli automatiquement en entier : `alert-{Territoire}-{Commune}{Suffixe}`, la commune étant slugifiée comme le territoire. Le cas est déterminé par `nature_zone` (étape 4), pas par le titre (texte validé à la main, qui peut avoir été retouché) :
+
+| `nature_zone` | Titre associé | Suffixe | Exemple |
+|---|---|---|---|
+| `rnu` | Règlement National de l'Urbanisme applicable | `RNU` | `alert-CCdelAlsaceBossue-AsswillerRNU` |
+| `trou_de_couverture` | Absence de document d'urbanisme référencé | `AbsenceGPU` | |
+| `document_non_significatif` | Aucune prescription bruit spécifique | `PasDeReferenceBruit` | |
+| `document_non_exploitable` | Document non analysable automatiquement | `DocNonAnalysable` | |
+
+Les termes « prescription » et « recommandation » ont un sens précis en urbanisme : ils sont volontairement évités dans les suffixes. La règle ne s'applique qu'aux géométries couvrant **une seule commune** ; un PLUi (plusieurs communes) reste à saisir à la main.
+
+**Statut d'un slug** — chaque `alert_slug_propose` est, à tout moment de la procédure :
+- `vide` : aucun caractère (territoire non résolu) ;
+- `initialisé` : proposition mécanique, finit par `-` (ex. `alert-CCdelAlsaceBossue-`) ;
+- `automatisé` : rempli par la règle ci-dessus — au moins deux `-`, ne finit pas par `-` ;
+- `manuel` : complété par l'opérateur — même forme qu'`automatisé`, distingué par comparaison avec ce que produirait la règle automatique.
+
+Seuls les slugs `manuel` sont conservés quand `generer_export.py` est relancé ; les autres sont recalculés (voir `etape-6-conception-technique.md`, "Reprise à la régénération").
 
 Points de vigilance relevés sur les données existantes, non reproduits comme règles :
 - une entrée utilise `_` au lieu de `-` comme séparateur (`alert-RennesMetropole_charte_bretagne_dechet`) — incohérence de saisie manuelle, pas un format à imiter ;

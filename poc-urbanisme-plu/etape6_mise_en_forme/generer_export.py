@@ -10,13 +10,18 @@ chaque géométrie finale : assemble les champs Strapi (`assembler_message.py`),
 propose un territoire (`resolution_territoire.py`), écrit sa géométrie en
 GeoJSON individuel, et une ligne dans `etape6_{dept}_export.csv`.
 
-**Reprise (ajouté le 24/08/2026)** : si `etape6_{dept}_export.csv` existe
-déjà dans le dossier de sortie, `alert_slug_propose` et `description_slug`
-y sont relus et conservés par `id_geometrie` plutôt qu'écrasés par la
-proposition mécanique fraîche — un second passage ne perd donc jamais une
-saisie déjà faite dans `outil_validation.html`. Pensez à renommer le
-dernier export de l'outil en `etape6_{dept}_export.csv` avant de relancer
-ce script, sinon la reprise ne verra pas vos dernières corrections.
+**Statut d'un slug et reprise (revu le 13/10/2026)** : chaque
+`alert_slug_propose` a l'un des statuts suivants (voir `_statut_slug`) :
+- `vide` : aucun caractère ;
+- `initialise` : proposition mécanique `alert-{Territoire}-`, finit par `-` ;
+- `automatise` : rempli par la règle automatique des cas sans contenu métier
+  (RNU, absence de document GPU... voir `SUFFIXE_PAR_NATURE_ZONE`) ;
+- `manuel` : complété à la main dans `outil_validation.html`.
+Si `etape6_{dept}_export.csv` existe déjà dans le dossier de sortie, seuls
+les slugs `manuel` y sont repris ; les autres sont recalculés, pour qu'une
+évolution des règles se propage. Pensez à renommer le dernier export de
+l'outil en `etape6_{dept}_export.csv` avant de relancer ce script, sinon la
+reprise ne verra pas vos dernières saisies.
 
 Usage :
     python -m etape6_mise_en_forme.generer_export --dept 033
@@ -76,8 +81,23 @@ COLONNES_EXPORT = [
 COLONNES_ERREURS = ["identifiant", "source", "message", "date_traitement"]
 
 # Ligatures à translittérer avant le retrait des accents, voir
-# `_slugifier_territoire` (« Wœrth » est une commune du 067).
+# `_slugifier_nom` (« Wœrth » est une commune du 067).
 LIGATURES = {"œ": "oe", "Œ": "OE", "æ": "ae", "Æ": "AE", "ß": "ss"}
+
+# Règle automatique (décidée le 13/10/2026) : pour ces cas sans contenu
+# métier, le slug complet est `alert-{Territoire}-{Commune}{Suffixe}`, sans
+# saisie manuelle. Fondée sur `nature_zone` (donnée de structure de
+# l'étape 4) plutôt que sur `titre_propose` (texte validé à la main, qui
+# peut avoir été retouché). Appliquée seulement si la géométrie couvre une
+# seule commune : un PLUi « sans référence bruit » reste à saisir à la main.
+# Vocabulaire choisi exprès : « prescription » et « recommandation » ont un
+# sens précis en urbanisme, d'où « PasDeReferenceBruit ».
+SUFFIXE_PAR_NATURE_ZONE = {
+    "rnu": "RNU",
+    "trou_de_couverture": "AbsenceGPU",
+    "document_non_significatif": "PasDeReferenceBruit",
+    "document_non_exploitable": "DocNonAnalysable",
+}
 
 
 class Etape5GpkgIntrouvable(Exception):
@@ -111,28 +131,64 @@ def _texte(valeur) -> str:
     return str(valeur).strip()
 
 
-def _slugifier_territoire(territoire: str) -> str:
-    """Retire espaces et accents, remplace tout autre caractère non admis par
-    un tiret, casse d'origine conservée — voir
+def _slugifier_nom(nom: str) -> str:
+    """Slugifie un nom de territoire ou de commune : ne garde que
+    `A-Z a-z 0-9`, casse d'origine conservée — voir
     `docs/etape-6-mise-en-forme-diagbruit.md`, "Format de l'alert_slug".
 
-    Caractères admis : ceux du champ Strapi `uid` (`alert_slug`), soit
-    `A-Z a-z 0-9 - _ . ~` — règle lue dans le code de Strapi 5.13.0
-    (`@strapi/core`, `uidValidator`), version déclarée dans cms/package.json.
-    Attention : Strapi n'applique cette règle qu'à la publication, pas au
-    brouillon — un slug invalide passerait donc l'étape 7 sans erreur et ne
-    bloquerait qu'au moment de publier.
+    Tout le reste est supprimé, tirets des noms composés compris : `-` est le
+    séparateur du slug (`alert-{Territoire}-{terme}`), un tiret à l'intérieur
+    d'un nom empêcherait de le découper. C'est plus strict que le champ
+    Strapi `uid`, qui admet `A-Z a-z 0-9 - _ . ~` (règle lue dans le code de
+    Strapi 5.13.0, `@strapi/core`, `uidValidator`) — et que Strapi n'applique
+    qu'à la publication, pas au brouillon.
 
-    Exemples : "CC de l'Alsace Bossue" → `CCdel-AlsaceBossue`,
-    "Wœrth" → `Woerth` (les ligatures ne sont pas des accents : NFKD ne les
-    décompose pas, d'où leur translittération explicite)."""
-    texte = territoire
+    Exemples : "CC de l'Alsace Bossue" → `CCdelAlsaceBossue`,
+    "Saint-Pierre-Bois" → `SaintPierreBois`, "Wœrth" → `Woerth` (les
+    ligatures ne sont pas des accents : NFKD ne les décompose pas, d'où leur
+    translittération explicite)."""
+    texte = nom
     for ligature, remplacement in LIGATURES.items():
         texte = texte.replace(ligature, remplacement)
     sans_accents = unicodedata.normalize("NFKD", texte)
     sans_accents = "".join(c for c in sans_accents if not unicodedata.combining(c))
-    sans_espaces = re.sub(r"\s+", "", sans_accents)
-    return re.sub(r"[^A-Za-z0-9\-_.~]", "-", sans_espaces)
+    return re.sub(r"[^A-Za-z0-9]", "", sans_accents)
+
+
+def _slug_initialise(territoire_propose: str) -> str:
+    """Proposition mécanique `alert-{Territoire}-`, à compléter à la main ;
+    vide si le territoire n'a pas pu être résolu."""
+    return f"alert-{_slugifier_nom(territoire_propose)}-" if territoire_propose else ""
+
+
+def _slug_automatise(territoire_propose: str, nature_zone: str, communes: list[str]) -> str:
+    """Slug complet de la règle automatique (voir `SUFFIXE_PAR_NATURE_ZONE`),
+    ou `""` si la règle ne s'applique pas à cette géométrie."""
+    suffixe = SUFFIXE_PAR_NATURE_ZONE.get(nature_zone)
+    if not suffixe or not territoire_propose or len(communes) != 1:
+        return ""
+    return f"{_slug_initialise(territoire_propose)}{_slugifier_nom(communes[0])}{suffixe}"
+
+
+def _statut_slug(slug: str, slug_automatique: str) -> str:
+    """Statut d'un slug (voir la docstring du module) : `vide`,
+    `initialise`, `automatise`, `manuel` — ou `non_conforme` pour une valeur
+    qui n'entre dans aucun de ces cas (ex. moins de deux `-`).
+
+    `automatise` et `manuel` ont la même forme (au moins deux `-`, ne finit
+    pas par `-`) : seule la comparaison avec ce que produirait la règle
+    automatique les distingue. Limite connue : si la règle automatique
+    change, un ancien slug automatisé ne lui correspond plus et sera vu comme
+    `manuel` — donc conservé ; le décompte affiché en fin de run le signale."""
+    if not slug:
+        return "vide"
+    if slug.endswith("-"):
+        return "initialise"
+    if slug.count("-") < 2:
+        return "non_conforme"
+    if slug_automatique and slug == slug_automatique:
+        return "automatise"
+    return "manuel"
 
 
 def _label_propose(nature_sonore_zone: str) -> str:
@@ -150,14 +206,17 @@ def _lire_documents_par_synthese(chemin: Path) -> dict[str, list[dict]]:
 
 
 def _details_par_geometrie(chemin: Path) -> dict[str, dict[str, str]]:
-    """`communes` et `nature_sonore_zone` (texte brut) par `id_geometrie`,
-    reprises de `etape4_{dept}.gpkg` — voir la docstring du module pour
-    pourquoi ce fichier est relu ici en plus de `etape5_{dept}.gpkg`."""
+    """`communes`, `nature_sonore_zone` et `nature_zone` (texte brut) par
+    `id_geometrie`, reprises de `etape4_{dept}.gpkg` — voir la docstring du
+    module pour pourquoi ce fichier est relu ici en plus de
+    `etape5_{dept}.gpkg`. `nature_zone` sert à la règle automatique du
+    slug (voir `SUFFIXE_PAR_NATURE_ZONE`)."""
     gdf = gpd.read_file(chemin, layer="geometries")
     return {
         _texte(ligne.get("id_geometrie")): {
             "communes": _texte(ligne.get("communes")),
             "nature_sonore_zone": _texte(ligne.get("nature_sonore_zone")),
+            "nature_zone": _texte(ligne.get("nature_zone")),
         }
         for _, ligne in gdf.iterrows()
     }
@@ -240,10 +299,13 @@ def generer(code_departement: str, dossier_sortie: str | Path = "output") -> Pat
 
     lignes_export: list[dict] = []
     erreurs: list[dict] = []
+    decompte_statuts: dict[str, int] = defaultdict(int)
 
     for _, ligne in gdf.iterrows():
         id_geometrie = _texte(ligne.get("id_geometrie"))
-        details = details_par_geometrie.get(id_geometrie, {"communes": "", "nature_sonore_zone": ""})
+        details = details_par_geometrie.get(
+            id_geometrie, {"communes": "", "nature_sonore_zone": "", "nature_zone": ""}
+        )
         communes_brutes = details["communes"]
         communes = [c.strip() for c in communes_brutes.split(SEPARATEUR_COMMUNES) if c.strip()]
 
@@ -258,17 +320,20 @@ def generer(code_departement: str, dossier_sortie: str | Path = "output") -> Pat
                 }
             )
 
+        # Slug : seule une saisie manuelle (ou non conforme, pour ne jamais
+        # effacer ce que l'opérateur a tapé) est reprise de l'export
+        # précédent ; tout le reste est recalculé — règle automatique si elle
+        # s'applique, sinon proposition mécanique `alert-{Territoire}-`.
+        slug_automatique = _slug_automatise(territoire_propose, details["nature_zone"], communes)
         precedent = export_precedent.get(id_geometrie)
-        # Un slug précédent vide n'est pas une saisie à préserver : c'est la
-        # trace d'un échec de résolution de territoire au run précédent. On le
-        # recalcule donc, pour qu'une relance après correction (API revenue,
-        # nom de commune corrigé...) complète enfin la proposition.
-        if precedent and precedent["alert_slug_propose"]:
+        statut_precedent = _statut_slug(precedent["alert_slug_propose"], slug_automatique) if precedent else "vide"
+        if statut_precedent in ("manuel", "non_conforme"):
             alert_slug_propose = precedent["alert_slug_propose"]
             description_slug = precedent["description_slug"]
         else:
-            alert_slug_propose = f"alert-{_slugifier_territoire(territoire_propose)}-" if territoire_propose else ""
+            alert_slug_propose = slug_automatique or _slug_initialise(territoire_propose)
             description_slug = ""
+        decompte_statuts[_statut_slug(alert_slug_propose, slug_automatique)] += 1
 
         documents = documents_par_synthese.get(id_geometrie, [])
         message_synthese = _texte(ligne.get("message_synthese"))
@@ -320,8 +385,13 @@ def generer(code_departement: str, dossier_sortie: str | Path = "output") -> Pat
     elif chemin_erreurs.exists():
         chemin_erreurs.unlink()
 
-    if export_precedent:
-        print(f"{len(export_precedent)} alert_slug déjà saisi(s) repris depuis {chemin_export.name}.")
+    print(
+        "Statut des alert_slug : "
+        + ", ".join(f"{statut} {decompte_statuts[statut]}" for statut in (
+            "vide", "initialise", "automatise", "manuel", "non_conforme"
+        ))
+        + (" (manuels et non conformes repris depuis l'export précédent)." if export_precedent else ".")
+    )
     print(f"{len(lignes_export)} ligne(s) écrite(s) dans {chemin_export}, géométries dans {dossier_geometries}.")
     return chemin_export
 
