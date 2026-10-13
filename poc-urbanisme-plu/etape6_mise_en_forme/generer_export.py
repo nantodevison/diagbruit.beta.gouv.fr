@@ -75,6 +75,10 @@ COLONNES_EXPORT = [
 
 COLONNES_ERREURS = ["identifiant", "source", "message", "date_traitement"]
 
+# Ligatures à translittérer avant le retrait des accents, voir
+# `_slugifier_territoire` (« Wœrth » est une commune du 067).
+LIGATURES = {"œ": "oe", "Œ": "OE", "æ": "ae", "Æ": "AE", "ß": "ss"}
+
 
 class Etape5GpkgIntrouvable(Exception):
     pass
@@ -108,11 +112,27 @@ def _texte(valeur) -> str:
 
 
 def _slugifier_territoire(territoire: str) -> str:
-    """Retire espaces et accents, casse d'origine conservée — voir
-    `docs/etape-6-mise-en-forme-diagbruit.md`, "Format de l'alert_slug"."""
-    sans_accents = unicodedata.normalize("NFKD", territoire)
+    """Retire espaces et accents, remplace tout autre caractère non admis par
+    un tiret, casse d'origine conservée — voir
+    `docs/etape-6-mise-en-forme-diagbruit.md`, "Format de l'alert_slug".
+
+    Caractères admis : ceux du champ Strapi `uid` (`alert_slug`), soit
+    `A-Z a-z 0-9 - _ . ~` — règle lue dans le code de Strapi 5.13.0
+    (`@strapi/core`, `uidValidator`), version déclarée dans cms/package.json.
+    Attention : Strapi n'applique cette règle qu'à la publication, pas au
+    brouillon — un slug invalide passerait donc l'étape 7 sans erreur et ne
+    bloquerait qu'au moment de publier.
+
+    Exemples : "CC de l'Alsace Bossue" → `CCdel-AlsaceBossue`,
+    "Wœrth" → `Woerth` (les ligatures ne sont pas des accents : NFKD ne les
+    décompose pas, d'où leur translittération explicite)."""
+    texte = territoire
+    for ligature, remplacement in LIGATURES.items():
+        texte = texte.replace(ligature, remplacement)
+    sans_accents = unicodedata.normalize("NFKD", texte)
     sans_accents = "".join(c for c in sans_accents if not unicodedata.combining(c))
-    return re.sub(r"\s+", "", sans_accents)
+    sans_espaces = re.sub(r"\s+", "", sans_accents)
+    return re.sub(r"[^A-Za-z0-9\-_.~]", "-", sans_espaces)
 
 
 def _label_propose(nature_sonore_zone: str) -> str:
@@ -239,7 +259,11 @@ def generer(code_departement: str, dossier_sortie: str | Path = "output") -> Pat
             )
 
         precedent = export_precedent.get(id_geometrie)
-        if precedent:
+        # Un slug précédent vide n'est pas une saisie à préserver : c'est la
+        # trace d'un échec de résolution de territoire au run précédent. On le
+        # recalcule donc, pour qu'une relance après correction (API revenue,
+        # nom de commune corrigé...) complète enfin la proposition.
+        if precedent and precedent["alert_slug_propose"]:
             alert_slug_propose = precedent["alert_slug_propose"]
             description_slug = precedent["description_slug"]
         else:

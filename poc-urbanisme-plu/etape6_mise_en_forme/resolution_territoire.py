@@ -101,12 +101,20 @@ class ResolveurTerritoire:
             # etape-6-conception-technique.md, "Gestion des erreurs").
             resolution = _ResolutionCommune(code_epci=None, trouvee=False)
         else:
+            # La recherche `nom=` de l'API est approximative : « Saverne »
+            # renvoie aussi Saint-Jean-Saverne, Ernolsheim-lès-Saverne...
+            # (constaté le 13/10/2026 sur le 067, 36 lignes sans territoire).
+            # On ne garde que les communes dont le nom est exactement celui
+            # demandé ; l'ambiguïté réelle (deux homonymes exacts dans le
+            # département) reste un échec, comme avant.
+            resultats = [r for r in resultats if r.get("nom") == nom]
             if len(resultats) == 1:
                 resolution = _ResolutionCommune(code_epci=resultats[0].get("codeEpci"), trouvee=True)
             else:
-                # Nom introuvable, ou ambigu au sein du département (aucun
-                # choix arbitraire à faire) : même traitement qu'une
-                # indisponibilité d'API — échec de résolution pour cette commune.
+                # Aucun nom exactement identique, ou homonymes exacts au sein
+                # du département (aucun choix arbitraire à faire) : même
+                # traitement qu'une indisponibilité d'API — échec de
+                # résolution pour cette commune.
                 resolution = _ResolutionCommune(code_epci=None, trouvee=False)
         self._cache_communes[nom] = resolution
         return resolution
