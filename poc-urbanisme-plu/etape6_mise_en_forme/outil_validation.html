@@ -86,6 +86,19 @@
   }
   .carte.est-modifiee { border-left-color: var(--couleur-corrige); }
 
+  /* Statut du slug (ajout du 13/10/2026, voir statutSlug() plus bas) : ce
+     qui reste à faire ressort (bordure bleue), ce qui est terminé est grisé
+     — sans être masqué, pour pouvoir le relire au survol. Une carte
+     modifiée mais encore à compléter (saisie en cours) garde la bordure
+     bleue, déclarée après la bordure orange "modifié". */
+  .carte.a-completer { border-left-color: var(--couleur-accent); }
+  .carte.est-terminee { opacity: 0.55; }
+  .carte.est-terminee:hover, .carte.est-terminee:focus-within { opacity: 1; }
+  .badge-statut-vide, .badge-statut-initialise { background: #dce6f7; color: var(--couleur-accent); }
+  .badge-statut-automatise { background: #e4e7ec; color: var(--couleur-texte-attenue); }
+  .badge-statut-manuel { background: #dcf0e2; color: #1f6b3a; }
+  .badge-statut-non_conforme { background: #f9dcdc; color: #a12626; }
+
   .ligne-badges { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-bottom: 10px; }
   .badge {
     display: inline-block;
@@ -179,6 +192,7 @@
     <li>Chargez <code>etape6_{dept}_export.csv</code> (ou un export précédent de cet outil, pour reprendre une session).</li>
     <li>Le champ <strong>Alert slug</strong> est préempli avec la proposition mécanique (<code>alert-{Territoire}-</code>, partie territoire déjà calculée) — complétez-le directement avec le terme métier (ex. <code>alert-EurometropoledeStrasbourg-exhaussement</code>), ou corrigez-le entièrement si <code>territoire_propose</code> vous semble faux. Voir <code>docs/etape-6-mise-en-forme-diagbruit.md</code>, "Format de l'alert_slug", pour ce que doit être ce terme métier (jamais un résumé du message : un vocable technique du domaine, parfois absent du texte).</li>
     <li>Le <strong>message final</strong> (<code>message_strapi</code>), déjà validé à l'étape 5 qu'il soit natif ou corrigé manuellement, s'affiche en lecture seule pour vous aider à choisir un terme cohérent avec le document concerné.</li>
+    <li>Les cas sans contenu métier (RNU, absence de document GPU, pas de référence bruit, document non analysable — une seule commune) arrivent <strong>déjà remplis</strong> par <code>generer_export.py</code> (statut <em>automatisé</em>). Le filtre <strong>Statut du slug</strong> affiche par défaut les seules lignes <em>à compléter</em> (vide ou initialisé) ; une carte complétée reste affichée tant que vous ne changez pas de filtre ou de recherche. Les cartes terminées (automatisé, manuel) sont grisées quand elles sont affichées. Statuts : voir <code>docs/etape-6-mise-en-forme-diagbruit.md</code>, "Format de l'alert_slug".</li>
     <li><strong>↺</strong> revient à la proposition mécanique d'origine si votre saisie ne convient pas.</li>
     <li>Exportez régulièrement votre progression — un export automatique se déclenche aussi tous les 10 champs modifiés. Sans sauvegarde navigateur possible dans cet outil, un export non téléchargé = un travail non conservé si l'onglet se ferme.</li>
     <li>Le fichier exporté a exactement la même structure que <code>etape6_{dept}_export.csv</code> — une fois la relecture terminée, renommez le dernier export téléchargé pour remplacer <code>etape6_{dept}_export.csv</code> (ou utilisez-le tel quel) : c'est directement le fichier pour la saisie Strapi/Notion, aucun script Python supplémentaire à relancer.</li>
@@ -189,6 +203,17 @@
   <div id="barre-outils" class="masque">
     <label for="recherche">Recherche</label>
     <input type="text" id="recherche" placeholder="territoire, commune, message, alert_slug…">
+
+    <label for="filtre-statut">Statut du slug</label>
+    <select id="filtre-statut">
+      <option value="a-completer">À compléter (vide + initialisé)</option>
+      <option value="tous">Tous</option>
+      <option value="initialise">Initialisé</option>
+      <option value="vide">Vide</option>
+      <option value="automatise">Automatisé</option>
+      <option value="manuel">Manuel</option>
+      <option value="non_conforme">Non conforme</option>
+    </select>
 
     <label for="filtre-modification">Afficher</label>
     <select id="filtre-modification">
@@ -344,6 +369,31 @@ function normaliserLigne(ligne) {
 
 function estModifiee(ligne) { return ligne.alert_slug_propose !== ligne._alertSlugOrigine; }
 
+// Statut d'un slug (ajout du 13/10/2026) — mêmes critères que
+// _statut_slug() dans generer_export.py, à une approximation près : le
+// script reconnaît un slug "automatisé" en le comparant à ce que produirait
+// la règle (qui a besoin de nature_zone, absente du CSV) ; ici, on se
+// contente de reconnaître l'un des suffixes de la règle. Suffisant pour de
+// l'affichage — à garder synchronisé avec SUFFIXE_PAR_NATURE_ZONE.
+const SUFFIXES_AUTOMATISES = ["RNU", "AbsenceGPU", "PasDeReferenceBruit", "DocNonAnalysable"];
+const MOTIF_AUTOMATISE = new RegExp(`^alert-[A-Za-z0-9]+-[A-Za-z0-9]+(${SUFFIXES_AUTOMATISES.join("|")})$`);
+const LIBELLES_STATUT = {
+  vide: "vide", initialise: "initialisé", automatise: "automatisé",
+  manuel: "manuel", non_conforme: "non conforme",
+};
+
+function statutSlug(slug) {
+  slug = (slug || "").trim();
+  if (!slug) return "vide";
+  if (slug.endsWith("-")) return "initialise";
+  if ((slug.match(/-/g) || []).length < 2) return "non_conforme";
+  if (MOTIF_AUTOMATISE.test(slug)) return "automatise";
+  return "manuel";
+}
+
+function estACompleter(statut) { return statut === "vide" || statut === "initialise"; }
+function estTerminee(statut) { return statut === "automatise" || statut === "manuel"; }
+
 /* ---------------------------------------------------------------------- *
  * 3. Rendu
  * ---------------------------------------------------------------------- */
@@ -353,12 +403,25 @@ const elBarreOutils = document.getElementById("barre-outils");
 const elProgression = document.getElementById("progression");
 const elRecherche = document.getElementById("recherche");
 const elFiltreModification = document.getElementById("filtre-modification");
+const elFiltreStatut = document.getElementById("filtre-statut");
+
+// Classes et badge d'une carte selon le statut du slug — partagés entre le
+// rendu complet (rendreLigne) et la mise à jour à la frappe (événement
+// "input"), pour que les deux restent identiques.
+function classesStatut(statut) {
+  return [estACompleter(statut) ? "a-completer" : "", estTerminee(statut) ? "est-terminee" : ""].join(" ");
+}
+function badgeStatut(statut) {
+  return `<span class="badge badge-statut badge-statut-${statut}">${LIBELLES_STATUT[statut]}</span>`;
+}
 
 function rendreLigne(ligne) {
   const modifiee = estModifiee(ligne);
+  const statut = statutSlug(ligne.alert_slug_propose);
   return `
-  <div class="carte ${modifiee ? "est-modifiee" : ""}" data-id="${echapperHTML(idLigne(ligne))}">
+  <div class="carte ${modifiee ? "est-modifiee" : ""} ${classesStatut(statut)}" data-id="${echapperHTML(idLigne(ligne))}">
     <div class="ligne-badges">
+      ${badgeStatut(statut)}
       <span class="badge">${echapperHTML(ligne.territoire_propose || "territoire inconnu")}</span>
       <span class="badge">${echapperHTML(ligne.label_propose || "")}</span>
       <span class="badge badge-fichier">${echapperHTML(ligne.nom_fichier_geometrie || "")}</span>
@@ -403,12 +466,21 @@ function correspondFiltre(modifiee, filtre) {
   return true;
 }
 
+function correspondStatut(statut, filtre) {
+  if (filtre === "tous") return true;
+  if (filtre === "a-completer") return estACompleter(statut);
+  return statut === filtre;
+}
+
 function rendre() {
   const terme = elRecherche.value.trim();
   const filtre = elFiltreModification.value;
+  const filtreStatut = elFiltreStatut.value;
 
   const visibles = etat.lignes.filter(l =>
-    correspondRecherche(l, terme) && correspondFiltre(estModifiee(l), filtre)
+    correspondRecherche(l, terme)
+    && correspondFiltre(estModifiee(l), filtre)
+    && correspondStatut(statutSlug(l.alert_slug_propose), filtreStatut)
   );
   elListe.innerHTML = visibles.map(rendreLigne).join("") || "<p>Aucune ligne chargée ou ne correspondant aux filtres.</p>";
 
@@ -418,7 +490,15 @@ function rendre() {
 function mettreAJourProgression() {
   const total = etat.lignes.length;
   const modifiees = etat.lignes.filter(estModifiee).length;
-  elProgression.innerHTML = `<strong>${modifiees} / ${total}</strong> modifié(s)`;
+  const decompte = { vide: 0, initialise: 0, automatise: 0, manuel: 0, non_conforme: 0 };
+  etat.lignes.forEach(l => { decompte[statutSlug(l.alert_slug_propose)]++; });
+  const aCompleter = decompte.vide + decompte.initialise;
+  // Les non conformes ne sont affichés que s'il y en a : c'est une alerte,
+  // pas un compteur de routine.
+  const nonConformes = decompte.non_conforme ? ` · <strong>${decompte.non_conforme}</strong> non conforme(s)` : "";
+  elProgression.innerHTML =
+    `<strong>${aCompleter}</strong> à compléter · ${decompte.automatise} automatisé(s) · `
+    + `${decompte.manuel} manuel(s)${nonConformes} — ${modifiees} / ${total} modifié(s) cette session`;
 }
 
 /* ---------------------------------------------------------------------- *
@@ -457,6 +537,14 @@ elListe.addEventListener("input", (evenement) => {
   } else if (!estModifiee(ligne) && badgeModifie) {
     badgeModifie.remove();
   }
+  // Statut recalculé à chaque frappe : badge et apparence suivent la
+  // saisie, mais la carte reste affichée même si elle ne correspond plus au
+  // filtre — elle disparaîtra au prochain rendu complet (filtre, recherche,
+  // ↺), jamais en pleine frappe.
+  const statut = statutSlug(ligne.alert_slug_propose);
+  carte.classList.toggle("a-completer", estACompleter(statut));
+  carte.classList.toggle("est-terminee", estTerminee(statut));
+  carte.querySelector(".badge-statut").outerHTML = badgeStatut(statut);
 });
 
 // "change" : ne se déclenche qu'à la perte de focus après une frappe — un
@@ -471,6 +559,7 @@ elListe.addEventListener("change", (evenement) => {
 let delaiRecherche = null;
 elRecherche.addEventListener("input", () => { clearTimeout(delaiRecherche); delaiRecherche = setTimeout(rendre, 150); });
 elFiltreModification.addEventListener("change", rendre);
+elFiltreStatut.addEventListener("change", rendre);
 
 /* ---------------------------------------------------------------------- *
  * 5. Import / export
