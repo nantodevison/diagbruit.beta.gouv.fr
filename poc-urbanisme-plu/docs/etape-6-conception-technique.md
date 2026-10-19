@@ -127,6 +127,50 @@ Une désynchronisation entre les fichiers d'entrée (un `id_geometrie_synthese` 
 - Aucune dépendance Python nouvelle : ni appel LLM (la partie du slug qui l'aurait justifié est finalement laissée à la saisie manuelle, voir `etape-6-mise-en-forme-diagbruit.md`, "Format de l'alert_slug"), ni bibliothèque supplémentaire pour `generer_export.py`.
 - **`outil_validation.html`** (voir Phase 2) — aucune dépendance non plus, même choix qu'aux étapes 3 et 5 : parseur/constructeur CSV maison, page utilisable hors ligne.
 
+## Évolution prévue — proposition automatique des termes métier (non implémentée)
+
+*Décidée le 19/10/2026, à reprendre avant le prochain territoire. Rien n'est codé à ce stade.*
+
+### Constat sur le 067 hors Eurométropole
+
+Après la règle automatique du 13/10 (cas sans contenu métier, voir `etape-6-mise-en-forme-diagbruit.md`, "Format de l'alert_slug"), il restait 149 termes métier saisis à la main, en une demi-journée environ. Analyse de ces 149 termes (export `etape6_export_alert_slugs_20261019_115431.csv`, avant correction des doublons) :
+- **77 (52 %) reprennent simplement la zone réglementaire** mentionnée dans `zone_reglementaire_mentionnee` (`etape4_{dept}.gpkg`) : `ZoneUa`, `SecteurUep`, `Zone1Aux3`, `Zone1Au`, `PADD`… Ils sont déductibles **sans LLM** ;
+- **72 sont des termes libres** : `TraitementPaysager`, `EspacesTransition`, `ExtensionAgricole`, `NuisancesActivitesMixte`, `Tampon`…
+- **10 slugs étaient en double** (21 lignes), presque tous parce qu'un même code de zone (`ZoneUa`) revenait dans deux communes d'un même EPCI. Corrigé le 19/10 en mettant la commune devant le terme (`LupsteinZoneUa` / `PrintzheimZoneUa`). Aucun contrôle ne l'avait signalé pendant la saisie.
+
+### Convention retenue (19/10/2026)
+
+**CamelCase pour le terme métier, sans tiret** : le tiret est réservé au séparateur des champs du slug (`alert-{Territoire}-{Terme}`). Les termes historiques de l'Eurométropole (`autorisation-spr`, `habillage-pac`, en minuscules avec tirets) ne suivent pas cette convention : ils doivent être convertis (`AutorisationSpr`) avant d'être utilisés comme exemples (niveau 2 ci-dessous).
+
+### Les trois niveaux de l'évolution
+
+**Niveau 1 — Règle déterministe pour les règles de zone** (dans `generer_export.py`, à côté de `_slug_automatise`) :
+- condition : `nature_zone == "occurrence_locale"`, une seule commune, et `zone_reglementaire_mentionnee` reconnue comme un code de zone court (ex. `UA`, `1AUx3`, `Uep` ; à exclure : les descriptions longues comme « zone d'activité limitrophe de l'habitat » ou « secteur formé par l'îlot des rues… ») ;
+- terme : `{Commune}{Zone|Secteur}{Code}`, ex. `alert-CCduPaysdeSaverne-LupsteinZoneUa`. La commune est mise **d'office**, pour éviter les doublons entre communes d'un même EPCI (cause des 10 doublons du 067). Le choix `Zone`/`Secteur` peut reprendre le mot présent dans `zone_reglementaire_mentionnee` ou dans `titre_propose` ; `Zone` par défaut ;
+- casse du code : à normaliser (le 067 mélange `ZoneUa` et `ZoneUA`) — proposition : première lettre en majuscule, le reste tel que dans le règlement (`ZoneUA`, `Zone1AUx3`), à trancher au moment de coder ;
+- statut : `automatise` (même mécanique que la règle du 13/10 : recalculé à chaque relance, jamais une saisie manuelle écrasée). `MOTIF_AUTOMATISE` dans `outil_validation.html` devra être élargi en conséquence, sinon ces slugs y apparaîtront comme `manuel`.
+
+**Niveau 2 — Suggestion par LLM pour les termes libres** :
+- ⚠️ **contredit une décision documentée** (`etape-6-mise-en-forme-diagbruit.md`, "Format de l'alert_slug" : « une génération automatique risquerait de proposer un terme plausible mais faux »). Garde-fou retenu : la suggestion ne remplace **jamais** le slug. Elle va dans une **nouvelle colonne `alert_slug_suggere`**, et `alert_slug_propose` reste `initialise` tant que l'opérateur ne l'a pas acceptée ;
+- exemples donnés au LLM (few-shot) : les couples `titre_propose` → terme validés du 067 hors Eurométropole (`etape6_067_export.csv`, lignes au statut `manuel`, environ 70 hors termes de zone) et de l'Eurométropole (`output/EurometropoleDeStrasbourg/etape6_export_alert_slugs_20260821_234826.csv`, 28 lignes, convertis en CamelCase). Prévoir un fichier de référence versionné (ex. `etape6_mise_en_forme/exemples_termes_metier.csv`) alimenté à chaque nouveau territoire, plutôt que de relire les exports de chaque département ;
+- entrée par ligne : `titre_propose` et `message_content` (le titre seul est souvent trop court) ;
+- implémentation : reprendre le schéma de `etape5_redaction_messages/preparer_messages.py` (`_appeler_claude`, sortie structurée, prompt caching du bloc d'exemples dans `system`, cache disque `etape6_{dept}_cache_llm.jsonl` pour qu'une relance ne coûte rien) ;
+- consignes du prompt : un vocable du domaine urbanisme/acoustique, **pas un résumé** du message ; CamelCase ; 1 à 3 mots ; ne pas répéter le territoire ni la commune (ajoutée par le script si nécessaire à l'unicité) ;
+- évaluation avant adoption : sur le 067, proposer un terme pour chaque ligne en retirant ses propres exemples (validation croisée simple), et mesurer la part de termes identiques ou jugés acceptables. Seuil d'adoption à décider avec l'opérateur.
+
+**Niveau 3 — Contrôles d'unicité et de format, dès l'étape 6** :
+- `generer_export.py` : signaler (sans bloquer) les slugs en double et les slugs hors `A-Z a-z 0-9 - _ . ~` à la fin du run, à côté du décompte des statuts ;
+- `outil_validation.html` : badge « doublon » et badge « format » recalculés à la frappe, et filtre correspondant — les doublons du 067 auraient été vus pendant la saisie ;
+- l'étape 7 garde son propre contrôle bloquant (voir `etape-7-conception-technique.md`) : l'étape 6 aide l'opérateur, l'étape 7 protège Strapi/Notion.
+
+### Côté outil de validation (`outil_validation.html`)
+
+Pour le niveau 2 : afficher `alert_slug_suggere` sous le champ de saisie, avec un bouton « Accepter » qui recopie la suggestion dans le champ (statut → `manuel`, puisque validé par l'opérateur). Ajouter `alert_slug_suggere` à `COLONNES_EXPORT` (JS) **et** à `COLONNES_EXPORT` (`generer_export.py`), sinon un réexport la perdrait (voir "Phase 2 — Outil de validation").
+
+### Ordre de mise en œuvre conseillé
+
+Niveau 3 (simple, utile tout de suite), puis niveau 1 (déterministe, environ la moitié des termes métier), puis niveau 2 (LLM, à évaluer avant adoption).
+
 ## Prochaine étape
 
 Voir `etape-6-mise-en-forme-diagbruit.md`, "Prochaine étape" — étape 7, qui automatise l'insertion dans Strapi et Notion à partir de `etape6_{dept}_export.csv` et `etape6_{dept}_geometries/` (voir `etape-7-conception-technique.md`).
