@@ -44,7 +44,7 @@ Deux parties, deux traitements très différents :
 |---|---|---|---|
 | `rnu` | Règlement National de l'Urbanisme applicable | `RNU` | `alert-CCdelAlsaceBossue-AsswillerRNU` |
 | `trou_de_couverture` | Absence de document d'urbanisme référencé | `AbsenceGPU` | |
-| `document_non_significatif` | Aucune prescription bruit spécifique | `PasDeReferenceBruit` | |
+| `document_non_significatif` | Aucune disposition relative au bruit | `PasDeReferenceBruit` | |
 | `document_non_exploitable` | Document non analysable automatiquement | `DocNonAnalysable` | |
 
 Les termes « prescription » et « recommandation » ont un sens précis en urbanisme : ils sont volontairement évités dans les suffixes. La règle ne s'applique qu'aux géométries couvrant **une seule commune** ; un PLUi (plusieurs communes) reste à saisir à la main.

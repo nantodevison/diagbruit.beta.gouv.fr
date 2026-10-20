@@ -59,6 +59,6 @@ MESSAGES_FIXES: dict[str, str] = {
 TITRES_FIXES: dict[str, str] = {
     "trou_de_couverture": "Absence de document d'urbanisme référencé",
     "rnu": "Règlement National de l'Urbanisme applicable",
-    "document_non_significatif": "Aucune prescription bruit spécifique",
+    "document_non_significatif": "Aucune disposition relative au bruit",  # corrigé le 20/10/2026 : « prescription » a un sens précis en urbanisme
     "document_non_exploitable": "Document non analysable automatiquement",
 }
