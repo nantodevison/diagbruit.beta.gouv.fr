@@ -146,32 +146,95 @@ def convertir_content_html(message_content: str) -> str:
     return f"<p>{corps}</p>"
 
 
-def _chercher(alert_slug: str, status: str, environnement: str) -> str | None:
+class DoublonStrapi(Exception):
+    """Plusieurs documents Strapi portent le même `alert_slug` — écrire
+    dans l'un laisserait l'autre silencieusement obsolète (voir
+    `trouver_document_id`). À nettoyer à la main dans l'admin Strapi."""
+
+
+def _chercher(alert_slug: str, status: str, environnement: str) -> set[str]:
+    """`documentId` de toutes les entrées portant `alert_slug` pour ce
+    statut — un ensemble, jamais seulement le premier résultat."""
     donnees = _get(
         f"{_base_url(environnement)}/api/{CONTENT_TYPE}",
         params={"filters[alert_slug][$eq]": alert_slug, "status": status},
         environnement=environnement,
     )
-    resultats = donnees.get("data") or []
-    return resultats[0]["documentId"] if resultats else None
+    return {resultat["documentId"] for resultat in donnees.get("data") or []}
 
 
-def trouver_document_id(alert_slug: str, environnement: str) -> str | None:
-    """Cherche une entrée existante par `alert_slug`, brouillon ou publiée.
-    Retourne son `documentId` (Strapi 5 — une chaîne, pas l'`id` numérique),
-    ou `None` si aucune entrée ne correspond.
+@dataclass
+class EtatEntree:
+    """État d'une entrée Strapi pour un `alert_slug` donné.
+
+    Rappel "draft and publish" (Strapi 5, `draftAndPublish: true` sur ce
+    content-type) : un document jamais publié n'a qu'une version brouillon ;
+    un document publié a deux versions, brouillon et publiée, qui partagent
+    le même `documentId`. Le front (FastAPI) ne lit que les publiées."""
+
+    document_id: str | None
+    brouillon: bool
+    publie: bool
+
+
+def etat_entree(alert_slug: str, environnement: str) -> EtatEntree:
+    """Cherche l'entrée portant `alert_slug`, parmi les brouillons **et**
+    parmi les publiées, et lève `DoublonStrapi` si plusieurs documents
+    distincts la portent.
 
     **Piège corrigé le 24/08/2026, après avoir créé 19 doublons en réel** :
     une requête sans paramètre `status` ne cherche, par défaut, que parmi
     les entrées **publiées** — comme ce script ne crée jamais que des
     brouillons (voir `creer_ou_mettre_a_jour`), une recherche sans ce
-    paramètre ne trouve jamais rien et déclenche une création à chaque
-    appel, même pour une entrée déjà existante. Cherche donc d'abord parmi
-    les brouillons, puis parmi les publiées (utile si l'opérateur a publié
-    l'entrée entre deux passages du script) — les deux peuvent légitimement
-    coexister avec le même `documentId` (document publié puis retouché).
-    """
-    return _chercher(alert_slug, "draft", environnement) or _chercher(alert_slug, "published", environnement)
+    paramètre ne trouvait jamais rien et déclenchait une création à chaque
+    appel.
+
+    **Recherche stricte (20/10/2026)** : la version précédente ne gardait
+    que le premier résultat. Avec un slug en double (doublons résiduels du
+    24/08), une seule des entrées était mise à jour, l'autre restait
+    obsolète sans que rien ne le signale."""
+    brouillons = _chercher(alert_slug, "draft", environnement)
+    publies = _chercher(alert_slug, "published", environnement)
+    documents = brouillons | publies
+    if len(documents) > 1:
+        raise DoublonStrapi(
+            f"{len(documents)} documents Strapi/{environnement} portent alert_slug={alert_slug!r} : "
+            f"{', '.join(sorted(documents))} — à dédoublonner dans l'admin Strapi avant tout envoi."
+        )
+    document_id = next(iter(documents), None)
+    return EtatEntree(document_id=document_id, brouillon=bool(brouillons), publie=bool(publies))
+
+
+def trouver_document_id(alert_slug: str, environnement: str) -> str | None:
+    """`documentId` (Strapi 5 — une chaîne, pas l'`id` numérique) de
+    l'entrée portant `alert_slug`, ou `None` si aucune ne correspond. Lève
+    `DoublonStrapi` si plusieurs documents la portent (voir `etat_entree`)."""
+    return etat_entree(alert_slug, environnement).document_id
+
+
+def lister_entrees(status: str, environnement: str) -> list[dict]:
+    """Toutes les entrées du content-type pour un statut (`draft` ou
+    `published`), page par page — lecture seule, utilisée par le mode
+    `--audit` de `inserer.py`. Chaque élément porte au moins `documentId`
+    et `alert_slug`."""
+    entrees: list[dict] = []
+    page = 1
+    while True:
+        donnees = _get(
+            f"{_base_url(environnement)}/api/{CONTENT_TYPE}",
+            params={
+                "status": status,
+                "fields[0]": "alert_slug",
+                "pagination[page]": page,
+                "pagination[pageSize]": 100,
+            },
+            environnement=environnement,
+        )
+        entrees.extend(donnees.get("data") or [])
+        nb_pages = ((donnees.get("meta") or {}).get("pagination") or {}).get("pageCount", 1)
+        if page >= nb_pages:
+            return entrees
+        page += 1
 
 
 @dataclass
@@ -200,7 +263,13 @@ def _payload(champs: ChampsNoisezoneAlert) -> dict:
 def creer_ou_mettre_a_jour(champs: ChampsNoisezoneAlert, environnement: str) -> tuple[str, bool]:
     """Crée l'entrée si `alert_slug` n'existe pas encore, la met à jour
     sinon. Retourne `(documentId, cree)` — `cree` vrai pour une nouvelle
-    entrée, faux pour une mise à jour."""
+    entrée, faux pour une mise à jour. Lève `DoublonStrapi` sans rien
+    écrire si plusieurs documents portent déjà ce slug.
+
+    Une mise à jour (`PUT ... ?status=draft`) ne modifie que la version
+    brouillon : si l'entrée est déjà publiée, sa version publiée — celle
+    que lit le front — reste l'ancienne jusqu'à une republication manuelle
+    dans l'admin Strapi."""
     document_id = trouver_document_id(champs.alert_slug, environnement)
     url_collection = f"{_base_url(environnement)}/api/{CONTENT_TYPE}"
     if document_id:

@@ -344,7 +344,7 @@ def generer(code_departement: str, dossier_sortie: str | Path = "output") -> Pat
 
         nom_fichier_geometrie = f"{id_geometrie}.geojson"
         # Volontairement sans alert_slug ici (voir docs/etape-7-conception-technique.md,
-        # "Correctif requis avant le prochain dépôt", ajouté le 11/09/2026) :
+        # "Correctif du 20/10/2026", point 2) :
         # alert_slug_propose n'est le plus souvent qu'une proposition mécanique
         # incomplète à ce stade, la valeur finale n'étant connue qu'après la
         # complétion manuelle en Phase 2 (outil_validation.html), qui ne

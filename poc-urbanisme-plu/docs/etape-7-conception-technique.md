@@ -8,19 +8,44 @@ Même sous-dossier du même POC que les étapes 1 à 6 (voir `etape-1-conception
 
 **Écart majeur par rapport aux étapes précédentes** : c'est la première étape qui écrit dans des systèmes partagés et visibles par toute l'équipe métier (CMS Strapi préprod, base Notion collective) — jamais anodin comme un fichier `output/` local que seul l'opérateur du POC consulte. Conséquence directe dans la conception : **`--envoyer` explicite requis pour toute écriture réelle** — sans ce drapeau, `inserer.py` ne fait qu'afficher ce qu'il ferait (voir "Mode dry-run" ci-dessous). C'est le comportement par défaut, pas une option.
 
-## ⚠️ Correctif requis avant le prochain dépôt — `alert_slug` absent des géométries
+## Correctif du 20/10/2026 — `alert_slug` dans les géométries, contrôles bloquants, audit
 
-*Constat du 11/09/2026 (retour utilisateur), non corrigé à ce stade — **le prochain dépôt Box (`--envoyer`) ne doit pas être relancé avant l'implémentation ci-dessous.***
+*Constat du 11/09/2026 (le `.geojson` déposé sur Box ne portait que `id_geometrie`), complété le 19/10/2026 par le retour de l'équipe de développement (identifiants dupliqués, PLU manquants entre prod et préprod). Implémenté et testé hors ligne le 20/10/2026 ; le bloc d'avertissement `TODO(alert_slug)` de `inserer.py` est retiré.*
 
-**Problème** : le `.geojson` déposé sur Box (`etape6_{dept}_geometries/{id_geometrie}.geojson`, produit par `generer_export.py` — voir `etape-6-conception-technique.md`) ne porte que `id_geometrie` comme propriété. `alert_slug` n'y figure jamais, alors que c'est lui qui doit permettre de relier la géométrie à son contenu Strapi une fois sortie de ce pipeline POC — Notion (`alert_slug` + lien Box côte à côte sur la même page) n'est qu'un outil de synchronisation vers l'équipe de développement, pas la jointure définitive : le fichier géométrie lui-même doit porter `alert_slug`.
+**Pourquoi `alert_slug` doit être dans le fichier géométrie** : c'est lui qui relie un contour à son contenu Strapi une fois sorti de ce pipeline POC. Notion (`alert_slug` et lien Box côte à côte sur la même page) n'est qu'un outil de coordination avec l'équipe de développement, pas la jointure définitive.
 
-**Décision de conception (validée le 11/09/2026, à implémenter)** :
-- **Rien à changer dans `generer_export.py` / l'étape 6** — une tentative d'écrire `alert_slug` dès la Phase 1 de l'étape 6 a été explicitement écartée : à ce stade, `alert_slug_propose` n'est le plus souvent qu'une proposition mécanique incomplète (terminée par `-`, voir `etape-6-conception-technique.md`, "Reprise à la régénération") — la valeur finale n'existe qu'après la complétion manuelle en Phase 2 (`outil_validation.html`), qui ne réécrit jamais les `.geojson`. Graver `alert_slug` à l'étape 6 risquerait donc de figer une valeur obsolète, avec un risque jugé trop élevé de l'oublier lors d'une complétion ultérieure.
-- **Tout se passe dans `inserer.py` (étape 7), à chaque exécution, jamais un script de vérification séparé à lancer "avant"** — un script séparé introduirait un risque de péremption (rien n'empêcherait de relancer `generer_export.py` ou de modifier `etape6_{dept}_export.csv` entre la vérification et l'usage réel). En intégrant la vérification au tout début de `inserer.py`, elle porte toujours exactement sur les fichiers qui vont être utilisés dans la foulée.
-- **Étape 1, "Validation de l'`alert_slug`" ci-dessous, à renforcer** : en plus du contrôle déjà en place (non vide, ne se termine pas par `-`), ajouter un contrôle de forme via un slugifier (à l'image de `_slugifier_nom` dans `etape6_mise_en_forme/generer_export.py`, mais à appliquer ici sur `alert_slug_propose` en entier) — la partie "terme métier" du slug est aujourd'hui saisie librement par l'opérateur dans `outil_validation.html`, **sans passer par aucun slugifier** (voir `etape-6-conception-technique.md`, "Contrat de données", `alert_slug_propose`), donc potentiellement porteuse d'espaces, d'accents ou d'une casse incohérente. Le jeu de caractères exact à valider doit être vérifié contre les règles réelles du champ Strapi `alert_slug` (type natif `uid`, voir `cms/src/api/noisezone-alert/content-types/noisezone-alert/schema.json`) avant d'être figé dans le code — ne pas deviner une regex de mémoire.
-- **Nouvelle sous-étape, avant le dépôt Box** : une fois l'`alert_slug` validé, réécrire le `.geojson` local pour y ajouter la propriété `alert_slug` (lue depuis `etape6_{dept}_export.csv`, la même valeur déjà utilisée pour Strapi/Notion) **avant** l'appel à `client_box.televerser_geometrie` — jamais en mode dry-run (cohérent avec "aucune écriture, pas même locale, sans `--envoyer`").
+**Ce qui est fait, dans `inserer.py`, à chaque exécution** (jamais un script de vérification séparé à lancer « avant », qui pourrait porter sur des fichiers modifiés entre-temps) :
 
-**Pourquoi ce n'est pas dans `ameliorations-identifiees.md`** : ce document est réservé aux limites dont la correction a été *envisagée puis écartée* — ici, à l'inverse, la correction est retenue et seulement pas encore implémentée.
+1. **Contrôles bloquants sur l'export entier, avant tout appel réseau** (`_controler_export`) — au moindre problème, arrêt sans rien envoyer, avec la liste complète des problèmes :
+   - format de chaque `alert_slug` : non vide, pas de `-` final, au moins deux `-` (`alert-{Territoire}-{Terme}`), et uniquement `A-Z a-z 0-9 - _ . ~` — règle du champ `uid` de Strapi, lue dans le code de Strapi 5.13.0 (`@strapi/core`, `uidValidator`), version déclarée dans `cms/package.json`. Strapi ne l'applique qu'à la **publication**, pas au brouillon : sans ce contrôle, un slug invalide passerait l'étape 7 et ne bloquerait qu'au moment de publier ;
+   - **unicité** des slugs dans l'export : un doublon ferait mettre à jour la même entrée deux fois, l'une écrasant l'autre ;
+   - présence du `.geojson` de chaque ligne.
+
+   Pourquoi bloquer plutôt que sauter la ligne (comportement d'avant) : un envoi partiel est plus difficile à rattraper qu'un envoi qui n'a pas eu lieu.
+2. **`alert_slug` ajouté au `.geojson` local juste avant le dépôt Box** (`_ajouter_alert_slug_geojson`), puis le fichier est relu pour vérification. Option retenue le 20/10/2026 : modifier le fichier local plutôt qu'envoyer une copie modifiée en mémoire — le fichier du disque, celui du dépôt Git et celui de Box restent identiques, sans modification silencieuse. Conséquences assumées : les `.geojson` locaux apparaissent modifiés dans Git après le premier envoi réel (à commiter) ; une relance de `generer_export.py` les réécrit sans `alert_slug`, que l'envoi suivant remet. Jamais en dry-run. `generer_export.py` (étape 6) reste inchangé : le slug n'y est pas encore définitif.
+3. **Recherche stricte des entrées existantes** (`client_strapi.etat_entree`, `client_notion.trouver_page_id`) : si plusieurs documents Strapi (ou pages Notion) portent le même `alert_slug`, la ligne passe en erreur sans aucune écriture, avec la liste des identifiants à dédoublonner à la main. Avant, seul le premier résultat était retenu : avec un doublon (cas des doublons résiduels du 24/08), une entrée était mise à jour et l'autre restait obsolète sans que rien ne le signale.
+4. **Journal enrichi** : colonnes `environnement` (`preprod`/`prod`) et `action_strapi`/`action_notion` (`cree`/`mis_a_jour`) — voir "Contrat de données". Un journal existant à l'ancien format est refusé (à renommer à la main) plutôt que complété avec un format mélangé. Le journal de l'Eurométropole (`etape7_067-plui-strasbourg_insertions.csv`) ne permettait pas de savoir dans quel environnement chaque ligne avait été écrite.
+5. **Mode `--audit`**, lecture seule — voir "Mode audit" ci-dessous.
+
+## Draft and publish (Strapi 5) — rappel et conséquences
+
+Le content-type `noisezone-alert` a `draftAndPublish: true`. Un document (une alerte, identifiée par son `documentId`) existe en base sous une ou deux lignes, chacune avec son propre `id` numérique :
+- **jamais publié** : une seule ligne, le brouillon (`published_at` vide) — état normal d'une entrée créée par ce script ;
+- **publié** : deux lignes, brouillon **et** version publiée, qui partagent le même `documentId`.
+
+Une alerte publiée à qui il manquerait sa ligne brouillon casse l'interface d'administration (retour de l'équipe de développement du 19/10/2026). Cet état ne peut pas être produit par ce script : il passe exclusivement par l'API REST (`POST`/`PUT /api/noisezone-alerts`), c'est Strapi qui crée les lignes et attribue les identifiants. Le payload ne contient **aucun** `id` ni `documentId` (ce dernier est seulement lu dans les réponses, puis utilisé dans l'URL d'un `PUT`) — vérifié dans le code le 19/10/2026.
+
+Conséquences pratiques :
+- le front (FastAPI, `fetch_noisezone_alert_content`) interroge Strapi **sans** paramètre `status`, donc ne voit que les entrées **publiées** : une alerte créée par ce script reste invisible sur le site tant que personne ne la publie dans l'admin Strapi. Un écart de publication entre prod et préprod se traduit donc par des PLU « manquants » d'un côté ;
+- une mise à jour (`PUT ... ?status=draft`) d'une alerte déjà publiée ne modifie que son brouillon : la version publiée reste l'ancienne jusqu'à une republication manuelle. Le dry-run le signale ligne par ligne.
+
+## Mode audit (`--audit`)
+
+`python -m etape7_stockage.inserer --dept 067 --audit --environnement preprod` — **lecture seule** : uniquement des `GET` sur Strapi (`client_strapi.lister_entrees`, toutes les entrées, page par page, en brouillon puis en publié), aucun appel Notion ni Box, aucune écriture distante. `--box-folder-id` n'est pas requis. Écrit `etape7_{dept}_audit_{environnement}.csv`, une ligne par `alert_slug` présent dans Strapi ou dans l'export (`alert_slug`, `dans_export`, `id_geometrie`, `document_ids`, `brouillon`, `publie`, `anomalie`), et affiche un résumé.
+
+Anomalies relevées : `doublon` (plusieurs documents pour un même slug), `publie_sans_brouillon` (document publié sans version brouillon visible, le cas signalé par l'équipe de développement), `absent` (slug de l'export absent de Strapi). Un brouillon seul n'est pas une anomalie.
+
+Même en lecture seule, un audit sur la **prod** n'est lancé qu'avec l'accord explicite de l'opérateur.
 
 ## Architecture des dossiers
 
@@ -61,7 +86,7 @@ Lit `etape6_{dept}_export.csv` (une ligne par géométrie finale, `alert_slug_pr
 
 Pour chaque ligne :
 
-1. **Validation de l'`alert_slug`** : une valeur vide, ou encore terminée par `-` (proposition mécanique de `outil_validation.html` jamais complétée par l'opérateur — voir `etape-6-conception-technique.md`), n'est pas exploitable. La ligne est tracée dans `etape7_{dept}_erreurs.csv` (`source` = `validation`) et ni Strapi ni Notion ne sont appelés pour elle. **⚠️ À renforcer** (voir "Correctif requis" en tête de document) : ajouter un contrôle de forme (slugifier) en plus des deux contrôles déjà en place.
+1. **Validation de l'`alert_slug`** : une valeur vide, ou encore terminée par `-` (proposition mécanique de `outil_validation.html` jamais complétée par l'opérateur — voir `etape-6-conception-technique.md`), n'est pas exploitable. **Depuis le 20/10/2026, ce contrôle porte sur l'export entier et il est bloquant** (format `uid` Strapi, unicité, géométrie présente) : au moindre problème, rien n'est envoyé — voir "Correctif du 20/10/2026" en tête de document.
 2. **Strapi** (`client_strapi.py`) — construit le payload à partir des colonnes déjà granulaires de l'étape 6 (voir `etape-6-conception-technique.md`, "Contrat de données") :
    - `alert_slug` ← `alert_slug_propose`
    - `content` ← `message_content`, encapsulé dans un unique `<p>...</p>`, chaque `\n` remplacé par `<br>` (voir "Conversion `content`" ci-dessous)
@@ -72,7 +97,7 @@ Pour chaque ligne :
    - Recherche préalable (`trouver_document_id`, voir "Idempotence") : absente → création, `POST {url_environnement}/api/noisezone-alerts?status=draft`, corps `{"data": {...}}`. Présente → mise à jour, `PUT {url_environnement}/api/noisezone-alerts/{documentId}?status=draft` (Strapi 5 — `documentId`, une chaîne, pas l'`id` numérique). `url_environnement` vient de `STRAPI_PREPROD_URL` ou `STRAPI_PROD_URL` selon `--environnement` (voir "Deux environnements Strapi" ci-dessous).
    - Entrée créée **en brouillon** (`draftAndPublish` actif sur ce content-type), jamais publiée automatiquement par le script — l'opérateur relit et publie manuellement dans Strapi. Le paramètre de requête `status=draft` sur `POST`/`PUT` est ce qui garantit ce comportement — voir "Piège : publication automatique" ci-dessous.
 3. **Box puis Notion** (`client_box.py` + `client_notion.py`) :
-   - **⚠️ Manquant** (voir "Correctif requis" en tête de document) : avant le dépôt, réécrire le `.geojson` local pour y ajouter la propriété `alert_slug` — actuellement absente, seule `id_geometrie` est écrite par `generer_export.py`.
+   - Avant le dépôt, le `.geojson` local reçoit la propriété `alert_slug` puis est relu pour vérification (voir "Correctif du 20/10/2026", point 2).
    - Dépôt de la géométrie sur Box (`client_box.televerser_geometrie`) : recherche d'un fichier du même nom dans `--box-folder-id` (index du dossier mis en cache pour le run, voir "Dépôt sur Box" ci-dessous) ; absent → `POST https://upload.box.com/api/2.0/files/content` (création) ; présent → `POST .../files/{id}/content` (nouvelle version, pas de doublon). Retourne `https://app.box.com/file/{id}`.
    - Recherche préalable côté Notion (`trouver_page_id`, `POST /v1/data_sources/{data_source_id}/query` — voir "Sources de données Notion" ci-dessous). Absente → création (`POST /v1/pages`, `parent` = `{"type": "data_source_id", "data_source_id": ...}`). Présente (`page_id`) → mise à jour (`PATCH /v1/pages/{page_id}`).
    - Champs : `Territoire` ← `territoire_propose`, `Description` ← `titre_propose` (même source que `title` Strapi ci-dessus), `alert_slug` ← `alert_slug_propose`, `data` ← lien externe vers le fichier Box (`{"type": "external", "external": {"url": "https://app.box.com/file/..."}}`), pas un fichier uploadé dans Notion.
@@ -129,7 +154,7 @@ Avant toute écriture, l'étape 7 cherche une entrée/page existante par `alert_
 
 ## Mode dry-run
 
-Comportement par défaut de `inserer.py`, sans `--envoyer` : aucune requête d'écriture (`POST`/`PUT`/`PATCH`) n'est faite, ni sur Strapi, ni sur Notion, ni sur Box — seules les recherches en lecture (voir "Idempotence") sont exécutées, pour afficher un dry-run fidèle à l'état réel. Le script affiche, pour chaque ligne, ce qu'il ferait ("créerait" ou "mettrait à jour {documentId}/{page_id}", d'après la recherche live) — y compris les valeurs exactes des champs qui seraient envoyés, pour permettre une relecture avant tout envoi réel. Aucun fichier n'est écrit dans `output/` en dry-run (ni journal ni fichier d'erreurs).
+Comportement par défaut de `inserer.py`, sans `--envoyer` : aucune requête d'écriture (`POST`/`PUT`/`PATCH`) n'est faite, ni sur Strapi, ni sur Notion, ni sur Box — seules les recherches en lecture (voir "Idempotence") sont exécutées, pour afficher un dry-run fidèle à l'état réel. Le script affiche, pour chaque ligne, ce qu'il ferait ("créerait" ou "mettrait à jour {documentId}/{page_id}", d'après la recherche live) — y compris les valeurs exactes des champs qui seraient envoyés, pour permettre une relecture avant tout envoi réel. Aucun fichier n'est écrit ni modifié en dry-run (ni journal, ni fichier d'erreurs, ni `.geojson`) — les erreurs éventuelles sont seulement affichées. Le dry-run signale aussi, pour une entrée Strapi existante, si elle est déjà publiée (la mise à jour ne touchera que son brouillon).
 
 ## Gestion des erreurs
 
@@ -145,13 +170,16 @@ Même principe que les étapes précédentes : un échec isolé sur une ligne (e
 |---|---|
 | `id_geometrie` | reprise de `etape6_{dept}_export.csv`. |
 | `alert_slug` | clé de correspondance entre les deux systèmes et avec `etape6_{dept}_export.csv`. |
+| `environnement` | `preprod` ou `prod` — Strapi ciblé par ce run (ajouté le 20/10/2026). |
+| `action_strapi` | `cree` ou `mis_a_jour` — vide si l'insertion Strapi a échoué (ajouté le 20/10/2026). |
 | `strapi_document_id` | `documentId` Strapi de l'entrée créée ou mise à jour — vide si l'insertion Strapi a échoué. |
+| `action_notion` | `cree` ou `mis_a_jour` — vide si l'insertion Notion a échoué (ajouté le 20/10/2026). |
 | `notion_page_id` | identifiant de page Notion créée ou mise à jour — vide si l'insertion Notion a échoué. |
 | `date_traitement` | date de l'écriture (création ou mise à jour) pour cette ligne. |
 
 `etape7_{dept}_erreurs.csv` : mêmes colonnes que les fichiers d'erreurs des étapes précédentes (`identifiant`, `source`, `message`, `date_traitement`) :
 - `source` vaut `strapi` ou `notion` pour un échec d'appel API — `identifiant` porte alors l'`alert_slug` ;
-- `source` vaut `validation` pour un `alert_slug` incomplet ou vide, détecté avant tout appel API — `identifiant` porte alors l'`id_geometrie`, faute d'`alert_slug` exploitable.
+- `source` ne vaut plus `validation` depuis le 20/10/2026 : un `alert_slug` invalide arrête désormais le run entier avant tout appel API (liste des problèmes en console), au lieu d'être tracé ligne par ligne.
 
 ## Dépendances retenues
 

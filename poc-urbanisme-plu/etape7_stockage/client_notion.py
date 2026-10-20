@@ -130,12 +130,24 @@ def _data_source_id() -> str:
     return _cache_data_source_id
 
 
+class DoublonNotion(Exception):
+    """Plusieurs pages Notion portent le même `alert_slug` — même risque
+    que `client_strapi.DoublonStrapi` : une seule serait mise à jour."""
+
+
 def trouver_page_id(alert_slug: str) -> str | None:
     """Cherche une page existante par `alert_slug`. Retourne son `id`, ou
-    `None` si aucune page ne correspond."""
+    `None` si aucune page ne correspond. Lève `DoublonNotion` si plusieurs
+    pages la portent (recherche stricte du 20/10/2026 : la version
+    précédente ne gardait que le premier résultat)."""
     payload = {"filter": {"property": "alert_slug", "rich_text": {"equals": alert_slug}}}
     donnees = _post_json(f"{NOTION_API_BASE}/data_sources/{_data_source_id()}/query", payload)
     resultats = donnees.get("results") or []
+    if len(resultats) > 1:
+        raise DoublonNotion(
+            f"{len(resultats)} pages Notion portent alert_slug={alert_slug!r} : "
+            f"{', '.join(r['id'] for r in resultats)} — à dédoublonner dans Notion avant tout envoi."
+        )
     return resultats[0]["id"] if resultats else None
 
 
