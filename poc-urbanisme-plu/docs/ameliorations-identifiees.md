@@ -107,4 +107,10 @@ fonctionnement retenu plutôt que ses limites.*
 
 **Problème** : d'éventuels doublons résiduels de cet épisode restent à nettoyer manuellement dans l'admin Strapi — le jeton d'API utilisé n'a pas le droit `delete`. Le contenu des deux entrées d'une même paire de doublons est strictement identique, l'une ou l'autre peut être supprimée indifféremment.
 
+**Résolu (constaté le 20/10/2026)** : l'audit en lecture seule (`inserer.py --audit`) ne trouve
+plus aucun slug en doublon, ni en préprod ni en prod (50 documents de chaque côté, tous publiés
+avec leur brouillon) — le nettoyage a été fait côté Strapi entre-temps. Depuis le correctif du
+20/10/2026, un slug porté par plusieurs documents est en outre détecté et bloque l'écriture
+(voir `etape-7-conception-technique.md`).
+
 **Piste de correction** : soit accorder ponctuellement le droit `delete` au jeton d'API pour un script de nettoyage dédié, soit traiter ce nettoyage manuellement dans l'interface Strapi une fois pour toutes sur les départements déjà traités avec l'ancienne version du script.
