@@ -11,7 +11,8 @@ fichier lui-même.
 
 **Contrôles bloquants (20/10/2026)** : avant tout appel réseau, l'export
 entier est contrôlé — format de chaque `alert_slug` (règle du champ `uid` de
-Strapi), unicité, présence du `.geojson`. Au moindre problème, le script
+Strapi), unicité, présence du `.geojson`, champs obligatoires de Strapi non
+vides et `label` autorisé. Au moindre problème, le script
 s'arrête sans rien envoyer et liste tous les problèmes trouvés : un slug en
 double écraserait une autre règle, et un envoi partiel est plus difficile à
 rattraper qu'un envoi qui n'a pas eu lieu.
@@ -81,6 +82,22 @@ COLONNES_AUDIT = ["alert_slug", "dans_export", "id_geometrie", "document_ids", "
 # bloquerait qu'au moment où quelqu'un publie.
 MOTIF_UID_STRAPI = re.compile(r"[A-Za-z0-9\-_.~]+")
 
+# Champs obligatoires du schéma Strapi (cms/src/api/noisezone-alert/
+# content-types/noisezone-alert/schema.json : source, reference, label —
+# alert_slug est contrôlé à part), avec la colonne de l'export qui les
+# alimente. Même piège que pour le format du slug : Strapi 5.13.0 ne les
+# vérifie qu'à la publication (`required: !isDraft && attr.required`,
+# @strapi/core, entity-validator) — vides, l'alerte serait créée en brouillon
+# puis impossible à publier. `message_content` (champ `content`, non
+# obligatoire côté Strapi) est ajouté : une alerte sans message n'a pas de sens.
+CHAMPS_OBLIGATOIRES = {
+    "strapi_source": "source",
+    "strapi_reference": "reference",
+    "label_propose": "label",
+    "message_content": "content",
+}
+LABELS_AUTORISES = ("ZONE SOUMISE AU BRUIT", "ZONE CALME")  # enum `label` du schéma Strapi
+
 
 class ExportCsvIntrouvable(Exception):
     pass
@@ -142,6 +159,15 @@ def _controler_export(lignes: list[dict], dossier_geometries: Path) -> list[str]
         chemin_geojson = dossier_geometries / _texte(ligne.get("nom_fichier_geometrie"))
         if not _texte(ligne.get("nom_fichier_geometrie")) or not chemin_geojson.is_file():
             problemes.append(f"g{id_geometrie} : géométrie introuvable ({chemin_geojson})")
+        vides = [champ for colonne, champ in CHAMPS_OBLIGATOIRES.items() if not _texte(ligne.get(colonne))]
+        if vides:
+            problemes.append(
+                f"g{id_geometrie} : champ(s) Strapi vide(s) : {', '.join(vides)} — "
+                "l'alerte serait créée en brouillon mais impossible à publier"
+            )
+        label = _texte(ligne.get("label_propose"))
+        if label and label not in LABELS_AUTORISES:
+            problemes.append(f"g{id_geometrie} : label {label!r} hors des valeurs autorisées {LABELS_AUTORISES}")
 
     par_slug: dict[str, list[str]] = defaultdict(list)
     for ligne in lignes:

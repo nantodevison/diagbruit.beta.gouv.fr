@@ -51,7 +51,7 @@ from pathlib import Path
 import geopandas as gpd
 import pandas as pd
 
-from .assembler_message import assembler_message, assembler_source_reference
+from .assembler_message import assembler_message, assembler_message_valeurs, assembler_source_reference
 from .resolution_territoire import SEPARATEUR_COMMUNES, ResolveurTerritoire
 
 # Correspondance vers le champ `label` de Strapi (enum `ZONE SOUMISE AU
@@ -206,20 +206,63 @@ def _lire_documents_par_synthese(chemin: Path) -> dict[str, list[dict]]:
 
 
 def _details_par_geometrie(chemin: Path) -> dict[str, dict[str, str]]:
-    """`communes`, `nature_sonore_zone` et `nature_zone` (texte brut) par
-    `id_geometrie`, reprises de `etape4_{dept}.gpkg` — voir la docstring du
-    module pour pourquoi ce fichier est relu ici en plus de
-    `etape5_{dept}.gpkg`. `nature_zone` sert à la règle automatique du
-    slug (voir `SUFFIXE_PAR_NATURE_ZONE`)."""
+    """`communes`, `nature_sonore_zone`, `nature_zone` et `nom_document`
+    (texte brut) par `id_geometrie`, reprises de `etape4_{dept}.gpkg` — voir
+    la docstring du module pour pourquoi ce fichier est relu ici en plus de
+    `etape5_{dept}.gpkg`. `nature_zone` sert à la règle automatique du slug
+    (voir `SUFFIXE_PAR_NATURE_ZONE`) et, avec `nom_document`, aux
+    source/référence des cas sans document source (voir
+    `source_reference_sans_document`)."""
     gdf = gpd.read_file(chemin, layer="geometries")
     return {
         _texte(ligne.get("id_geometrie")): {
             "communes": _texte(ligne.get("communes")),
             "nature_sonore_zone": _texte(ligne.get("nature_sonore_zone")),
             "nature_zone": _texte(ligne.get("nature_zone")),
+            "nom_document": _texte(ligne.get("nom_document")),
         }
         for _, ligne in gdf.iterrows()
     }
+
+
+def date_consultation_gpu(chemin_etape1: Path) -> str:
+    """Date (JJ/MM/AAAA) à laquelle le Géoportail de l'Urbanisme a été
+    interrogé à l'étape 1 — la plus récente `date_traitement` de
+    `etape1_{dept}.csv`, ou `""` si le fichier est absent (la référence
+    « absence de GPU » reste alors vide, et l'étape 7 refusera l'envoi)."""
+    if not chemin_etape1.exists():
+        return ""
+    with chemin_etape1.open(encoding="utf-8-sig", newline="") as fichier:
+        dates = [_texte(l.get("date_traitement")) for l in csv.DictReader(fichier)]
+    dates = [d for d in dates if d]
+    if not dates:
+        return ""
+    annee, mois, jour = max(dates).split("-")
+    return f"{jour}/{mois}/{annee}"
+
+
+def source_reference_sans_document(nature_zone: str, nom_document: str, date_gpu: str) -> tuple[str, str]:
+    """`(source, reference)` pour les cas sans document source — décidé le
+    20/10/2026. Ces deux champs sont **obligatoires** dans le schéma Strapi,
+    mais Strapi ne le vérifie qu'à la publication, pas pour un brouillon :
+    vides, ils rendraient l'alerte impossible à publier. Retourne `("", "")`
+    pour un autre cas (occurrence locale : source et référence viennent du
+    document, voir `assembler_source_reference`).
+
+    RNU : pas de lien Legifrance ici — `source`/`reference` sont du texte
+    simple, affiché tel quel par le front ; l'affichage d'un lien est une
+    question posée à l'équipe de développement (option C du 20/10/2026)."""
+    if nature_zone == "rnu":
+        return "Code de l'urbanisme", "Règlement national d'urbanisme (art. L111-1 à L111-35 et R111-1 à R111-64)"
+    if nature_zone == "trou_de_couverture":
+        if not date_gpu:
+            return "Géoportail de l'Urbanisme", ""
+        return "Géoportail de l'Urbanisme", f"Aucun document d'urbanisme référencé à date du {date_gpu}"
+    if nature_zone == "document_non_significatif":
+        return nom_document, "Aucune disposition relative au bruit identifiée"
+    if nature_zone == "document_non_exploitable":
+        return nom_document, "Document non exploitable automatiquement"
+    return "", ""
 
 
 def _lire_export_precedent(chemin: Path) -> dict[str, dict[str, str]]:
@@ -296,6 +339,7 @@ def generer(code_departement: str, dossier_sortie: str | Path = "output") -> Pat
 
     resolveur = ResolveurTerritoire(code_departement)
     date_traitement = date.today().isoformat()
+    date_gpu = date_consultation_gpu(dossier / f"etape1_{code_departement}.csv")
 
     lignes_export: list[dict] = []
     erreurs: list[dict] = []
@@ -304,7 +348,7 @@ def generer(code_departement: str, dossier_sortie: str | Path = "output") -> Pat
     for _, ligne in gdf.iterrows():
         id_geometrie = _texte(ligne.get("id_geometrie"))
         details = details_par_geometrie.get(
-            id_geometrie, {"communes": "", "nature_sonore_zone": "", "nature_zone": ""}
+            id_geometrie, {"communes": "", "nature_sonore_zone": "", "nature_zone": "", "nom_document": ""}
         )
         communes_brutes = details["communes"]
         communes = [c.strip() for c in communes_brutes.split(SEPARATEUR_COMMUNES) if c.strip()]
@@ -339,6 +383,13 @@ def generer(code_departement: str, dossier_sortie: str | Path = "output") -> Pat
         message_synthese = _texte(ligne.get("message_synthese"))
         message_strapi = assembler_message(message_synthese, documents)
         strapi_source, strapi_reference = assembler_source_reference(documents)
+        if not documents:
+            # Cas sans document source (RNU, absence de GPU...) : valeurs
+            # fixes, obligatoires pour pouvoir publier dans Strapi.
+            strapi_source, strapi_reference = source_reference_sans_document(
+                details["nature_zone"], details["nom_document"], date_gpu
+            )
+            message_strapi = assembler_message_valeurs(message_synthese, strapi_source, strapi_reference)
         label_propose = _label_propose(details["nature_sonore_zone"])
         titre_propose = _texte(ligne.get("titre_propose"))
 

@@ -62,7 +62,18 @@ Le raisonnement, en trois temps :
 
 Il serait tentant de retirer cette déduplication au motif que "des valeurs identiques ne veulent pas dire des occurrences identiques" (vrai, mais incomplet) : cet argument s'arrête à l'étape 1 ci-dessus, sans aller jusqu'aux étapes 2-3 (la fusion déjà validée rend cette distinction non pertinente pour un champ de synthèse). Sans déduplication, `strapi_reference` afficherait `"Article 4 / Article 4 / Article 4 / Article 4"` — jamais produit par une saisie manuelle réelle (vérifié sur une capture d'écran Strapi).
 
-**Cas `rnu`/`document_non_significatif`/`document_non_exploitable`/`trou_de_couverture`** : ces quatre cas suivent le même traitement — ils ont eux aussi une géométrie et un message dans `etape5_{dept}.gpkg` (Phase A de l'étape 4), donc une ligne d'export comme les autres. Seule différence : `etape5_{dept}_documents_par_synthese.csv` n'a pas d'entrée pour ces `id_geometrie` (pas de document source), donc "Docs sources"/"références" restent vides dans le message assemblé — cohérent avec les messages fixes déjà rédigés à l'étape 5, qui ne citent pas de document.
+**Cas `rnu`/`document_non_significatif`/`document_non_exploitable`/`trou_de_couverture`** : ces quatre cas suivent le même traitement — ils ont eux aussi une géométrie et un message dans `etape5_{dept}.gpkg` (Phase A de l'étape 4), donc une ligne d'export comme les autres. Seule différence : `etape5_{dept}_documents_par_synthese.csv` n'a pas d'entrée pour ces `id_geometrie` (pas de document source).
+
+**Source et référence de ces quatre cas (décision du 20/10/2026)** : elles étaient laissées vides jusque-là. Or `source` et `reference` sont **obligatoires** dans le schéma Strapi, et Strapi 5.13.0 ne le vérifie qu'à la publication, pas pour un brouillon (`required: !isDraft && attr.required`) : vides, les alertes auraient été créées puis impossibles à publier (253 lignes sur 400 pour le 067 hors Eurométropole, détecté au dry-run de l'étape 7). Valeurs fixes désormais calculées par `source_reference_sans_document` (`generer_export.py`), selon `nature_zone` :
+
+| `nature_zone` | `strapi_source` | `strapi_reference` |
+|---|---|---|
+| `rnu` | `Code de l'urbanisme` | `Règlement national d'urbanisme (art. L111-1 à L111-35 et R111-1 à R111-64)` |
+| `trou_de_couverture` | `Géoportail de l'Urbanisme` | `Aucun document d'urbanisme référencé à date du {JJ/MM/AAAA}` — date de **consultation** du Géoportail à l'étape 1 (plus récente `date_traitement` de `etape1_{dept}.csv`), plus exacte qu'une date de création : c'est ce jour-là que l'absence a été constatée |
+| `document_non_significatif` | nom complet du document (`nom_document`, `etape4_{dept}.gpkg`), ex. `Plan Local d'Urbanisme (PLU) de la commune de ALTORF` | `Aucune disposition relative au bruit identifiée` |
+| `document_non_exploitable` | nom complet du document | `Document non exploitable automatiquement` |
+
+RNU : pas de lien Legifrance dans `reference` — `source` et `reference` sont du texte simple, affiché tel quel par le front (`DiagnosticRegulationBox.tsx`), une URL n'y serait pas cliquable. L'affichage d'un lien (partie législative `LEGISCTA000031719324`, partie réglementaire `LEGISCTA000031721322`) est une question posée à l'équipe de développement (20/10/2026). `message_strapi` est assemblé avec ces mêmes valeurs (`assembler_message_valeurs`).
 
 Vérifié sur un export réel (`etape4_067-plui-strasbourg.gpkg`, colonne `communes`) : le séparateur est `", "` (virgule-espace), pas `" / "` comme envisagé initialement. `resolution_territoire.py` s'appuie sur ce séparateur constaté.
 

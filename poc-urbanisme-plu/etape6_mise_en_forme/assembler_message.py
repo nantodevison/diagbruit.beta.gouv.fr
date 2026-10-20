@@ -113,4 +113,12 @@ def assembler_message(message_synthese: str, documents: list[dict]) -> str:
     `assembler_source_reference` pour les mêmes listes exposées séparément.
     """
     docs_sources, references = assembler_source_reference(documents)
+    return assembler_message_valeurs(message_synthese, docs_sources, references)
+
+
+def assembler_message_valeurs(message_synthese: str, docs_sources: str, references: str) -> str:
+    """Même bloc `message_strapi`, à partir de source/référence déjà
+    connues — utilisé pour les cas sans document source (RNU, absence de
+    GPU...), dont les valeurs sont fixes (voir
+    `generer_export.source_reference_sans_document`)."""
     return f"Message : {message_synthese}\nDocs sources : {docs_sources}\nréférences : {references}"
