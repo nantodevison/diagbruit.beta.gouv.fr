@@ -7,11 +7,13 @@ Gardez-le court : quelques lignes par section suffisent.
 -->
 
 ## En cours
-- [ ] Étape 6, phase 2 (saisie des alert_slug dans outil_validation.html), 067 hors
-      Eurométropole : export généré le 2026-10-13 (402 lignes, 249 slugs automatisés) ;
-      saisie manuelle en cours (26 faits, 127 restants au 2026-10-13, dernier export
-      etape6_export_alert_slugs_20261013_180833.csv). En fin de saisie, renommer le
-      dernier export en etape6_067_export.csv.
+- [ ] Étape 7, 067 hors Eurométropole : prêt à envoyer (etape6_067_export.csv, 400 lignes,
+      dry-run préprod du 2026-10-20 conforme : 400 créations Strapi/Notion, 0 erreur, dossier
+      Box 428951751647). EN ATTENTE de la réponse de l'équipe de dev (message envoyé le
+      2026-10-20) : environnement cible (préprod seule + bascule, ou les deux), qui publie et
+      où, reprise des géométries Box, lot test ou envoi complet, liens Legifrance dans
+      reference. Aucun --envoyer sans accord explicite. Après le 1er envoi réel : commiter les
+      .geojson (alert_slug ajouté).
 
 ## Prochaines étapes
 - [ ] Vérifier l'occurrence 2_67239 (PADD 67239, mention "axes routiers" à vérifier contre
@@ -23,11 +25,10 @@ Gardez-le court : quelques lignes par section suffisent.
 - [ ] Documenter dans docs/ameliorations-identifiees.md : la couche texte des PDF « modèle »
       (Heiligenberg, Kurtzenhouse, Lauterbourg, Scheibenhard, Weitbruch, Munchhausen) est décalée
       par rapport à l'affichage, ce qui fausse pages et portées à l'étape 2.
-- [ ] Retirer le TODO(alert_slug) de etape7_stockage/inserer.py une fois le correctif implémenté
-      (voir docs/etape-7-conception-technique.md).
-      À faire avant tout --envoyer : ajouter alert_slug aux .geojson et contrôler sa forme avec
-      la règle Strapi uid (A-Z a-z 0-9 - _ . ~, appliquée seulement à la publication, pas au
-      brouillon — lue dans @strapi/core 5.13.0).
+- [ ] Avant le prochain territoire : proposition automatique des termes métier (niveaux 3 puis
+      1 puis 2, voir docs/etape-6-conception-technique.md, "Évolution prévue").
+- [ ] (Suggestion) Relire les autres titres et messages fixes (messages_fixes.py) avec le même
+      regard sur le vocabulaire juridique (« prescription », « recommandation »).
 
 ## Plus tard / idées
 - Renforcer l'étape 2 : un en-tête ou un article de zone (« Art. 2-UC », « au5 ») doit
@@ -37,13 +38,29 @@ Gardez-le court : quelques lignes par section suffisent.
   docs/etape-5-conception-technique.md).
 - Faire cascader une correction d'occurrence vers une régénération de synthèse, si le besoin se
   confirme à l'usage (reporté, même document).
-- Nettoyer les doublons Strapi résiduels d'un bug d'idempotence désormais corrigé (voir
-  docs/ameliorations-identifiees.md).
-- (Suggestion) Contrôler la forme du slug dès la saisie dans outil_validation.html, pour
-  repérer une erreur tout de suite plutôt qu'à l'étape 7.
+- (Intégré au niveau 3 de l'évolution prévue) Contrôler forme et unicité du slug dès la saisie
+  dans outil_validation.html.
 
 ## Décisions récentes
 <!-- Une ligne par décision : date — décision — raison en quelques mots -->
+- 2026-10-20 — Titre fixe « Aucune prescription bruit spécifique » → « Aucune disposition
+  relative au bruit » (messages_fixes.py, etape5_067.gpkg, export étape 6 : 97 lignes) —
+  « prescription » a un sens précis en urbanisme ; les titres fixes échappaient à la relecture.
+- 2026-10-20 — Source/référence des cas sans document (obligatoires dans Strapi, vérifiées
+  seulement à la publication) : RNU → Code de l'urbanisme / art. L111-1 à L111-35 et R111-1 à
+  R111-64 ; absence GPU → Géoportail / « à date du » consultation étape 1 (25/08/2026) ; pas de
+  référence bruit et non analysable → nom complet du document. Liens Legifrance : question
+  posée à l'équipe de dev (option C).
+- 2026-10-20 — Correctif étape 7 : contrôles bloquants sur l'export entier (format uid, unicité,
+  géométrie, champs obligatoires, label), alert_slug écrit dans le .geojson local avant dépôt
+  Box (option A : pas de copie modifiée silencieuse), recherche Strapi/Notion stricte, journal
+  avec environnement et action, mode --audit en lecture seule.
+- 2026-10-20 — Audit préprod/prod : 50 documents identiques, tous publiés avec brouillon, aucun
+  doublon ; l'outil passe par l'API REST et n'envoie aucun id. Objectif : ne pas casser
+  l'alignement prod/préprod.
+- 2026-10-19 — Slugs : convention CamelCase pour le terme métier (tiret = séparateur) ; commune
+  devant le terme en cas de répétition ; doublons g341 (de g337) et g403 (de g402) retirés de
+  l'export étape 6 seulement (une relance de generer_export.py les ferait revenir).
 - 2026-10-13 — Villé (géométrie 412, OAP p.69) : message corrigé du 2026-10-12 confirmé
   sur l'image du PDF (la règle bruit est une puce distincte de la partie Est), rien à modifier.
 - 2026-10-13 — Slugs remplis automatiquement pour les cas sans contenu métier mono-commune,
