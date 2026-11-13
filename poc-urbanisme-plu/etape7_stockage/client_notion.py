@@ -135,14 +135,30 @@ class DoublonNotion(Exception):
     que `client_strapi.DoublonStrapi` : une seule serait mise à jour."""
 
 
+def _slug_de_la_page(page: dict) -> str:
+    """Texte de la propriété `alert_slug` d'une page renvoyée par l'API
+    Notion. Un `rich_text` est une liste de morceaux de texte : on les
+    recolle (`plain_text`) pour retrouver la valeur complète."""
+    morceaux = ((page.get("properties") or {}).get("alert_slug") or {}).get("rich_text") or []
+    return "".join(m.get("plain_text", "") for m in morceaux)
+
+
 def trouver_page_id(alert_slug: str) -> str | None:
     """Cherche une page existante par `alert_slug`. Retourne son `id`, ou
     `None` si aucune page ne correspond. Lève `DoublonNotion` si plusieurs
     pages la portent (recherche stricte du 20/10/2026 : la version
-    précédente ne gardait que le premier résultat)."""
+    précédente ne gardait que le premier résultat).
+
+    **Comparaison exacte (13/11/2026)** : le filtre `rich_text equals` de
+    Notion ignore la casse — constaté en réel le 10/11/2026 sur le 067 :
+    `…-ZoneUa` (g358) a trouvé, puis écrasé, la page de `…-ZoneUA` (g303) ;
+    idem `…-Secteur1Aue` (g394) / `…-Secteur1AUe` (g275). Le filtre Notion
+    sert donc seulement à dégrossir ; on ne garde ensuite que les pages dont
+    le slug est identique au caractère près, majuscules comprises (même
+    règle que Strapi, dont le filtre `$eq` respecte la casse)."""
     payload = {"filter": {"property": "alert_slug", "rich_text": {"equals": alert_slug}}}
     donnees = _post_json(f"{NOTION_API_BASE}/data_sources/{_data_source_id()}/query", payload)
-    resultats = donnees.get("results") or []
+    resultats = [r for r in donnees.get("results") or [] if _slug_de_la_page(r) == alert_slug]
     if len(resultats) > 1:
         raise DoublonNotion(
             f"{len(resultats)} pages Notion portent alert_slug={alert_slug!r} : "

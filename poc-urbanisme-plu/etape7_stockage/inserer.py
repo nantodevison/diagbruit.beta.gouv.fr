@@ -169,16 +169,26 @@ def _controler_export(lignes: list[dict], dossier_geometries: Path) -> list[str]
         if label and label not in LABELS_AUTORISES:
             problemes.append(f"g{id_geometrie} : label {label!r} hors des valeurs autorisées {LABELS_AUTORISES}")
 
-    par_slug: dict[str, list[str]] = defaultdict(list)
+    # Unicité contrôlée sans tenir compte des majuscules (13/11/2026) : deux
+    # slugs qui ne diffèrent que par la casse (ex. « ZoneUA » / « ZoneUa »)
+    # sont distincts pour Strapi, mais pas pour la recherche Notion, ni pour
+    # un humain qui les lit — constaté en réel sur le 067 le 10/11/2026.
+    # On regroupe donc les slugs par leur forme en minuscules (`casefold`).
+    par_slug: dict[str, list[tuple[str, str]]] = defaultdict(list)
     for ligne in lignes:
         alert_slug = _texte(ligne.get("alert_slug_propose"))
         if alert_slug:
-            par_slug[alert_slug].append(_texte(ligne.get("id_geometrie")))
-    for alert_slug, ids in sorted(par_slug.items()):
-        if len(ids) > 1:
+            par_slug[alert_slug.casefold()].append((alert_slug, _texte(ligne.get("id_geometrie"))))
+    for _, occurrences in sorted(par_slug.items()):
+        if len(occurrences) < 2:
+            continue
+        detail = ", ".join(f"g{id_geometrie} {slug!r}" for slug, id_geometrie in occurrences)
+        if len({slug for slug, _ in occurrences}) == 1:
+            problemes.append(f"alert_slug en double ({detail}) — un envoi écraserait une règle par une autre")
+        else:
             problemes.append(
-                f"alert_slug {alert_slug!r} en double ({', '.join('g' + i for i in ids)}) — "
-                "un envoi écraserait une règle par une autre"
+                f"alert_slug identiques aux majuscules près ({detail}) — Notion les confondrait "
+                "et écraserait une page par l'autre"
             )
     return problemes
 
