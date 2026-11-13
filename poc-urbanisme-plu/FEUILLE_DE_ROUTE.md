@@ -7,13 +7,11 @@ Gardez-le court : quelques lignes par section suffisent.
 -->
 
 ## En cours
-- [ ] Étape 7, 067 hors Eurométropole : prêt à envoyer (etape6_067_export.csv, 400 lignes,
-      dry-run préprod du 2026-10-20 conforme : 400 créations Strapi/Notion, 0 erreur, dossier
-      Box 428951751647). EN ATTENTE de la réponse de l'équipe de dev (message envoyé le
-      2026-10-20) : environnement cible (préprod seule + bascule, ou les deux), qui publie et
-      où, reprise des géométries Box, lot test ou envoi complet, liens Legifrance dans
-      reference. Aucun --envoyer sans accord explicite. Après le 1er envoi réel : commiter les
-      .geojson (alert_slug ajouté).
+- [x] Étape 7, 067 hors Eurométropole : envoyé le 2026-11-10 (Strapi préprod en brouillon,
+      Notion, Box 428951751647). Après nettoyage du 2026-11-13 : 398 alertes cohérentes dans les
+      trois bases (audit préprod : 0 doublon, 0 absent).
+- [ ] Suite de l'étape 7 avec l'équipe de dev : relecture/publication en préprod, puis envoi
+      en prod (--environnement prod), liens Legifrance dans reference.
 
 ## Prochaines étapes
 - [ ] Vérifier l'occurrence 2_67239 (PADD 67239, mention "axes routiers" à vérifier contre
@@ -38,11 +36,27 @@ Gardez-le court : quelques lignes par section suffisent.
   docs/etape-5-conception-technique.md).
 - Faire cascader une correction d'occurrence vers une régénération de synthèse, si le besoin se
   confirme à l'usage (reporté, même document).
+- Étape 7 : envois limités pour les tests (option `--ids` listant des id_geometrie, contrôles
+  bloquants toujours faits sur l'export entier ; éventuellement `--strapi-seulement` pour ne pas
+  écrire dans Notion/Box, qui n'ont pas de préprod). Idée du 2026-11-10, test à 5 lignes
+  abandonné au profit de l'envoi complet.
 - (Intégré au niveau 3 de l'évolution prévue) Contrôler forme et unicité du slug dès la saisie
-  dans outil_validation.html.
+  dans outil_validation.html — unicité **sans tenir compte des majuscules**, comme le contrôle
+  de l'étape 7 depuis le 2026-11-13 (aujourd'hui l'erreur n'est arrêtée qu'au dry-run).
 
 ## Décisions récentes
 <!-- Une ligne par décision : date — décision — raison en quelques mots -->
+- 2026-11-13 — Collision de casse : g303 (ZoneUA, « PAC et climatisation ») et g275
+  (Secteur1AUe, « activités commerciales ») supprimés de Strapi préprod (à la main, le jeton n'a
+  pas le droit delete), de Box et de l'export étape 6 (398 lignes) ; g358/g394 conservés, leurs
+  pages Notion sont justes. Retirés de l'export seulement : une relance de generer_export.py
+  les ferait revenir. Le journal etape7_067_insertions.csv garde leur trace. — Préférer perdre
+  deux règles peu impactantes plutôt que risquer l'intégrité de bases qui ont une partie prod.
+- 2026-11-13 — Étape 7 : recherche Notion par slug au caractère près (le filtre `equals` de
+  Notion ignore la casse) et contrôle d'unicité des slugs sans tenir compte des majuscules —
+  le 2026-11-10, ZoneUa/ZoneUA et Secteur1Aue/Secteur1AUe ont fusionné dans Notion.
+- 2026-11-10 — Envoi complet du 067 plutôt qu'un lot test de 5 (décision prise avec l'équipe
+  de dev). L'idée d'envois limités (`--ids`) est notée dans « Plus tard ».
 - 2026-10-20 — Titre fixe « Aucune prescription bruit spécifique » → « Aucune disposition
   relative au bruit » (messages_fixes.py, etape5_067.gpkg, export étape 6 : 97 lignes) —
   « prescription » a un sens précis en urbanisme ; les titres fixes échappaient à la relecture.
