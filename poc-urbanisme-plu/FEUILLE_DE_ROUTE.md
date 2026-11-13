@@ -10,8 +10,14 @@ Gardez-le court : quelques lignes par section suffisent.
 - [x] Étape 7, 067 hors Eurométropole : envoyé le 2026-11-10 (Strapi préprod en brouillon,
       Notion, Box 428951751647). Après nettoyage du 2026-11-13 : 398 alertes cohérentes dans les
       trois bases (audit préprod : 0 doublon, 0 absent).
-- [ ] Suite de l'étape 7 avec l'équipe de dev : relecture/publication en préprod, puis envoi
-      en prod (--environnement prod), liens Legifrance dans reference.
+- [ ] Étape 8 (publication préprod, pour relecture par l'ATIP) : doc et code écrits le
+      2026-11-13, dry-run conforme (398 à publier). ⚠️ HYPOTHÈSE NON VÉRIFIÉE sur la requête de
+      publication : publier UNE alerte (--ids), la vérifier à l'œil (admin + front préprod),
+      puis le reste. Voir docs/etape-8-conception-technique.md.
+- [ ] Question à l'équipe de dev (2026-11-13) : séparation des géométries Box entre préprod
+      et prod (Dagster lit 390359250129 et ses sous-dossiers) — risque d'encadrés vides en prod.
+      Et chargement des géométries du 067 dans la base de préprod pour l'ATIP.
+- [ ] Après les retours de l'ATIP : envoi et publication en prod, liens Legifrance dans reference.
 
 ## Prochaines étapes
 - [ ] Vérifier l'occurrence 2_67239 (PADD 67239, mention "axes routiers" à vérifier contre
