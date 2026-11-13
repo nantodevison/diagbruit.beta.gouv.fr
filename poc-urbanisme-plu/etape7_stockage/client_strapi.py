@@ -260,6 +260,71 @@ def _payload(champs: ChampsNoisezoneAlert) -> dict:
     }
 
 
+# --- Publication (étape 8, ajout du 13/11/2026) -----------------------------
+# Voir docs/etape-8-conception-technique.md. Ces fonctions servent à
+# l'étape 8 (`etape8_publication/publier.py`) ; l'étape 7 ne les appelle
+# jamais : elle ne crée que des brouillons.
+
+# Champs comparés entre le brouillon et la version publiée, pour vérifier
+# qu'une publication a publié le brouillon à l'identique.
+CHAMPS_COMPARES = ("alert_slug", "title", "content", "source", "reference", "label")
+
+
+def lire_entree(document_id: str, status: str, environnement: str) -> dict | None:
+    """Champs d'un document dans sa version `draft` ou `published`, ou
+    `None` si cette version n'existe pas (Strapi répond alors 404)."""
+    try:
+        donnees = _get(
+            f"{_base_url(environnement)}/api/{CONTENT_TYPE}/{document_id}",
+            params={"status": status},
+            environnement=environnement,
+        )
+    except requests.exceptions.HTTPError as exc:
+        if exc.response is not None and exc.response.status_code == 404:
+            return None
+        raise
+    return donnees.get("data") or None
+
+
+@retry(
+    retry=retry_if_exception_type(requests.exceptions.ConnectionError),
+    stop=stop_after_attempt(4),
+    wait=wait_exponential(multiplier=1, min=1, max=10),
+    reraise=True,
+)
+def _put_publication(url: str, environnement: str) -> dict:
+    """Seul appel du module qui publie. Volontairement séparé de `_put`
+    (qui force `status=draft`) pour qu'aucun appel existant ne puisse
+    publier par erreur.
+
+    ⚠️ HYPOTHÈSE NON VÉRIFIÉE au 13/11/2026 : un `PUT` avec
+    `status=published` et un corps sans aucun champ publie le brouillon
+    existant à l'identique. Voir docs/etape-8-conception-technique.md —
+    c'est pourquoi `publier.py` compare le brouillon et la version publiée
+    après chaque appel.
+
+    Nouvelle tentative seulement sur une coupure réseau, pas sur une erreur
+    HTTP : un refus de Strapi doit remonter tout de suite, sans insister."""
+    response = requests.put(
+        url,
+        headers={**_headers(environnement), "Content-Type": "application/json"},
+        params={"status": "published"},
+        json={"data": {}},
+        timeout=15,
+    )
+    response.raise_for_status()
+    return response.json()
+
+
+def publier(document_id: str, environnement: str) -> None:
+    """Publie le brouillon du document `document_id`. Refuse la prod
+    (décision du 13/11/2026 : pas de publication en prod sans relecture —
+    voir docs/etape-8-publication-diagbruit.md)."""
+    if environnement != "preprod":
+        raise ValueError(f"Publication refusée hors préprod (environnement reçu : {environnement!r}).")
+    _put_publication(f"{_base_url(environnement)}/api/{CONTENT_TYPE}/{document_id}", environnement)
+
+
 def creer_ou_mettre_a_jour(champs: ChampsNoisezoneAlert, environnement: str) -> tuple[str, bool]:
     """Crée l'entrée si `alert_slug` n'existe pas encore, la met à jour
     sinon. Retourne `(documentId, cree)` — `cree` vrai pour une nouvelle

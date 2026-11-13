@@ -42,7 +42,8 @@ flowchart TD
     E4A -->|"Message standard"| E6["Étape 6 — Mise en forme pour ingestion"]
     E5 --> E6
     E6 --> E7["Étape 7 — Stockage"]
-    E7 --> Couv[("Couverture SIG départementale diagBruit")]
+    E7 --> E8["Étape 8 — Publication (préprod, relecture partenaires)"]
+    E8 --> Couv[("Couverture SIG départementale diagBruit")]
     Couv -.-> Usage["Utilisation finale : intersection SIG avec la parcelle cadastrale"]
 ```
 
@@ -61,6 +62,7 @@ flowchart TD
 5. **Rédaction des messages** associés aux occurrences validées des documents significatifs (génération par LLM, validation humaine, vérification orthographique) — inclut aussi les messages fixes des documents non significatifs, des documents non exploitables, des communes RNU et des trous de couverture.
 6. **Mise en forme** des données selon le format attendu pour la saisie dans Strapi et Notion.
 7. **Stockage** des messages et géométries validés dans le CMS Strapi et la base Notion utilisés par la partie métier de diagBruit.
+8. **Publication** en préprod des alertes d'un département (brouillons créés à l'étape 7), pour une relecture par les partenaires qui ont contribué aux PLU (ATIP…) — préprod uniquement à ce stade, voir `etape-8-publication-diagbruit.md`.
 
 ## Points de vigilance retenus
 
