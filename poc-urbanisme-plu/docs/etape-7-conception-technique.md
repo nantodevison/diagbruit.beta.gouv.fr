@@ -34,21 +34,21 @@ Le filtre `rich_text equals` de Notion **ignore les majuscules** (constaté en r
 - `client_notion.trouver_page_id` garde le filtre Notion pour ramener les candidats, puis ne retient que les pages dont le slug est identique **au caractère près** (`_slug_de_la_page`) ;
 - `_controler_export` contrôle l'unicité des slugs **sans tenir compte des majuscules** (`casefold`) : deux slugs identiques aux majuscules près bloquent l'envoi, avec un message dédié.
 
-## Évolution du 16/11/2026 — un fichier géométrie par territoire
+## Évolution du 16/11/2026 — un seul fichier géométrie par run
 
 **Constat** : l'équipe de développement charge les géométries depuis Box avec Dagster (`dagster/.../noisezone/defs.py`), qui traite les fichiers **un par un** : téléchargement Box et dépôt S3 au launcher, puis lecture et écriture PostGIS au landing. Avec un fichier par zone (398 pour le 067 hors Eurométropole), le chargement ne passait pas.
 
-**Décision (avec l'équipe de développement)** : un `.geojson` **par territoire** (`territoire_propose`), contenant une entité par zone, chacune avec ses propriétés `id_geometrie` et `alert_slug`. Le 067 passe de 398 fichiers à 23. L'ingestion Dagster lit déjà un GeoJSON à plusieurs entités (`ingest_shapefiles.py`) et le mapping `noisezone` garde l'`alert_slug` de chacune : rien à changer côté Dagster. Les zones, les alertes Strapi et les pages Notion restent une par zone.
+**Décision (avec l'équipe de développement)** : un seul `.geojson` **par run** (un export de l'étape 6, identifié par `--dept`), `etape7_{dept}_geometries.geojson`, contenant une entité par zone, chacune avec ses propriétés `id_geometrie` et `alert_slug`. Le 067 hors Eurométropole passe de 398 fichiers à 1. L'ingestion Dagster lit déjà un GeoJSON à plusieurs entités (`ingest_shapefiles.py`) et le mapping `noisezone` garde l'`alert_slug` de chacune : rien à changer côté Dagster. Les zones, les alertes Strapi et les pages Notion restent une par zone. *(Un regroupement intermédiaire par territoire, 23 fichiers pour le 067, a été écrit puis abandonné le même jour : la demande portait sur un fichier par run.)*
 
 **Pourquoi à l'étape 7 et pas à l'étape 6** : l'étape 6 écrit les géométries **sans** `alert_slug`, volontairement (le slug n'y est pas définitif, voir "Correctif du 20/10/2026", point 2). Seule l'étape 7 connaît le slug final.
 
 **Ce qui change dans `inserer.py`** :
-1. **Contrôles bloquants** supplémentaires : chaque ligne a un `territoire_propose` ; deux territoires différents ne donnent pas le même nom de fichier ; chaque `.geojson` de l'étape 6 contient au moins une entité ; tous ont le même système de coordonnées (`crs`).
-2. **Constitution des fichiers par territoire** (`_fichiers_par_territoire`), en mémoire, avant tout appel réseau : nom `{dept}_{Territoire}.geojson`, `{Territoire}` réduit à `A-Z a-z 0-9` selon la même règle que les slugs de l'étape 6 (ex. `067_CCdelAlsaceBossue.geojson`). Toutes les entités des fichiers de l'étape 6 sont reprises, avec `id_geometrie` et `alert_slug` en propriétés.
-3. **Avec `--envoyer`** : chaque fichier de territoire est écrit dans `etape7_{dept}_geometries/` puis déposé sur Box **une seule fois**, avant le traitement ligne à ligne. Le fichier local et celui de Box restent identiques (même principe que le point 2 du 20/10/2026). Les `.geojson` de l'étape 6 **ne sont plus modifiés**.
-4. **Notion** : `data` reçoit l'URL Box du fichier du territoire (la même pour toutes les pages d'un territoire).
-5. **Dépôt Box en échec pour un territoire** : les lignes de ce territoire passent en erreur côté `notion` (pas de page sans lien vers sa géométrie) ; Strapi est traité normalement.
-6. **Dry-run** : les fichiers sont constitués en mémoire et décrits (territoire, nombre d'entités), rien n'est écrit.
+1. **Contrôles bloquants** supplémentaires (`_controler_geometries`) : chaque `.geojson` de l'étape 6 contient au moins une entité, et tous ont le même système de coordonnées (`crs`) — sans quoi on mélangerait des coordonnées incompatibles dans un même fichier.
+2. **Constitution du fichier du run** (`_fichier_du_run`), en mémoire, avant tout appel réseau : toutes les entités des fichiers de l'étape 6 sont reprises, avec `id_geometrie` et `alert_slug` en propriétés (les autres propriétés sont remplacées).
+3. **Avec `--envoyer`** : le fichier est écrit dans le dossier de l'export, relu, puis déposé sur Box **une seule fois**, avant le traitement ligne à ligne. Le fichier local et celui de Box restent identiques (même principe que le point 2 du 20/10/2026). Le nom ne change pas d'un envoi à l'autre : une relance dépose une **nouvelle version** du même fichier Box, jamais un doublon. Les `.geojson` de l'étape 6 **ne sont plus modifiés**.
+4. **Notion** : `data` reçoit l'URL Box du fichier du run (la même pour toutes les pages).
+5. **Dépôt Box en échec** : toutes les lignes passent en erreur côté `notion` (pas de page sans lien vers sa géométrie) ; Strapi est traité normalement.
+6. **Dry-run** : le fichier est constitué en mémoire et décrit (nom, nombre d'entités), rien n'est écrit.
 
 **Passage de l'ancien dépôt au nouveau** : les anciens fichiers (un par zone) restent sur Box, le script ne supprimant jamais rien. Ils doivent être **supprimés à la main avant le prochain chargement Dagster**, sinon chaque zone serait chargée deux fois.
 
@@ -86,7 +86,7 @@ poc-urbanisme-plu/
 └── output/
     ├── etape6_{dept}_export.csv
     ├── etape6_{dept}_geometries/          # un fichier par zone (lu, plus modifié depuis le 16/11/2026)
-    ├── etape7_{dept}_geometries/          # un fichier par territoire, identique à Box (avec --envoyer)
+    ├── etape7_{dept}_geometries.geojson   # toutes les zones du run, identique à Box (avec --envoyer)
     ├── etape7_{dept}_insertions.csv       # journal des créations/mises à jour, jamais relu (voir "Idempotence")
     └── etape7_{dept}_erreurs.csv          # échecs isolés, absent si rien à signaler
 ```
@@ -122,7 +122,7 @@ Pour chaque ligne :
    - `title` ← `titre_propose` (titre court généré par LLM à l'étape 5, validé par l'opérateur). `alert_slug` (champ `uid`, `targetField: title` côté schéma Strapi) est fourni explicitement dans le payload plutôt que dérivé de `title`.
    - Recherche préalable (`trouver_document_id`, voir "Idempotence") : absente → création, `POST {url_environnement}/api/noisezone-alerts?status=draft`, corps `{"data": {...}}`. Présente → mise à jour, `PUT {url_environnement}/api/noisezone-alerts/{documentId}?status=draft` (Strapi 5 — `documentId`, une chaîne, pas l'`id` numérique). `url_environnement` vient de `STRAPI_PREPROD_URL` ou `STRAPI_PROD_URL` selon `--environnement` (voir "Deux environnements Strapi" ci-dessous).
    - Entrée créée **en brouillon** (`draftAndPublish` actif sur ce content-type), jamais publiée automatiquement par le script — l'opérateur relit et publie manuellement dans Strapi. Le paramètre de requête `status=draft` sur `POST`/`PUT` est ce qui garantit ce comportement — voir "Piège : publication automatique" ci-dessous.
-3. **Box puis Notion** (`client_box.py` + `client_notion.py`) — *depuis le 16/11/2026, le dépôt Box se fait une fois par territoire, avant la boucle sur les lignes ; chaque page Notion reçoit l'URL du fichier de son territoire (voir "Évolution du 16/11/2026"). Les deux premiers points ci-dessous décrivent le fonctionnement antérieur, un fichier par zone ; le mécanisme de dépôt Box (recherche par nom, nouvelle version) est inchangé :*
+3. **Box puis Notion** (`client_box.py` + `client_notion.py`) — *depuis le 16/11/2026, le dépôt Box se fait une seule fois pour tout le run, avant la boucle sur les lignes ; chaque page Notion reçoit l'URL de ce fichier unique (voir "Évolution du 16/11/2026"). Les deux premiers points ci-dessous décrivent le fonctionnement antérieur, un fichier par zone ; le mécanisme de dépôt Box (recherche par nom, nouvelle version) est inchangé :*
    - Avant le dépôt, le `.geojson` local reçoit la propriété `alert_slug` puis est relu pour vérification (voir "Correctif du 20/10/2026", point 2).
    - Dépôt de la géométrie sur Box (`client_box.televerser_geometrie`) : recherche d'un fichier du même nom dans `--box-folder-id` (index du dossier mis en cache pour le run, voir "Dépôt sur Box" ci-dessous) ; absent → `POST https://upload.box.com/api/2.0/files/content` (création) ; présent → `POST .../files/{id}/content` (nouvelle version, pas de doublon). Retourne `https://app.box.com/file/{id}`.
    - Recherche préalable côté Notion (`trouver_page_id`, `POST /v1/data_sources/{data_source_id}/query` — voir "Sources de données Notion" ci-dessous). Absente → création (`POST /v1/pages`, `parent` = `{"type": "data_source_id", "data_source_id": ...}`). Présente (`page_id`) → mise à jour (`PATCH /v1/pages/{page_id}`).

@@ -10,14 +10,14 @@ Gardez-le court : quelques lignes par section suffisent.
 - [x] Étape 7, 067 hors Eurométropole : envoyé le 2026-11-10 (Strapi préprod en brouillon,
       Notion, Box 428951751647). Après nettoyage du 2026-11-13 : 398 alertes cohérentes dans les
       trois bases (audit préprod : 0 doublon, 0 absent).
-- [ ] Un fichier géométrie par territoire (branche poc-plu-geojson-regroupe, 2026-11-16) :
-      Dagster ne supportait pas 398 fichiers. Doc et code faits, dry-run conforme (23 fichiers,
-      398 zones ; Strapi et Notion : 398 mises à jour, 0 création). Reste, dans l'ordre :
+- [ ] Un seul fichier géométrie par run (branche poc-plu-geojson-regroupe, 2026-11-16) :
+      Dagster ne supportait pas 398 fichiers. Doc et code faits, etape7_067_geometries.geojson
+      (398 zones). Reste, dans l'ordre :
       1) supprimer à la main les 400 anciens fichiers du dossier Box 428951751647 (sinon zones
       chargées deux fois par Dagster) ; 2) inserer --envoyer ; 3) prévenir Senhao pour relancer
       Dagster ; 4) fusionner la branche dans poc-urbanisme-plu.
 - [ ] Question à l'équipe de dev : regrouper aussi les 28 fichiers de l'Eurométropole (dossier
-      Box 398163261000) ?
+      Box 398163261000) en un seul fichier ?
 - [ ] Étape 8 (publication préprod, pour relecture par l'ATIP) : doc et code écrits le
       2026-11-13, dry-run conforme (398 à publier). ⚠️ HYPOTHÈSE NON VÉRIFIÉE sur la requête de
       publication : publier UNE alerte (--ids), la vérifier à l'œil (admin + front préprod),
@@ -60,9 +60,10 @@ Gardez-le court : quelques lignes par section suffisent.
 
 ## Décisions récentes
 <!-- Une ligne par décision : date — décision — raison en quelques mots -->
-- 2026-11-16 — Un .geojson par territoire (territoire_propose) au lieu d'un par zone, constitué
-  à l'étape 7 (seule à connaître le slug final) ; zones, alertes Strapi et pages Notion restent
-  une par zone, et chaque page Notion pointe vers le fichier de son territoire. — Dagster traite
+- 2026-11-16 — Un seul .geojson par run (etape7_{dept}_geometries.geojson) au lieu d'un par
+  zone, constitué à l'étape 7 (seule à connaître le slug final) ; zones, alertes Strapi et pages
+  Notion restent une par zone, et chaque page Notion pointe vers ce fichier unique (un premier
+  essai à un fichier par territoire a été abandonné le même jour). — Dagster traite
   les fichiers un par un et bloquait sur 398 ; une fois en base, la notion de fichier disparaît
   (l'alert_slug de chaque entité fait la jointure). Regroupement des zones elles-mêmes écarté.
 - 2026-11-13 — Collision de casse : g303 (ZoneUA, « PAC et climatisation ») et g275

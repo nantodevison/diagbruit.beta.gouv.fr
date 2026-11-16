@@ -3,17 +3,17 @@ géométrie déposée sur Box, voir `docs/etape-7-conception-technique.md`.
 
 Lit `etape6_{dept}_export.csv` et `etape6_{dept}_geometries/`.
 
-**Un fichier géométrie par territoire (16/11/2026)** : les géométries des
-zones d'un même `territoire_propose` sont réunies dans un seul `.geojson`
-(une entité par zone, avec `id_geometrie` et `alert_slug`), écrit dans
-`etape7_{dept}_geometries/` puis déposé une fois dans le dossier Box
-`--box-folder-id`. Raison : Dagster, qui charge ces fichiers, ne supportait
-pas un fichier par zone (398 pour le 067).
+**Un seul fichier géométrie par run (16/11/2026)** : toutes les géométries
+de l'export sont réunies dans `etape7_{dept}_geometries.geojson` (une entité
+par zone, avec `id_geometrie` et `alert_slug`), écrit dans le dossier de
+l'export puis déposé une fois dans le dossier Box `--box-folder-id`.
+Raison : Dagster, qui charge ces fichiers, ne supportait pas un fichier par
+zone (398 pour le 067).
 
 Puis, pour chaque zone : cherche une entrée Strapi/Notion existante par
 `alert_slug` (idempotence, voir la conception technique), crée ou met à jour
 chaque côté indépendamment — Notion reçoit dans `data` l'URL Box du fichier
-de son territoire, pas le fichier lui-même.
+du run, pas le fichier lui-même.
 
 **Contrôles bloquants (20/10/2026)** : avant tout appel réseau, l'export
 entier est contrôlé — format de chaque `alert_slug` (règle du champ `uid` de
@@ -54,7 +54,7 @@ Sortie (dans le même dossier) :
     etape7_{dept}_insertions.csv          — journal des créations/mises à jour, jamais relu (avec --envoyer)
     etape7_{dept}_erreurs.csv             — échecs isolés, si non vide (avec --envoyer)
     etape7_{dept}_audit_{environnement}.csv — état Strapi (avec --audit)
-    etape7_{dept}_geometries/{dept}_{Territoire}.geojson — un fichier par territoire, identique à Box (avec --envoyer)
+    etape7_{dept}_geometries.geojson      — toutes les zones du run, identique à Box (avec --envoyer)
 """
 
 from __future__ import annotations
@@ -64,7 +64,6 @@ import csv
 import json
 import re
 import sys
-import unicodedata
 from collections import Counter, defaultdict
 from datetime import date
 from pathlib import Path
@@ -104,11 +103,6 @@ CHAMPS_OBLIGATOIRES = {
     "message_content": "content",
 }
 LABELS_AUTORISES = ("ZONE SOUMISE AU BRUIT", "ZONE CALME")  # enum `label` du schéma Strapi
-
-# Ligatures à translittérer avant le retrait des accents — même règle que
-# `_slugifier_nom` de l'étape 6 (recopiée plutôt qu'importée : chaque étape
-# reste indépendante du code des autres).
-LIGATURES = {"œ": "oe", "Œ": "OE", "æ": "ae", "Æ": "AE", "ß": "ss"}
 
 
 class ExportCsvIntrouvable(Exception):
@@ -158,22 +152,12 @@ def _probleme_format_slug(alert_slug: str) -> str | None:
     return None
 
 
-def _slugifier_nom(nom: str) -> str:
-    """Réduit un nom de territoire à `A-Z a-z 0-9`, casse conservée (ex.
-    "CC de l'Alsace Bossue" → `CCdelAlsaceBossue`) — même règle que les
-    slugs de l'étape 6, pour que le nom du fichier se lise comme le slug."""
-    texte = nom
-    for ligature, remplacement in LIGATURES.items():
-        texte = texte.replace(ligature, remplacement)
-    sans_accents = unicodedata.normalize("NFKD", texte)
-    sans_accents = "".join(c for c in sans_accents if not unicodedata.combining(c))
-    return re.sub(r"[^A-Za-z0-9]", "", sans_accents)
-
-
-def _nom_fichier_territoire(code_departement: str, territoire: str) -> str:
-    """Nom du `.geojson` qui regroupe les zones d'un territoire (évolution
-    du 16/11/2026), ex. `067_CCdelAlsaceBossue.geojson`."""
-    return f"{code_departement}_{_slugifier_nom(territoire)}.geojson"
+def _nom_fichier_run(code_departement: str) -> str:
+    """Nom du `.geojson` unique qui regroupe toutes les zones du run
+    (évolution du 16/11/2026), ex. `etape7_067_geometries.geojson`. Même
+    nom d'un envoi à l'autre : une relance dépose une nouvelle version sur
+    Box (recherche par nom dans `client_box`), jamais un doublon."""
+    return f"etape7_{code_departement}_geometries.geojson"
 
 
 def _lire_geojson(chemin: Path) -> dict:
@@ -181,21 +165,15 @@ def _lire_geojson(chemin: Path) -> dict:
         return json.load(fichier)
 
 
-def _controler_geometries(lignes: list[dict], dossier_geometries: Path, code_departement: str) -> list[str]:
-    """Contrôles propres au regroupement par territoire (16/11/2026) :
-    territoire renseigné, noms de fichiers sans collision, `.geojson` non
-    vides et tous dans le même système de coordonnées — sans quoi on
-    mélangerait des coordonnées incompatibles dans un même fichier."""
+def _controler_geometries(lignes: list[dict], dossier_geometries: Path) -> list[str]:
+    """Contrôles propres au regroupement en un seul fichier (16/11/2026) :
+    `.geojson` de l'étape 6 non vides et tous dans le même système de
+    coordonnées — sans quoi on mélangerait des coordonnées incompatibles
+    dans un même fichier."""
     problemes: list[str] = []
-    territoires_par_fichier: dict[str, set[str]] = defaultdict(set)
     crs_vus: dict[str, list[str]] = defaultdict(list)
     for ligne in lignes:
         id_geometrie = _texte(ligne.get("id_geometrie"))
-        territoire = _texte(ligne.get("territoire_propose"))
-        if not territoire:
-            problemes.append(f"g{id_geometrie} : territoire_propose vide — impossible de choisir son fichier géométrie")
-        else:
-            territoires_par_fichier[_nom_fichier_territoire(code_departement, territoire)].add(territoire)
         chemin = dossier_geometries / _texte(ligne.get("nom_fichier_geometrie"))
         if not chemin.is_file():
             continue  # déjà signalé par `_controler_export`
@@ -203,61 +181,47 @@ def _controler_geometries(lignes: list[dict], dossier_geometries: Path, code_dep
         if not contenu.get("features"):
             problemes.append(f"g{id_geometrie} : aucune entité dans {chemin.name}")
         crs_vus[json.dumps(contenu.get("crs"), sort_keys=True)].append(id_geometrie)
-    for nom_fichier, territoires in sorted(territoires_par_fichier.items()):
-        if len(territoires) > 1:
-            problemes.append(f"territoires {sorted(territoires)} donneraient le même fichier {nom_fichier}")
     if len(crs_vus) > 1:
         detail = " ; ".join(f"{crs} ({len(ids)} fichier(s))" for crs, ids in crs_vus.items())
         problemes.append(f"systèmes de coordonnées différents entre les géométries : {detail}")
     return problemes
 
 
-def _fichiers_par_territoire(lignes: list[dict], dossier_geometries: Path, code_departement: str) -> dict[str, dict]:
-    """Regroupe les géométries de l'étape 6 par territoire, en mémoire.
-    Retourne `{territoire: {"nom_fichier", "contenu", "nb_entites"}}` ;
-    chaque entité reçoit `id_geometrie` et `alert_slug` en propriétés —
-    c'est `alert_slug` qui la relie à son alerte Strapi une fois chargée en
-    base par Dagster. Suppose `_controler_geometries` passé."""
-    fichiers: dict[str, dict] = {}
+def _fichier_du_run(lignes: list[dict], dossier_geometries: Path, code_departement: str) -> dict:
+    """Réunit, en mémoire, toutes les géométries de l'étape 6 en un seul
+    GeoJSON. Retourne `{"nom_fichier", "contenu", "nb_entites"}` ; chaque
+    entité reçoit `id_geometrie` et `alert_slug` en propriétés — c'est
+    `alert_slug` qui la relie à son alerte Strapi une fois chargée en base
+    par Dagster. Suppose `_controler_geometries` passé."""
+    nom_fichier = _nom_fichier_run(code_departement)
+    collection: dict = {"type": "FeatureCollection", "name": nom_fichier[: -len(".geojson")]}
+    entites: list[dict] = []
     for ligne in lignes:
-        territoire = _texte(ligne.get("territoire_propose"))
         contenu = _lire_geojson(dossier_geometries / _texte(ligne.get("nom_fichier_geometrie")))
-        if territoire not in fichiers:
-            nom_fichier = _nom_fichier_territoire(code_departement, territoire)
-            collection = {"type": "FeatureCollection", "name": nom_fichier.removesuffix(".geojson")}
-            if contenu.get("crs"):
-                collection["crs"] = contenu["crs"]
-            collection["features"] = []
-            fichiers[territoire] = {"nom_fichier": nom_fichier, "contenu": collection}
-        for entite in contenu["features"]:
-            proprietes = {"id_geometrie": _texte(ligne.get("id_geometrie")), "alert_slug": _texte(ligne.get("alert_slug_propose"))}
-            fichiers[territoire]["contenu"]["features"].append({**entite, "properties": proprietes})
-    for fichier in fichiers.values():
-        fichier["nb_entites"] = len(fichier["contenu"]["features"])
-    return fichiers
+        if "crs" not in collection and contenu.get("crs"):
+            collection["crs"] = contenu["crs"]  # identique partout (contrôlé)
+        proprietes = {"id_geometrie": _texte(ligne.get("id_geometrie")), "alert_slug": _texte(ligne.get("alert_slug_propose"))}
+        entites.extend({**entite, "properties": proprietes} for entite in contenu["features"])
+    collection["features"] = entites
+    return {"nom_fichier": nom_fichier, "contenu": collection, "nb_entites": len(entites)}
 
 
-def _deposer_fichiers(fichiers: dict[str, dict], dossier_local: Path, box_folder_id: str) -> dict[str, tuple[str, str | None]]:
-    """Écrit chaque fichier de territoire dans `dossier_local`, le relit,
-    puis le dépose sur Box (création ou nouvelle version, voir `client_box`).
-    Retourne `{territoire: (url_box, None)}` ou `{territoire: ("", erreur)}`
-    — un échec n'arrête pas les autres territoires. Jamais en dry-run."""
-    dossier_local.mkdir(exist_ok=True)
-    depots: dict[str, tuple[str, str | None]] = {}
-    for territoire, fichier in sorted(fichiers.items()):
-        chemin = dossier_local / fichier["nom_fichier"]
-        try:
-            with chemin.open("w", encoding="utf-8") as sortie:
-                json.dump(fichier["contenu"], sortie, ensure_ascii=False)
-            if len(_lire_geojson(chemin).get("features") or []) != fichier["nb_entites"]:
-                raise ValueError(f"relecture de {chemin.name} : nombre d'entités différent")
-            url = client_box.televerser_geometrie(chemin, box_folder_id)
-            depots[territoire] = (url, None)
-            print(f"[Box] {fichier['nom_fichier']} ({fichier['nb_entites']} zone(s)) déposé : {url}")
-        except Exception as exc:
-            depots[territoire] = ("", f"dépôt Box de {fichier['nom_fichier']} : {exc}")
-            print(f"[Box] ÉCHEC {fichier['nom_fichier']} : {exc}")
-    return depots
+def _deposer_fichier(fichier: dict, dossier_local: Path, box_folder_id: str) -> tuple[str, str | None]:
+    """Écrit le fichier du run dans `dossier_local`, le relit, puis le dépose
+    sur Box (création ou nouvelle version, voir `client_box`). Retourne
+    `(url_box, None)` ou `("", erreur)`. Jamais en dry-run."""
+    chemin = dossier_local / fichier["nom_fichier"]
+    try:
+        with chemin.open("w", encoding="utf-8") as sortie:
+            json.dump(fichier["contenu"], sortie, ensure_ascii=False)
+        if len(_lire_geojson(chemin).get("features") or []) != fichier["nb_entites"]:
+            raise ValueError(f"relecture de {chemin.name} : nombre d'entités différent")
+        url = client_box.televerser_geometrie(chemin, box_folder_id)
+    except Exception as exc:
+        print(f"[Box] ÉCHEC {fichier['nom_fichier']} : {exc}")
+        return "", f"dépôt Box de {fichier['nom_fichier']} : {exc}"
+    print(f"[Box] {fichier['nom_fichier']} ({fichier['nb_entites']} zone(s)) déposé : {url}")
+    return url, None
 
 
 def _controler_export(lignes: list[dict], dossier_geometries: Path) -> list[str]:
@@ -349,9 +313,9 @@ def _traiter_notion(
     ligne: dict, alert_slug: str, nom_fichier: str, depot: tuple[str, str | None] | None, envoyer: bool
 ) -> tuple[str, str, str | None]:
     """Retourne `(action, page_id, message_erreur)` — mêmes conventions que
-    `_traiter_strapi`. `nom_fichier` est le fichier du territoire de la
-    ligne ; `depot` est le résultat de son dépôt Box (`(url, erreur)`,
-    `None` en dry-run). Si ce dépôt a échoué, la page n'est pas écrite : une
+    `_traiter_strapi`. `nom_fichier` est le fichier géométrie du run ;
+    `depot` est le résultat de son dépôt Box (`(url, erreur)`, `None` en
+    dry-run). Si ce dépôt a échoué, la page n'est pas écrite : une
     page sans lien vers sa géométrie n'aurait pas de sens."""
     try:
         if envoyer:
@@ -377,7 +341,7 @@ def _traiter_notion(
                 f"  [Notion] (dry-run) créerait — Territoire={_texte(ligne.get('territoire_propose'))!r}, "
                 f"Description={_texte(ligne.get('titre_propose'))[:60]!r}..."
             )
-        print(f"  [Notion] (dry-run) data → fichier du territoire {nom_fichier}")
+        print(f"  [Notion] (dry-run) data → {nom_fichier}")
         return "", existant or "", None
     except Exception as exc:
         return "", "", str(exc)
@@ -430,16 +394,15 @@ def inserer(
     # Contrôles bloquants d'abord : rien n'est lu ni écrit à distance tant
     # que l'export entier n'est pas exploitable.
     problemes = _controler_export(lignes, dossier_geometries)
-    problemes += _controler_geometries(lignes, dossier_geometries, code_departement)
+    problemes += _controler_geometries(lignes, dossier_geometries)
     if problemes:
         raise ExportInvalide(problemes)
 
-    # Un fichier géométrie par territoire (évolution du 16/11/2026), constitué
-    # en mémoire avant tout appel réseau.
-    fichiers = _fichiers_par_territoire(lignes, dossier_geometries, code_departement)
-    print(f"{len(fichiers)} fichier(s) géométrie par territoire, pour {len(lignes)} zone(s) :")
-    for fichier in sorted(fichiers.values(), key=lambda f: f["nom_fichier"]):
-        print(f"  {fichier['nom_fichier']} — {fichier['nb_entites']} zone(s)")
+    # Un seul fichier géométrie pour tout le run (évolution du 16/11/2026),
+    # constitué en mémoire avant tout appel réseau.
+    fichier = _fichier_du_run(lignes, dossier_geometries, code_departement)
+    print(f"Fichier géométrie du run : {fichier['nom_fichier']} — {fichier['nb_entites']} zone(s) "
+          f"pour {len(lignes)} ligne(s) d'export")
 
     # Vérifié tôt, avant de traiter la moindre ligne — une configuration
     # manquante n'a rien d'un échec isolé, rien n'est exploitable sans elle.
@@ -449,14 +412,14 @@ def inserer(
 
     date_traitement = date.today().isoformat()
 
-    # Dépôt Box une fois par territoire, avant le traitement ligne à ligne.
+    # Dépôt Box une seule fois, avant le traitement ligne à ligne.
     # En dry-run : rien n'est écrit, ni sur le disque ni sur Box.
     if envoyer:
-        depots = _deposer_fichiers(fichiers, dossier / f"etape7_{code_departement}_geometries", box_folder_id)
+        depot = _deposer_fichier(fichier, dossier, box_folder_id)
     else:
-        depots = {}
-        print(f"[Box] (dry-run) écrirait ces fichiers dans etape7_{code_departement}_geometries/ "
-              f"puis les déposerait dans le dossier {box_folder_id}")
+        depot = None
+        print(f"[Box] (dry-run) écrirait {fichier['nom_fichier']} dans {dossier} "
+              f"puis le déposerait dans le dossier {box_folder_id}")
 
     # Journal écrit ligne par ligne, pas en un seul bloc à la fin — une
     # interruption en cours de route (constaté en réel le 24/08/2026, un
@@ -482,9 +445,8 @@ def inserer(
                     {"identifiant": alert_slug, "source": "strapi", "message": erreur_strapi, "date_traitement": date_traitement}
                 )
 
-            territoire = _texte(ligne.get("territoire_propose"))
             action_notion, notion_page_id, erreur_notion = _traiter_notion(
-                ligne, alert_slug, fichiers[territoire]["nom_fichier"], depots.get(territoire), envoyer
+                ligne, alert_slug, fichier["nom_fichier"], depot, envoyer
             )
             if erreur_notion:
                 erreurs.append(
