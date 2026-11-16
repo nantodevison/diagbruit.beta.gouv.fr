@@ -621,6 +621,9 @@ def _parser() -> argparse.ArgumentParser:
 
 
 def main(argv: list[str] | None = None) -> int:
+    # Console Windows : sans cela, un caractère hors de l'encodage local (ex. « → »)
+    # ferait planter un print — potentiellement juste après une écriture réussie.
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
     parser = _parser()
     args = parser.parse_args(argv)
     if not args.audit and not args.box_folder_id:
