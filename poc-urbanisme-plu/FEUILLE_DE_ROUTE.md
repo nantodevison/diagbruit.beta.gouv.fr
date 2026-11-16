@@ -11,11 +11,11 @@ Gardez-le court : quelques lignes par section suffisent.
       Notion, Box 428951751647). Après nettoyage du 2026-11-13 : 398 alertes cohérentes dans les
       trois bases (audit préprod : 0 doublon, 0 absent).
 - [ ] Un seul fichier géométrie par run (branche poc-plu-geojson-regroupe, 2026-11-16) :
-      Dagster ne supportait pas 398 fichiers. Doc et code faits, etape7_067_geometries.geojson
-      (398 zones). Reste, dans l'ordre :
-      1) supprimer à la main les 400 anciens fichiers du dossier Box 428951751647 (sinon zones
-      chargées deux fois par Dagster) ; 2) inserer --envoyer ; 3) prévenir Senhao pour relancer
-      Dagster ; 4) fusionner la branche dans poc-urbanisme-plu.
+      Dagster ne supportait pas 398 fichiers. Envoyé le 2026-11-16 après suppression manuelle des
+      anciens fichiers Box et des pages Notion : Box = 1 fichier (398 zones), Notion = 398 pages
+      recréées (ne pas restaurer les anciennes depuis la corbeille), Strapi préprod = 398 mises à
+      jour, audit 0 doublon/0 absent. Reste : 1) prévenir Senhao pour relancer Dagster ;
+      2) fusionner la branche dans poc-urbanisme-plu.
 - [ ] Question à l'équipe de dev : regrouper aussi les 28 fichiers de l'Eurométropole (dossier
       Box 398163261000) en un seul fichier ?
 - [ ] Étape 8 (publication préprod, pour relecture par l'ATIP) : doc et code écrits le
