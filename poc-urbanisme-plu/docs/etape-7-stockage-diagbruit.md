@@ -45,7 +45,13 @@ La base "Données réglementaires locales (PLU, PPBE, …)" porte `alert_slug` (
 
 ## Pièce jointe géométrie
 
-La géométrie de la zone (`.geojson`, produite à l'étape 6) est d'abord déposée sur Box, dans un dossier dédié au territoire (`--box-folder-id`, un dossier par territoire — ex. `398163261000` pour l'Eurométropole de Strasbourg). L'URL de la page Box du fichier (`https://app.box.com/file/{id}` — pas un *shared link*, qui nécessiterait d'activer explicitement le partage public) est ensuite renseignée dans la propriété `data` de la page Notion, comme lien externe plutôt que comme fichier attaché.
+**Un fichier par territoire (depuis le 16/11/2026).** Les géométries des zones d'un même territoire (`territoire_propose`, un EPCI) sont réunies dans **un seul `.geojson`**, où chaque entité porte son `alert_slug`. C'est ce fichier qui est déposé sur Box (`--box-folder-id`, ex. `398163261000` pour l'Eurométropole de Strasbourg). L'URL de sa page Box (`https://app.box.com/file/{id}` — pas un *shared link*, qui nécessiterait d'activer explicitement le partage public) est renseignée dans la propriété `data` de **chaque** page Notion du territoire, comme lien externe.
+
+**Pourquoi** : l'équipe de développement charge les géométries depuis Box avec Dagster, qui traite les fichiers un par un (téléchargement Box, dépôt S3, ingestion en base). Avec un fichier par zone (398 pour le 067 hors Eurométropole), le chargement ne passait pas ; regroupé par territoire, le 067 tient en 23 fichiers. **Rien ne change pour les zones elles-mêmes** : une fois en base, chaque entité redevient une ligne, reliée à son alerte Strapi par son `alert_slug` — la notion de fichier disparaît. Décision prise avec l'équipe de développement le 16/11/2026.
+
+**À faire lors du passage d'un ancien dépôt (un fichier par zone) au nouveau** : supprimer à la main les anciens fichiers du dossier Box **avant** le prochain chargement Dagster, sinon chaque zone serait chargée deux fois (une fois par son ancien fichier, une fois par le fichier du territoire). Le script ne supprime jamais rien sur Box.
+
+**Historique** : du 04/09/2026 au 16/11/2026, un `.geojson` par zone était déposé sur Box, et chaque page Notion pointait vers le sien.
 
 **Historique** : jusqu'au 04/09/2026, le `.geojson` était uploadé directement à Notion comme pièce jointe (`file_upload`) — l'API Notion refusait l'extension `.geojson`, le fichier était donc renommé en `.json` avant envoi. Écarté au profit du dépôt Box pour disposer d'une copie durable et consultable indépendamment de Notion.
 
@@ -53,7 +59,7 @@ La géométrie de la zone (`.geojson`, produite à l'étape 6) est d'abord dépo
 
 Avant toute écriture, l'étape 7 cherche une entrée/page existante par `alert_slug`, de chaque côté — jamais l'inverse :
 - **Strapi** : `alert_slug` est un champ `uid` unique — une entrée trouvée est mise à jour, sinon elle est créée.
-- **Notion** : `alert_slug` est un simple champ texte, sans contrainte d'unicité — la recherche préalable est donc la seule protection contre les doublons.
+- **Notion** : `alert_slug` est un simple champ texte, sans contrainte d'unicité — la recherche préalable est donc la seule protection contre les doublons. Cette recherche **ignore les majuscules** côté Notion : depuis le 13/11/2026, le script ne retient que la page au slug identique au caractère près, et refuse en amont deux slugs qui ne diffèrent que par la casse (incident du 10/11/2026 sur le 067 : deux pages écrasées).
 
 Relancer l'étape 7 sur le même `etape6_{dept}_export.csv` (par exemple après une correction de message à l'étape 5) met donc à jour les entrées déjà créées plutôt que d'en créer de nouvelles.
 
