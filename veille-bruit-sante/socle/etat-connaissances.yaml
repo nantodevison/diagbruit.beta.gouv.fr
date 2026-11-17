@@ -31,12 +31,12 @@
 #   validations et des révisions. Incrémenter « version » et « date_revision ».
 # =============================================================================
 
-version: "1.0"
+version: "1.1"
 statut: valide               # brouillon | valide
 date_redaction: 2026-09-30
-date_revision: 2026-10-02    # date de la dernière révision validée
+date_revision: 2026-11-17    # date de la dernière révision validée
 redige_par: premier jet Claude, à partir de l'export de la base Notion du 30/09/2026
-valide_par: Martin Schoreisz # validation effet par effet, 30/09 et 02/10/2026
+valide_par: Martin Schoreisz # validation effet par effet, 30/09 et 02/10/2026 ; v1.1 (chiffre gêne) le 17/11/2026
 
 # -----------------------------------------------------------------------------
 # Échelle des niveaux de preuve
@@ -168,6 +168,7 @@ valeurs_guides_oms_2018:
 effets:
 
   - id: cardiovasculaire
+    etiquette_notion: Cardiovasculaire       # option de la colonne domaine_sante (etape-5-conception-technique.md, Décision 1)
     nom: Maladies cardiovasculaires
     niveau_preuve: demontre
     justification_niveau: >-
@@ -235,6 +236,7 @@ effets:
     alias_domaine_sante: [maladies cardiovasculaires, Cardiovasculaire, effets cardiovasculaires, santé cardiovasculaire, infarctus du myocarde, cardiopathie ischémique, hypertension, accident vasculaire cérébral, système cardiovasculaire, facteurs de risque cardiovasculaire, fibrillation atriale, athérosclérose coronarienne, troubles cardiovasculaires, cardiovascular effects, santé cardiométabolique, risque cardiométabolique]
 
   - id: sommeil
+    etiquette_notion: Sommeil       # option de la colonne domaine_sante (etape-5-conception-technique.md, Décision 1)
     nom: Troubles du sommeil
     niveau_preuve: demontre
     justification_niveau: >-
@@ -304,6 +306,7 @@ effets:
     alias_domaine_sante: [troubles du sommeil, Sommeil, qualité du sommeil, insomnie chronique, sleep disturbance]
 
   - id: gene
+    etiquette_notion: Gene       # option de la colonne domaine_sante (etape-5-conception-technique.md, Décision 1)
     nom: Gêne
     niveau_preuve: demontre
     justification_niveau: >-
@@ -331,6 +334,24 @@ effets:
         origine: source_directe
         verification: fait
         citation: "The increase of %HA in newer studies of aircraft, road and railway noise at comparable Lden levels of earlier studies point to the necessity of adjusting noise limit recommendations."
+      # Ajouté et validé le 17/11/2026 (version 1.1).
+      # Vérifié par script dans le texte intégral (PMC5750957). Rapports de cotes
+      # par +10 dB Lden : avion 3,4 (données observées) à 4,8 (modélisées),
+      # route 2,7 à 3,0, train 3,4 (4,0 sans l'étude japonaise Shinkansen).
+      - texte: >-
+          Chaque hausse de 10 dB du bruit multiplie environ par 3 la « chance »
+          d'être fortement gêné (rapport de cotes) pour la route et le train,
+          et par 3 à 5 pour l'avion.
+        mise_en_avant: false
+        source: oms-2018-revue-gene
+        origine: fiche_notion
+        verification: fait
+        citation: "the chance to be highly annoyed by aircraft noise is roughly between three to five times higher when the noise level increases by 10 dB […] the odds or chance to be highly annoyed is about three times higher when the road traffic noise level increases by 10 dB. […] the chance to be highly annoyed is more than three times higher when the railway noise level increases from 50 to 60 dB."
+        attention: >-
+          C'est la cote (rapport « gênés / non gênés ») qui est multipliée, pas
+          le nombre de personnes gênées : ne pas écrire « 3 à 5 fois plus de
+          personnes gênées ». Les auteurs signalent aussi de grands écarts
+          entre études.
     references: [oms-2018-revue-gene, anses-2013, eoliennes-rivm-2021, aee-2025-synthese]
     pourquoi_important: >-
       C'est l'effet qui touche le plus de monde : des millions d'Européens, bien
@@ -338,10 +359,11 @@ effets:
     points_de_vigilance:
       - >-
         La revue OMS sur la gêne (Guski et al.) a été ajoutée au socle le
-        30/09/2026 ; elle est à ajouter à la main dans la base Notion.
+        30/09/2026, puis à la base Notion le même jour (fiche ajoutée à la main).
     alias_domaine_sante: [gêne (annoyance), gêne/annoyance, gêne sonore, gêne sonore (annoyance), gêne due au bruit, gêne, annoyance, sensibilisation au bruit, sensibilité au bruit]
 
   - id: apprentissage_enfant
+    etiquette_notion: Enfant       # thème enfants : apprentissages + autres effets chez l'enfant (etape-5-conception-technique.md, Décision 1)
     nom: Apprentissages chez l'enfant
     niveau_preuve: demontre
     justification_niveau: >-
@@ -382,10 +404,11 @@ effets:
         avions : ne pas écrire que la route nuit à la lecture de 500 000 enfants.
       - >-
         La revue OMS sur la cognition (Clark et Paunovic) a été ajoutée au socle
-        le 02/10/2026 ; elle est à ajouter à la main dans la base Notion.
+        le 02/10/2026, puis à la base Notion le même jour (fiche ajoutée à la main).
     alias_domaine_sante: [effets cognitifs chez l'enfant, troubles cognitifs chez l'enfant, développement cognitif, développement cognitif de l'enfant, développement cognitif chez l'enfant, fonctions cognitives chez l'enfant, cognition chez l'enfant, performance scolaire, cognitif, Cognition, troubles cognitifs, fonctions cognitives, santé cognitive]
 
   - id: metabolique
+    etiquette_notion: Metabolique       # option de la colonne domaine_sante (etape-5-conception-technique.md, Décision 1)
     nom: Diabète et troubles métaboliques
     niveau_preuve: probable
     justification_niveau: >-
@@ -441,6 +464,7 @@ effets:
     alias_domaine_sante: [métabolique, effets métaboliques, troubles métaboliques, maladies métaboliques, santé métabolique, diabète de type 2, metabolic effects]
 
   - id: sante_mentale
+    etiquette_notion: Sante mentale       # option de la colonne domaine_sante (etape-5-conception-technique.md, Décision 1)
     nom: Santé mentale
     niveau_preuve: debattu
     justification_niveau: >-
@@ -500,6 +524,7 @@ effets:
 # un encadré à part, affiché en tête de la vision « état des connaissances ».
 encadre_a_ne_pas_confondre:
   id: auditif
+  etiquette_notion: Auditif       # option de la colonne domaine_sante (etape-5-conception-technique.md, Décision 1)
   titre: "À ne pas confondre : le bruit qui abîme l'oreille et le bruit qui nuit à la santé"
   niveau_preuve: demontre      # pour les sons très forts ou très prolongés
   texte: >-
@@ -535,6 +560,7 @@ encadre_a_ne_pas_confondre:
 # -----------------------------------------------------------------------------
 pistes_emergentes:
   - id: cancer
+    etiquette_notion: Cancer       # option de la colonne domaine_sante (etape-5-conception-technique.md, Décision 1)
     nom: Cancer
     etat: >-
       Une méta-analyse de 2025 suggère un lien avec certains cancers, mais avec un
@@ -543,6 +569,7 @@ pistes_emergentes:
     alias_domaine_sante: [cancer]
   # Ajoutée le 02/10/2026 sur la base du rapport AEE 2025.
   - id: demence
+    etiquette_notion: Demence       # option de la colonne domaine_sante (etape-5-conception-technique.md, Décision 1)
     nom: Démence
     etat: >-
       L'Agence européenne pour l'environnement estime que le bruit pourrait
@@ -559,6 +586,7 @@ pistes_emergentes:
 # environnemental et bruit professionnel (hors périmètre de la veille).
 themes_hors_socle:
   - id: grossesse
+    etiquette_notion: Grossesse       # option de la colonne domaine_sante (etape-5-conception-technique.md, Décision 1)
     nom: Grossesse et naissance
     alias_domaine_sante: [issues de grossesse, faible poids de naissance, prématurité, "petit poids pour l'âge gestationnel", nouveau-nés, santé néonatale]
 
