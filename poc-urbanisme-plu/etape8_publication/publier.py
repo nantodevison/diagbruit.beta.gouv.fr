@@ -214,6 +214,9 @@ def _parser() -> argparse.ArgumentParser:
 
 
 def main(argv: list[str] | None = None) -> int:
+    # Console Windows : sans cela, un caractère hors de l'encodage local (ex. « → »)
+    # ferait planter un print — potentiellement juste après une écriture réussie.
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
     args = _parser().parse_args(argv)
     mode = "PUBLICATION RÉELLE" if args.publier else "dry-run"
     print(f"Étape 8 — département {args.dept} — Strapi/{args.environnement} — {mode}")

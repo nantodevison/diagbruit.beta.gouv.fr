@@ -1,13 +1,19 @@
 """Étape 7 — phase unique : insertion dans Strapi et Notion (`inserer.py`),
 géométrie déposée sur Box, voir `docs/etape-7-conception-technique.md`.
 
-Lit `etape6_{dept}_export.csv` et `etape6_{dept}_geometries/`. Pour chaque
-géométrie finale : ajoute `alert_slug` aux propriétés du `.geojson` local,
-le dépose dans le dossier Box `--box-folder-id` (un dossier par territoire),
-cherche une entrée Strapi/Notion existante par `alert_slug` (idempotence,
-voir la conception technique), crée ou met à jour chaque côté indépendamment
-— Notion reçoit l'URL Box du fichier dans sa propriété `data`, pas le
-fichier lui-même.
+Lit `etape6_{dept}_export.csv` et `etape6_{dept}_geometries/`.
+
+**Un seul fichier géométrie par run (16/11/2026)** : toutes les géométries
+de l'export sont réunies dans `etape7_{dept}_geometries.geojson` (une entité
+par zone, avec `id_geometrie` et `alert_slug`), écrit dans le dossier de
+l'export puis déposé une fois dans le dossier Box `--box-folder-id`.
+Raison : Dagster, qui charge ces fichiers, ne supportait pas un fichier par
+zone (398 pour le 067).
+
+Puis, pour chaque zone : cherche une entrée Strapi/Notion existante par
+`alert_slug` (idempotence, voir la conception technique), crée ou met à jour
+chaque côté indépendamment — Notion reçoit dans `data` l'URL Box du fichier
+du run, pas le fichier lui-même.
 
 **Contrôles bloquants (20/10/2026)** : avant tout appel réseau, l'export
 entier est contrôlé — format de chaque `alert_slug` (règle du champ `uid` de
@@ -48,7 +54,7 @@ Sortie (dans le même dossier) :
     etape7_{dept}_insertions.csv          — journal des créations/mises à jour, jamais relu (avec --envoyer)
     etape7_{dept}_erreurs.csv             — échecs isolés, si non vide (avec --envoyer)
     etape7_{dept}_audit_{environnement}.csv — état Strapi (avec --audit)
-    etape6_{dept}_geometries/*.geojson    — propriété alert_slug ajoutée (avec --envoyer)
+    etape7_{dept}_geometries.geojson      — toutes les zones du run, identique à Box (avec --envoyer)
 """
 
 from __future__ import annotations
@@ -146,6 +152,78 @@ def _probleme_format_slug(alert_slug: str) -> str | None:
     return None
 
 
+def _nom_fichier_run(code_departement: str) -> str:
+    """Nom du `.geojson` unique qui regroupe toutes les zones du run
+    (évolution du 16/11/2026), ex. `etape7_067_geometries.geojson`. Même
+    nom d'un envoi à l'autre : une relance dépose une nouvelle version sur
+    Box (recherche par nom dans `client_box`), jamais un doublon."""
+    return f"etape7_{code_departement}_geometries.geojson"
+
+
+def _lire_geojson(chemin: Path) -> dict:
+    with chemin.open(encoding="utf-8") as fichier:
+        return json.load(fichier)
+
+
+def _controler_geometries(lignes: list[dict], dossier_geometries: Path) -> list[str]:
+    """Contrôles propres au regroupement en un seul fichier (16/11/2026) :
+    `.geojson` de l'étape 6 non vides et tous dans le même système de
+    coordonnées — sans quoi on mélangerait des coordonnées incompatibles
+    dans un même fichier."""
+    problemes: list[str] = []
+    crs_vus: dict[str, list[str]] = defaultdict(list)
+    for ligne in lignes:
+        id_geometrie = _texte(ligne.get("id_geometrie"))
+        chemin = dossier_geometries / _texte(ligne.get("nom_fichier_geometrie"))
+        if not chemin.is_file():
+            continue  # déjà signalé par `_controler_export`
+        contenu = _lire_geojson(chemin)
+        if not contenu.get("features"):
+            problemes.append(f"g{id_geometrie} : aucune entité dans {chemin.name}")
+        crs_vus[json.dumps(contenu.get("crs"), sort_keys=True)].append(id_geometrie)
+    if len(crs_vus) > 1:
+        detail = " ; ".join(f"{crs} ({len(ids)} fichier(s))" for crs, ids in crs_vus.items())
+        problemes.append(f"systèmes de coordonnées différents entre les géométries : {detail}")
+    return problemes
+
+
+def _fichier_du_run(lignes: list[dict], dossier_geometries: Path, code_departement: str) -> dict:
+    """Réunit, en mémoire, toutes les géométries de l'étape 6 en un seul
+    GeoJSON. Retourne `{"nom_fichier", "contenu", "nb_entites"}` ; chaque
+    entité reçoit `id_geometrie` et `alert_slug` en propriétés — c'est
+    `alert_slug` qui la relie à son alerte Strapi une fois chargée en base
+    par Dagster. Suppose `_controler_geometries` passé."""
+    nom_fichier = _nom_fichier_run(code_departement)
+    collection: dict = {"type": "FeatureCollection", "name": nom_fichier[: -len(".geojson")]}
+    entites: list[dict] = []
+    for ligne in lignes:
+        contenu = _lire_geojson(dossier_geometries / _texte(ligne.get("nom_fichier_geometrie")))
+        if "crs" not in collection and contenu.get("crs"):
+            collection["crs"] = contenu["crs"]  # identique partout (contrôlé)
+        proprietes = {"id_geometrie": _texte(ligne.get("id_geometrie")), "alert_slug": _texte(ligne.get("alert_slug_propose"))}
+        entites.extend({**entite, "properties": proprietes} for entite in contenu["features"])
+    collection["features"] = entites
+    return {"nom_fichier": nom_fichier, "contenu": collection, "nb_entites": len(entites)}
+
+
+def _deposer_fichier(fichier: dict, dossier_local: Path, box_folder_id: str) -> tuple[str, str | None]:
+    """Écrit le fichier du run dans `dossier_local`, le relit, puis le dépose
+    sur Box (création ou nouvelle version, voir `client_box`). Retourne
+    `(url_box, None)` ou `("", erreur)`. Jamais en dry-run."""
+    chemin = dossier_local / fichier["nom_fichier"]
+    try:
+        with chemin.open("w", encoding="utf-8") as sortie:
+            json.dump(fichier["contenu"], sortie, ensure_ascii=False)
+        if len(_lire_geojson(chemin).get("features") or []) != fichier["nb_entites"]:
+            raise ValueError(f"relecture de {chemin.name} : nombre d'entités différent")
+        url = client_box.televerser_geometrie(chemin, box_folder_id)
+    except Exception as exc:
+        print(f"[Box] ÉCHEC {fichier['nom_fichier']} : {exc}")
+        return "", f"dépôt Box de {fichier['nom_fichier']} : {exc}"
+    print(f"[Box] {fichier['nom_fichier']} ({fichier['nb_entites']} zone(s)) déposé : {url}")
+    return url, None
+
+
 def _controler_export(lignes: list[dict], dossier_geometries: Path) -> list[str]:
     """Contrôles bloquants sur l'export entier, avant tout appel réseau —
     retourne la liste de tous les problèmes (vide si tout va bien)."""
@@ -193,30 +271,6 @@ def _controler_export(lignes: list[dict], dossier_geometries: Path) -> list[str]
     return problemes
 
 
-def _ajouter_alert_slug_geojson(chemin: Path, alert_slug: str) -> None:
-    """Ajoute (ou remplace) la propriété `alert_slug` de chaque entité du
-    `.geojson` local, puis relit le fichier pour vérifier — voir
-    `etape-7-conception-technique.md`, "Correctif du 20/10/2026", point 2.
-
-    Le fichier local est modifié volontairement (option retenue le
-    20/10/2026) : il reste ainsi identique à celui déposé sur Box, sans
-    copie modifiée en mémoire dont personne ne garderait la trace. Jamais
-    appelé en dry-run."""
-    with chemin.open(encoding="utf-8") as fichier:
-        contenu = json.load(fichier)
-    entites = contenu.get("features") or []
-    if not entites:
-        raise ValueError(f"aucune entité dans {chemin}")
-    for entite in entites:
-        entite.setdefault("properties", {})["alert_slug"] = alert_slug
-    with chemin.open("w", encoding="utf-8") as fichier:
-        json.dump(contenu, fichier, ensure_ascii=False)
-    with chemin.open(encoding="utf-8") as fichier:
-        relu = json.load(fichier)
-    if any((e.get("properties") or {}).get("alert_slug") != alert_slug for e in relu.get("features") or []):
-        raise ValueError(f"alert_slug absent ou différent après réécriture de {chemin}")
-
-
 def _traiter_strapi(ligne: dict, alert_slug: str, environnement: str, envoyer: bool) -> tuple[str, str, str | None]:
     """Retourne `(action, document_id, message_erreur)` — `action` vaut
     `cree`, `mis_a_jour` ou `""` ; `message_erreur` est `None` en cas de
@@ -256,25 +310,24 @@ def _traiter_strapi(ligne: dict, alert_slug: str, environnement: str, envoyer: b
 
 
 def _traiter_notion(
-    ligne: dict, alert_slug: str, dossier_geometries: Path, box_folder_id: str, envoyer: bool
+    ligne: dict, alert_slug: str, nom_fichier: str, depot: tuple[str, str | None] | None, envoyer: bool
 ) -> tuple[str, str, str | None]:
     """Retourne `(action, page_id, message_erreur)` — mêmes conventions que
-    `_traiter_strapi`. Le `.geojson` reçoit `alert_slug` juste avant son
-    dépôt sur Box (jamais en dry-run)."""
+    `_traiter_strapi`. `nom_fichier` est le fichier géométrie du run ;
+    `depot` est le résultat de son dépôt Box (`(url, erreur)`, `None` en
+    dry-run). Si ce dépôt a échoué, la page n'est pas écrite : une
+    page sans lien vers sa géométrie n'aurait pas de sens."""
     try:
-        chemin_geojson = dossier_geometries / _texte(ligne.get("nom_fichier_geometrie"))
         if envoyer:
-            # Recherche Notion d'abord : un doublon Notion arrête la ligne
-            # avant toute écriture, y compris le dépôt Box.
-            client_notion.trouver_page_id(alert_slug)
-            _ajouter_alert_slug_geojson(chemin_geojson, alert_slug)
-            url_geometrie = client_box.televerser_geometrie(chemin_geojson, box_folder_id)
+            url_geometrie, erreur_depot = depot
+            if erreur_depot:
+                raise RuntimeError(erreur_depot)
             champs = client_notion.ChampsPageNotion(
                 territoire=_texte(ligne.get("territoire_propose")),
                 description=_texte(ligne.get("titre_propose")),
                 alert_slug=alert_slug,
                 url_geometrie=url_geometrie,
-                nom_fichier=chemin_geojson.name,
+                nom_fichier=nom_fichier,
             )
             page_id, cree = client_notion.creer_ou_mettre_a_jour(champs)
             print(f"  [Notion] {'créé' if cree else 'mis à jour'} ({page_id}) — géométrie : {url_geometrie}")
@@ -288,7 +341,7 @@ def _traiter_notion(
                 f"  [Notion] (dry-run) créerait — Territoire={_texte(ligne.get('territoire_propose'))!r}, "
                 f"Description={_texte(ligne.get('titre_propose'))[:60]!r}..."
             )
-        print(f"  [Box] (dry-run) ajouterait alert_slug={alert_slug!r} à {chemin_geojson.name}, puis déposerait dans {box_folder_id}")
+        print(f"  [Notion] (dry-run) data → {nom_fichier}")
         return "", existant or "", None
     except Exception as exc:
         return "", "", str(exc)
@@ -341,8 +394,15 @@ def inserer(
     # Contrôles bloquants d'abord : rien n'est lu ni écrit à distance tant
     # que l'export entier n'est pas exploitable.
     problemes = _controler_export(lignes, dossier_geometries)
+    problemes += _controler_geometries(lignes, dossier_geometries)
     if problemes:
         raise ExportInvalide(problemes)
+
+    # Un seul fichier géométrie pour tout le run (évolution du 16/11/2026),
+    # constitué en mémoire avant tout appel réseau.
+    fichier = _fichier_du_run(lignes, dossier_geometries, code_departement)
+    print(f"Fichier géométrie du run : {fichier['nom_fichier']} — {fichier['nb_entites']} zone(s) "
+          f"pour {len(lignes)} ligne(s) d'export")
 
     # Vérifié tôt, avant de traiter la moindre ligne — une configuration
     # manquante n'a rien d'un échec isolé, rien n'est exploitable sans elle.
@@ -351,6 +411,15 @@ def inserer(
     client_box.verifier_configuration()
 
     date_traitement = date.today().isoformat()
+
+    # Dépôt Box une seule fois, avant le traitement ligne à ligne.
+    # En dry-run : rien n'est écrit, ni sur le disque ni sur Box.
+    if envoyer:
+        depot = _deposer_fichier(fichier, dossier, box_folder_id)
+    else:
+        depot = None
+        print(f"[Box] (dry-run) écrirait {fichier['nom_fichier']} dans {dossier} "
+              f"puis le déposerait dans le dossier {box_folder_id}")
 
     # Journal écrit ligne par ligne, pas en un seul bloc à la fin — une
     # interruption en cours de route (constaté en réel le 24/08/2026, un
@@ -377,7 +446,7 @@ def inserer(
                 )
 
             action_notion, notion_page_id, erreur_notion = _traiter_notion(
-                ligne, alert_slug, dossier_geometries, box_folder_id, envoyer
+                ligne, alert_slug, fichier["nom_fichier"], depot, envoyer
             )
             if erreur_notion:
                 erreurs.append(
@@ -552,6 +621,9 @@ def _parser() -> argparse.ArgumentParser:
 
 
 def main(argv: list[str] | None = None) -> int:
+    # Console Windows : sans cela, un caractère hors de l'encodage local (ex. « → »)
+    # ferait planter un print — potentiellement juste après une écriture réussie.
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
     parser = _parser()
     args = parser.parse_args(argv)
     if not args.audit and not args.box_folder_id:

@@ -23,10 +23,34 @@ Même sous-dossier du même POC que les étapes 1 à 6 (voir `etape-1-conception
    - **champs obligatoires de Strapi non vides** (`source`, `reference`, `label`, plus `content`) et `label` parmi `ZONE SOUMISE AU BRUIT`/`ZONE CALME` — ajouté le 20/10/2026 après le dry-run du 067 : même piège que le format du slug, Strapi ne vérifie les champs obligatoires qu'à la publication (`required: !isDraft && attr.required`). 253 lignes sur 400 avaient `source`/`reference` vides : elles auraient été créées en brouillon puis impossibles à publier (voir `etape-6-conception-technique.md`, "Source et référence de ces quatre cas").
 
    Pourquoi bloquer plutôt que sauter la ligne (comportement d'avant) : un envoi partiel est plus difficile à rattraper qu'un envoi qui n'a pas eu lieu.
-2. **`alert_slug` ajouté au `.geojson` local juste avant le dépôt Box** (`_ajouter_alert_slug_geojson`), puis le fichier est relu pour vérification. Option retenue le 20/10/2026 : modifier le fichier local plutôt qu'envoyer une copie modifiée en mémoire — le fichier du disque, celui du dépôt Git et celui de Box restent identiques, sans modification silencieuse. Conséquences assumées : les `.geojson` locaux apparaissent modifiés dans Git après le premier envoi réel (à commiter) ; une relance de `generer_export.py` les réécrit sans `alert_slug`, que l'envoi suivant remet. Jamais en dry-run. `generer_export.py` (étape 6) reste inchangé : le slug n'y est pas encore définitif.
+2. *(Remplacé le 16/11/2026 par les fichiers par territoire, voir "Évolution du 16/11/2026" : le principe — fichier local identique au fichier Box — est conservé, mais il porte désormais sur le fichier du territoire, et les `.geojson` de l'étape 6 ne sont plus modifiés.)* **`alert_slug` ajouté au `.geojson` local juste avant le dépôt Box** (`_ajouter_alert_slug_geojson`), puis le fichier est relu pour vérification. Option retenue le 20/10/2026 : modifier le fichier local plutôt qu'envoyer une copie modifiée en mémoire — le fichier du disque, celui du dépôt Git et celui de Box restent identiques, sans modification silencieuse. Conséquences assumées : les `.geojson` locaux apparaissent modifiés dans Git après le premier envoi réel (à commiter) ; une relance de `generer_export.py` les réécrit sans `alert_slug`, que l'envoi suivant remet. Jamais en dry-run. `generer_export.py` (étape 6) reste inchangé : le slug n'y est pas encore définitif.
 3. **Recherche stricte des entrées existantes** (`client_strapi.etat_entree`, `client_notion.trouver_page_id`) : si plusieurs documents Strapi (ou pages Notion) portent le même `alert_slug`, la ligne passe en erreur sans aucune écriture, avec la liste des identifiants à dédoublonner à la main. Avant, seul le premier résultat était retenu : avec un doublon (cas des doublons résiduels du 24/08), une entrée était mise à jour et l'autre restait obsolète sans que rien ne le signale.
 4. **Journal enrichi** : colonnes `environnement` (`preprod`/`prod`) et `action_strapi`/`action_notion` (`cree`/`mis_a_jour`) — voir "Contrat de données". Un journal existant à l'ancien format est refusé (à renommer à la main) plutôt que complété avec un format mélangé. Le journal de l'Eurométropole (`etape7_067-plui-strasbourg_insertions.csv`) ne permettait pas de savoir dans quel environnement chaque ligne avait été écrite.
 5. **Mode `--audit`**, lecture seule — voir "Mode audit" ci-dessous.
+
+## Correctif du 13/11/2026 — slugs qui ne diffèrent que par la casse
+
+Le filtre `rich_text equals` de Notion **ignore les majuscules** (constaté en réel le 10/11/2026 sur le 067 : `…-ZoneUa` a trouvé, puis écrasé, la page de `…-ZoneUA` ; idem `…-Secteur1Aue`/`…-Secteur1AUe`). Strapi, lui, les distingue (`$eq`). Deux corrections :
+- `client_notion.trouver_page_id` garde le filtre Notion pour ramener les candidats, puis ne retient que les pages dont le slug est identique **au caractère près** (`_slug_de_la_page`) ;
+- `_controler_export` contrôle l'unicité des slugs **sans tenir compte des majuscules** (`casefold`) : deux slugs identiques aux majuscules près bloquent l'envoi, avec un message dédié.
+
+## Évolution du 16/11/2026 — un seul fichier géométrie par run
+
+**Constat** : l'équipe de développement charge les géométries depuis Box avec Dagster (`dagster/.../noisezone/defs.py`), qui traite les fichiers **un par un** : téléchargement Box et dépôt S3 au launcher, puis lecture et écriture PostGIS au landing. Avec un fichier par zone (398 pour le 067 hors Eurométropole), le chargement ne passait pas.
+
+**Décision (avec l'équipe de développement)** : un seul `.geojson` **par run** (un export de l'étape 6, identifié par `--dept`), `etape7_{dept}_geometries.geojson`, contenant une entité par zone, chacune avec ses propriétés `id_geometrie` et `alert_slug`. Le 067 hors Eurométropole passe de 398 fichiers à 1. L'ingestion Dagster lit déjà un GeoJSON à plusieurs entités (`ingest_shapefiles.py`) et le mapping `noisezone` garde l'`alert_slug` de chacune : rien à changer côté Dagster. Les zones, les alertes Strapi et les pages Notion restent une par zone. *(Un regroupement intermédiaire par territoire, 23 fichiers pour le 067, a été écrit puis abandonné le même jour : la demande portait sur un fichier par run.)*
+
+**Pourquoi à l'étape 7 et pas à l'étape 6** : l'étape 6 écrit les géométries **sans** `alert_slug`, volontairement (le slug n'y est pas définitif, voir "Correctif du 20/10/2026", point 2). Seule l'étape 7 connaît le slug final.
+
+**Ce qui change dans `inserer.py`** :
+1. **Contrôles bloquants** supplémentaires (`_controler_geometries`) : chaque `.geojson` de l'étape 6 contient au moins une entité, et tous ont le même système de coordonnées (`crs`) — sans quoi on mélangerait des coordonnées incompatibles dans un même fichier.
+2. **Constitution du fichier du run** (`_fichier_du_run`), en mémoire, avant tout appel réseau : toutes les entités des fichiers de l'étape 6 sont reprises, avec `id_geometrie` et `alert_slug` en propriétés (les autres propriétés sont remplacées).
+3. **Avec `--envoyer`** : le fichier est écrit dans le dossier de l'export, relu, puis déposé sur Box **une seule fois**, avant le traitement ligne à ligne. Le fichier local et celui de Box restent identiques (même principe que le point 2 du 20/10/2026). Le nom ne change pas d'un envoi à l'autre : une relance dépose une **nouvelle version** du même fichier Box, jamais un doublon. Les `.geojson` de l'étape 6 **ne sont plus modifiés**.
+4. **Notion** : `data` reçoit l'URL Box du fichier du run (la même pour toutes les pages).
+5. **Dépôt Box en échec** : toutes les lignes passent en erreur côté `notion` (pas de page sans lien vers sa géométrie) ; Strapi est traité normalement.
+6. **Dry-run** : le fichier est constitué en mémoire et décrit (nom, nombre d'entités), rien n'est écrit.
+
+**Passage de l'ancien dépôt au nouveau** : les anciens fichiers (un par zone) restent sur Box, le script ne supprimant jamais rien. Ils doivent être **supprimés à la main avant le prochain chargement Dagster**, sinon chaque zone serait chargée deux fois.
 
 ## Draft and publish (Strapi 5) — rappel et conséquences
 
@@ -61,7 +85,8 @@ poc-urbanisme-plu/
 │   └── inserer.py                         # phase unique — lit etape6_{dept}_export.csv + etape6_{dept}_geometries/
 └── output/
     ├── etape6_{dept}_export.csv
-    ├── etape6_{dept}_geometries/
+    ├── etape6_{dept}_geometries/          # un fichier par zone (lu, plus modifié depuis le 16/11/2026)
+    ├── etape7_{dept}_geometries.geojson   # toutes les zones du run, identique à Box (avec --envoyer)
     ├── etape7_{dept}_insertions.csv       # journal des créations/mises à jour, jamais relu (voir "Idempotence")
     └── etape7_{dept}_erreurs.csv          # échecs isolés, absent si rien à signaler
 ```
@@ -97,7 +122,7 @@ Pour chaque ligne :
    - `title` ← `titre_propose` (titre court généré par LLM à l'étape 5, validé par l'opérateur). `alert_slug` (champ `uid`, `targetField: title` côté schéma Strapi) est fourni explicitement dans le payload plutôt que dérivé de `title`.
    - Recherche préalable (`trouver_document_id`, voir "Idempotence") : absente → création, `POST {url_environnement}/api/noisezone-alerts?status=draft`, corps `{"data": {...}}`. Présente → mise à jour, `PUT {url_environnement}/api/noisezone-alerts/{documentId}?status=draft` (Strapi 5 — `documentId`, une chaîne, pas l'`id` numérique). `url_environnement` vient de `STRAPI_PREPROD_URL` ou `STRAPI_PROD_URL` selon `--environnement` (voir "Deux environnements Strapi" ci-dessous).
    - Entrée créée **en brouillon** (`draftAndPublish` actif sur ce content-type), jamais publiée automatiquement par le script — l'opérateur relit et publie manuellement dans Strapi. Le paramètre de requête `status=draft` sur `POST`/`PUT` est ce qui garantit ce comportement — voir "Piège : publication automatique" ci-dessous.
-3. **Box puis Notion** (`client_box.py` + `client_notion.py`) :
+3. **Box puis Notion** (`client_box.py` + `client_notion.py`) — *depuis le 16/11/2026, le dépôt Box se fait une seule fois pour tout le run, avant la boucle sur les lignes ; chaque page Notion reçoit l'URL de ce fichier unique (voir "Évolution du 16/11/2026"). Les deux premiers points ci-dessous décrivent le fonctionnement antérieur, un fichier par zone ; le mécanisme de dépôt Box (recherche par nom, nouvelle version) est inchangé :*
    - Avant le dépôt, le `.geojson` local reçoit la propriété `alert_slug` puis est relu pour vérification (voir "Correctif du 20/10/2026", point 2).
    - Dépôt de la géométrie sur Box (`client_box.televerser_geometrie`) : recherche d'un fichier du même nom dans `--box-folder-id` (index du dossier mis en cache pour le run, voir "Dépôt sur Box" ci-dessous) ; absent → `POST https://upload.box.com/api/2.0/files/content` (création) ; présent → `POST .../files/{id}/content` (nouvelle version, pas de doublon). Retourne `https://app.box.com/file/{id}`.
    - Recherche préalable côté Notion (`trouver_page_id`, `POST /v1/data_sources/{data_source_id}/query` — voir "Sources de données Notion" ci-dessous). Absente → création (`POST /v1/pages`, `parent` = `{"type": "data_source_id", "data_source_id": ...}`). Présente (`page_id`) → mise à jour (`PATCH /v1/pages/{page_id}`).
