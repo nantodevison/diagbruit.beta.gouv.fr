@@ -108,7 +108,8 @@ Le script n'écrit **jamais** dans les colonnes que tu remplis toi-même (`favor
 | `sens_conclusion` | Effet démontré, absence d'effet, non concluant, pas de conclusion propre. Sert au calcul de la priorité. |
 | `elements_probants` | Ce qui étaye la conclusion : population, méthode, chiffres. Vide = rien de probant dans le contenu lu. |
 | `reprise_de` | Pour un communiqué ou un commentaire : la publication d'origine qu'il relaie. Utile pour retrouver l'étude source. |
-| `domaine_sante` / `source_bruit` | Catégories (cardiovasculaire, sommeil… / routier, aérien…). Pratiques pour filtrer. Sur les fiches d'août 2026, ce sont des libellés libres, pas encore harmonisés. |
+| `domaine_sante` | Effet de santé, aligné sur le socle « état des connaissances » (nettoyé le 17/11/2026) : Cardiovasculaire, Sommeil, Gene, Enfant, Metabolique, Sante mentale, Auditif, Cancer, Demence, Grossesse, et General pour un document d'ensemble sans effet précis. `Enfant` regroupe les apprentissages de l'enfant et toute étude menée chez l'enfant (cumulable avec l'effet concerné). Sert à rattacher chaque document à un effet de la page de synthèse : à corriger pendant le tri si besoin. |
+| `source_bruit` | Source du bruit (routier, aérien, ferroviaire, industriel). Pratique pour filtrer. |
 | `url_source` | D'où vient le lien : API scientifique (fiable), recherche web, ou proposé par le modèle (à vérifier). Vide sur les fiches d'août 2026. |
 | `url_not_real` | Le lien semble mort ou renvoie vers la page d'accueil du site. |
 | `auteurs` | Premier auteur (et « et al. »). |

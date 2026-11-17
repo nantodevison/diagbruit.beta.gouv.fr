@@ -14,8 +14,15 @@ from notion_client import Client
 # de cette liste — voir etape-2-conception-technique.md, corrigé après le premier essai réel
 # (le modèle produisait des valeurs libres avec virgules, rejetées par Notion : un
 # multi_select/select ne peut pas contenir de virgule dans le nom d'une option).
+#
+# domaine_sante : une option par entrée du socle (champ `etiquette_notion` de
+# socle/etat-connaissances.yaml), plus General pour un document d'ensemble — voir
+# docs/etape-5-conception-technique.md, Décision 1 (17/11/2026). Toute modification ici
+# doit être reportée dans le socle, et inversement. Pas de rafraîchissement automatique
+# du schéma : sur une base existante, une option absente est créée à la première écriture.
 OPTIONS_DOMAINE_SANTE = (
-    "Cardiovasculaire", "Sante mentale", "Cognition", "Metabolique", "Sommeil", "Enfant",
+    "Cardiovasculaire", "Sommeil", "Gene", "Enfant", "Metabolique", "Sante mentale",
+    "Auditif", "Cancer", "Demence", "Grossesse", "General",
 )
 OPTIONS_SOURCE_BRUIT = ("Routier", "Aerien", "Ferroviaire", "Industriel")
 

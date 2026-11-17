@@ -134,14 +134,24 @@ du schema (ne rien inventer), en retenant celles qui s'appliquent meme partielle
 etude peut cumuler plusieurs valeurs sur les deux champs. Definitions :
 
 domaine_sante :
-- Cardiovasculaire : hypertension, maladies coronariennes, AVC, arythmies.
-- Sante mentale : anxiete, depression, stress percu, qualite de vie psychologique.
-- Cognition : attention, memoire, performances scolaires, fonctions executives.
-- Metabolique : diabete, obesite, syndrome metabolique.
+- Cardiovasculaire : hypertension, infarctus et maladies coronariennes, AVC, fibrillation \
+atriale et autres arythmies.
 - Sommeil : latence d'endormissement, reveils nocturnes, qualite du sommeil rapportee ou \
 mesuree.
-- Enfant : tout effet specifique etudie chez une population pediatrique (0-17 ans), quel \
-que soit le domaine de sante concerne.
+- Gene : gene due au bruit (annoyance) declaree, sensibilite au bruit.
+- Enfant : apprentissages de l'enfant (lecture, memoire, attention, performances \
+scolaires), et tout autre effet etudie chez une population pediatrique (0-17 ans) — dans \
+ce cas, ajouter aussi la valeur de l'effet concerne (ex. Sante mentale + Enfant).
+- Metabolique : diabete, obesite et surpoids, syndrome metabolique.
+- Sante mentale : anxiete, depression, stress percu, bien-etre, qualite de vie, troubles \
+emotionnels ou du comportement.
+- Auditif : perte d'audition, acouphenes.
+- Cancer : tout type de cancer.
+- Demence : demence, maladie d'Alzheimer, declin cognitif de l'adulte ou de la personne agee.
+- Grossesse : issues de grossesse, poids de naissance, prematurite.
+- General : document d'ensemble sur les effets du bruit sans effet de sante precis \
+(rapport general, page d'information, methodologie). Uniquement si aucune autre valeur \
+ne s'applique.
 
 source_bruit :
 - Routier : trafic automobile, poids lourds, deux-roues.
