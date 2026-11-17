@@ -51,6 +51,8 @@ La base "Données réglementaires locales (PLU, PPBE, …)" porte `alert_slug` (
 
 **À faire lors du passage d'un ancien dépôt (un fichier par zone) au nouveau** : supprimer à la main les anciens fichiers du dossier Box **avant** le prochain chargement Dagster, sinon chaque zone serait chargée deux fois (une fois par son ancien fichier, une fois par le fichier du run). Le script ne supprime jamais rien sur Box.
 
+**Après toute relance qui change les géométries** : Dagster ne suit pas les évolutions des fichiers Box, il est relancé à la main par l'équipe de développement (constat du 17/11/2026). Il faut donc la prévenir, sinon la base garde les anciennes géométries.
+
 **Historique** : du 04/09/2026 au 16/11/2026, un `.geojson` par zone était déposé sur Box, et chaque page Notion pointait vers le sien.
 
 **Historique** : jusqu'au 04/09/2026, le `.geojson` était uploadé directement à Notion comme pièce jointe (`file_upload`) — l'API Notion refusait l'extension `.geojson`, le fichier était donc renommé en `.json` avant envoi. Écarté au profit du dépôt Box pour disposer d'une copie durable et consultable indépendamment de Notion.

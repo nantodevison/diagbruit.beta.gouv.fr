@@ -13,8 +13,6 @@ Gardez-le court : quelques lignes par section suffisent.
 - [x] Un seul fichier géométrie par run : envoyé le 2026-11-16 (Box = 1 fichier de 398 zones,
       Notion = 398 pages recréées — ne pas restaurer les anciennes depuis la corbeille, Strapi
       préprod = 398 mises à jour). Dagster passe (Senhao, 2026-11-17) ; branche fusionnée.
-- [ ] Question à l'équipe de dev : regrouper aussi les 28 fichiers de l'Eurométropole (dossier
-      Box 398163261000) en un seul fichier ?
 - [x] Étape 8, 067 hors Eurométropole : 398 alertes publiées en préprod le 2026-11-17
       (375 et 316 testées une à une, puis les 396 autres ; 396/396 identiques au brouillon ;
       audit : 0 brouillon seul, 0 doublon, 0 publié sans brouillon). Prêt pour l'ATIP.
@@ -24,6 +22,15 @@ Gardez-le court : quelques lignes par section suffisent.
 - [ ] Après les retours de l'ATIP : envoi et publication en prod, liens Legifrance dans reference.
 
 ## Prochaines étapes
+- [ ] **PRIORITAIRE — Saisie manuelle des slugs, maillon faible du pipeline** : avant le
+      prochain territoire, proposition automatique des termes métier (niveaux 3 puis 1 puis 2,
+      voir docs/etape-6-conception-technique.md, "Évolution prévue"), avec contrôle de forme et
+      d'unicité sans tenir compte des majuscules dès la saisie dans outil_validation.html.
+      C'est de cette saisie qu'est venue la collision du 2026-11-10.
+- [ ] Étape 7 : refuser le dépôt Box si le dossier contient déjà un fichier géométrie du même
+      nom (accord du 2026-11-17) — sinon un autre run du même département viderait le premier
+      au prochain chargement Dagster. À trancher : comment laisser passer la relance légitime du
+      même run (ex. option explicite, ou nom de fichier incluant le run).
 - [ ] Vérifier l'occurrence 2_67239 (PADD 67239, mention "axes routiers" à vérifier contre
       le contexte documentaire), si ce n'a pas été fait pendant la passe rapide du 2026-10-12.
 - [ ] Mesurer combien d'occurrences `zone_urba_auto` du 067 oublient des sous-secteurs : la
@@ -33,8 +40,6 @@ Gardez-le court : quelques lignes par section suffisent.
 - [ ] Documenter dans docs/ameliorations-identifiees.md : la couche texte des PDF « modèle »
       (Heiligenberg, Kurtzenhouse, Lauterbourg, Scheibenhard, Weitbruch, Munchhausen) est décalée
       par rapport à l'affichage, ce qui fausse pages et portées à l'étape 2.
-- [ ] Avant le prochain territoire : proposition automatique des termes métier (niveaux 3 puis
-      1 puis 2, voir docs/etape-6-conception-technique.md, "Évolution prévue").
 - [ ] (Suggestion) Relire les autres titres et messages fixes (messages_fixes.py) avec le même
       regard sur le vocabulaire juridique (« prescription », « recommandation »).
 
@@ -46,16 +51,17 @@ Gardez-le court : quelques lignes par section suffisent.
   docs/etape-5-conception-technique.md).
 - Faire cascader une correction d'occurrence vers une régénération de synthèse, si le besoin se
   confirme à l'usage (reporté, même document).
-- Étape 7 : envois limités pour les tests (option `--ids` listant des id_geometrie, contrôles
-  bloquants toujours faits sur l'export entier ; éventuellement `--strapi-seulement` pour ne pas
-  écrire dans Notion/Box, qui n'ont pas de préprod). Idée du 2026-11-10, test à 5 lignes
-  abandonné au profit de l'envoi complet.
-- (Intégré au niveau 3 de l'évolution prévue) Contrôler forme et unicité du slug dès la saisie
-  dans outil_validation.html — unicité **sans tenir compte des majuscules**, comme le contrôle
-  de l'étape 7 depuis le 2026-11-13 (aujourd'hui l'erreur n'est arrêtée qu'au dry-run).
 
 ## Décisions récentes
 <!-- Une ligne par décision : date — décision — raison en quelques mots -->
+- 2026-11-17 — Les 28 fichiers géométrie de l'Eurométropole (Box 398163261000) ne sont pas
+  regroupés — ils sont déjà en base.
+- 2026-11-17 — Idée d'envois limités à l'étape 7 (`--ids`) abandonnée : depuis le fichier
+  géométrie unique par run, un envoi partiel remplacerait sur Box le fichier complet par un
+  fichier réduit. (L'option `--ids` de l'étape 8, qui ne touche pas Box, reste valable.)
+- 2026-11-17 — Dagster ne suit pas les évolutions des fichiers Box : il est relancé à la main.
+  Toute relance de l'étape 7 qui change les géométries doit donc être signalée à l'équipe de
+  dev pour relancer Dagster.
 - 2026-11-17 — Étape 8 : publication par PUT ?status=published à corps vide validée (version
   publiée identique au brouillon, front conforme sur 316 Hœrdt). Alerte de test à choisir près
   d'une grande route — le front n'affiche pas le PLU sans score de bruit (suivi par les devs).
