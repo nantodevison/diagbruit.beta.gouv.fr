@@ -24,14 +24,35 @@ Gardez-le court : quelques lignes par section suffisent.
         veille créé avec les dépendances du projet et `pypdf`.
   - [x] Revues OMS gêne et cognition ajoutées à la base et qualifiées
         (0,27 $ + 0,15 $) ; `domaine_sante` renseigné à la main.
-  - [ ] Vérifier « ×3 à ×5 de personnes fortement gênées par 10 dB » (revue
-        OMS gêne, texte sur PMC) et l'ajouter à l'effet gêne.
-  - [ ] Fiche OMS cognition dans Notion : `sens_conclusion` « Non concluant »
-        à revoir (facultatif), titre à remettre sur une seule ligne.
-- [ ] **Prochaine étape : conception technique** (`docs/etape-5-conception-technique.md`) :
-      nettoyage de `domaine_sante` (toutes les étiquettes sont déjà classées
-      dans le socle), colonnes `verdict` et `piste d'actualité`, run à 15 jours,
-      script de génération de la page HTML et publication sur GitHub Pages.
+  - [x] Chiffre « ×3 à ×5 » vérifié (17/11) dans la revue OMS gêne : vaut
+        pour l'avion seulement (route et train ≈ ×3), et c'est la cote d'être
+        fortement gêné qui est multipliée, pas le nombre de personnes. Ajouté
+        à l'effet gêne → socle **v1.1**, validé le 17/11.
+  - [x] Fiche OMS cognition (17/11) : `sens_conclusion` « Non concluant » →
+        « Effet demontre » ; titre déjà sur une seule ligne.
+- [x] **Conception technique validée** (17/11) → `veille-bruit-sante/docs/etape-5-conception-technique.md`
+      (7 décisions). Lots à réaliser, dans l'ordre :
+  - [x] **Lot 1 — nettoyage de `domaine_sante`** (terminé le 17/11) :
+    - [x] Fiches nettoyées dans Notion (17/11) : 97 fiches modifiées,
+          vérifié (0 restante) ; sauvegarde des anciennes étiquettes dans
+          `analyse_relecture/export/etudes_2026-11-17_avant_nettoyage.csv`.
+    - [x] Schéma Notion réduit de 112 à 10 options (`Demence` sera créée à
+          la première fiche qui l'utilise).
+    - [x] Nouvelle liste `OPTIONS_DOMAINE_SANTE` (11 options, identique au
+          socle, vérifié par script) et définitions du `PROMPT_SYSTEME`
+          (≈ 2 650 tokens, cache toujours actif) ; guide utilisateur à jour.
+  - [ ] Lot 2 — colonnes `verdict` (LLM, résumé du socle dans le prompt) et
+        `piste_actualite` (case manuelle), migration `--ajouter-artefact`.
+  - [ ] Lot 3 — run à 15 jours (semaines ISO paires) et retrait du
+        déclencheur `push` du workflow.
+  - [ ] Lot 4 — script de génération de la page (`etape5_artefact/`, Jinja2).
+  - [ ] Lot 5 — publication sur GitHub Pages du fork (voir « Rendre le run
+        automatique » ci-dessous).
+- [ ] **Version 2 de la page — regard transversal « Enfants »** (reporté le
+      17/11, NE PAS OUBLIER) : validé dans le cadrage le 02/10 mais exclu de
+      la v1 pour publier plus tôt. Rassemble apprentissages (bruit des avions),
+      santé mentale de l'enfant (cohorte ELFE) et chiffres AEE (lecture,
+      comportement, surpoids) ; s'appuie sur l'option `Enfant` de `domaine_sante`.
 
 ## Prochaines étapes
 - [ ] **Passer le run à 15 jours**, le lundi, 6 h UTC (données prêtes avant
@@ -43,8 +64,8 @@ Gardez-le court : quelques lignes par section suffisent.
       (`nantodevison/…`, décidé le 30/09), y configurer les 3 secrets
       (ANTHROPIC_API_KEY, NOTION_API_KEY, NOTION_DATABASE_ID), activer les
       tâches planifiées (désactivées par défaut sur un fork) et GitHub Pages.
-      Point à décider : le workflow se lance aussi à chaque push sur `main`
-      touchant la veille, donc un run payant à chaque fusion.
+      Le déclencheur `push` (un run payant à chaque fusion) sera retiré
+      (décidé le 17/11, lot 3).
 - [x] **Case `ajout_manuel`** (29/09) : cochée automatiquement (auteur Notion
       de la fiche ≠ intégration), ignorée pour la date de départ du run
       (vérifié : le prochain run repart bien du 26/08). `regenerer_resumes`
@@ -168,3 +189,13 @@ Gardez-le court : quelques lignes par section suffisent.
   la seule source sur la grossesse mêle bruit professionnel et preuves très faibles.
 - 2026-10-02 — Étude E3N (diabète) : chiffres du modèle principal (+8 % / +12 %),
   pas les +21 % de la fiche Notion — plus prudents, et ce sont ceux du résumé.
+- 2026-11-17 — `domaine_sante` reprend la liste du socle, plus `General` pour les
+  documents d'ensemble — la gêne manquait à l'ancienne liste fermée, et le
+  script de la page doit compter les documents par effet.
+- 2026-11-17 — Une seule option `Enfant` (apprentissages + public enfants) —
+  plus simple à trier ; le compte du bloc « apprentissages » inclut donc les
+  autres études chez l'enfant.
+- 2026-11-17 — Retrait du déclencheur `push` du workflow — évite un run payant
+  à chaque fusion ; le lancement manuel reste possible.
+- 2026-11-17 — Regard « Enfants » reporté à la v2 de la page — publier plus tôt
+  la lecture par effet.
