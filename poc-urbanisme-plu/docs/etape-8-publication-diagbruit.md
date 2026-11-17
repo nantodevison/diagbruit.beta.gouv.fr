@@ -15,19 +15,15 @@ L'étape 8 publie en une fois, **sur le Strapi de préprod uniquement**, les bro
 - **On ne republie jamais une alerte déjà publiée** : elle est signalée et laissée telle quelle.
 - **Notion et Box ne sont pas touchés** : ils n'ont pas de notion de brouillon ni de préprod.
 
-## ⚠️ Hypothèse technique non vérifiée — à confirmer avant tout envoi complet
+## Manière de publier — vérifiée le 17/11/2026
 
-**La manière de publier par l'API n'a jamais été testée.** L'outil suppose qu'une requête de mise à jour Strapi portant le paramètre `status=published`, **sans aucun champ modifié**, publie le brouillon existant à l'identique. Cette supposition s'appuie sur un comportement observé par accident le 24/08/2026 (une création sans `status=draft` avait publié l'entrée), mais **pas sur une mise à jour, ni sur une requête sans contenu**.
+Jusqu'au 17/11/2026, la manière de publier par l'API était une **hypothèse** : une requête de mise à jour Strapi portant `status=published`, sans aucun champ modifié, devait publier le brouillon à l'identique — mais rien ne garantissait que Strapi ne publierait pas autre chose (champs vidés, par exemple).
 
-Tant qu'elle n'est pas confirmée en réel, trois issues sont possibles : la publication fonctionne comme prévu ; Strapi refuse la requête (aucun dégât) ; ou Strapi accepte la requête mais publie autre chose que le brouillon (champs vidés, par exemple) — c'est ce dernier cas qu'il faut absolument écarter.
+**Constat du 17/11/2026** (Strapi 5.13.0, préprod) : la publication fonctionne comme prévu. Deux alertes du 067 ont été publiées une à une ; la version publiée est identique au brouillon (contrôle automatique et relecture des deux versions), et l'opérateur a vérifié à l'œil le statut dans l'admin Strapi et l'affichage de l'alerte de Hœrdt (marges de recul le long de l'A35) sur le front de préprod. Les 396 autres ont ensuite été publiées.
 
-**Procédure obligatoire au premier usage** (et à refaire si la version de Strapi change — 5.13.0 au 13/11/2026, voir `cms/package.json`) :
-1. dry-run sur le département ;
-2. publication d'**une seule** alerte (`--ids`) ;
-3. vérification **à l'œil**, par l'opérateur, dans l'admin Strapi **et** sur le front de préprod : titre, message, source, référence, label identiques au brouillon ;
-4. seulement ensuite, publication du reste.
+**À savoir pour choisir l'alerte de test** : le front n'affiche pas le PLU sur une parcelle qui n'a pas de score de bruit (limite connue, suivie par l'équipe de développement). Il faut donc tester une zone proche d'une grande route ou d'une voie ferrée.
 
-L'outil compare aussi automatiquement, pour chaque alerte publiée, la version publiée au brouillon, et s'arrête à la première différence. Ce contrôle automatique **ne remplace pas** la vérification à l'œil de l'étape 3 : il ne voit que les champs qu'on lui a demandé de comparer.
+**À refaire si la version de Strapi change** (voir `cms/package.json`) : dry-run, publication d'**une seule** alerte (`--ids`), vérification à l'œil dans l'admin et sur le front, puis le reste. L'outil compare aussi automatiquement chaque version publiée au brouillon et s'arrête à la première différence, mais ce contrôle ne voit que les champs qu'on lui a demandé de comparer : il ne remplace pas la vérification à l'œil.
 
 ## Ce que l'étape suppose en amont et en aval
 

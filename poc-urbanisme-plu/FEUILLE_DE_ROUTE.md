@@ -15,10 +15,9 @@ Gardez-le court : quelques lignes par section suffisent.
       préprod = 398 mises à jour). Dagster passe (Senhao, 2026-11-17) ; branche fusionnée.
 - [ ] Question à l'équipe de dev : regrouper aussi les 28 fichiers de l'Eurométropole (dossier
       Box 398163261000) en un seul fichier ?
-- [ ] Étape 8 (publication préprod, pour relecture par l'ATIP) : doc et code écrits le
-      2026-11-13, dry-run conforme (398 à publier). ⚠️ HYPOTHÈSE NON VÉRIFIÉE sur la requête de
-      publication : publier UNE alerte (--ids), la vérifier à l'œil (admin + front préprod),
-      puis le reste. Voir docs/etape-8-conception-technique.md.
+- [x] Étape 8, 067 hors Eurométropole : 398 alertes publiées en préprod le 2026-11-17
+      (375 et 316 testées une à une, puis les 396 autres ; 396/396 identiques au brouillon ;
+      audit : 0 brouillon seul, 0 doublon, 0 publié sans brouillon). Prêt pour l'ATIP.
 - [ ] Question à l'équipe de dev (2026-11-13) : séparation des géométries Box entre préprod
       et prod (Dagster lit 390359250129 et ses sous-dossiers) — risque d'encadrés vides en prod.
       Et chargement des géométries du 067 dans la base de préprod pour l'ATIP.
@@ -57,6 +56,9 @@ Gardez-le court : quelques lignes par section suffisent.
 
 ## Décisions récentes
 <!-- Une ligne par décision : date — décision — raison en quelques mots -->
+- 2026-11-17 — Étape 8 : publication par PUT ?status=published à corps vide validée (version
+  publiée identique au brouillon, front conforme sur 316 Hœrdt). Alerte de test à choisir près
+  d'une grande route — le front n'affiche pas le PLU sans score de bruit (suivi par les devs).
 - 2026-11-16 — Un seul .geojson par run (etape7_{dept}_geometries.geojson) au lieu d'un par
   zone, constitué à l'étape 7 (seule à connaître le slug final) ; zones, alertes Strapi et pages
   Notion restent une par zone, et chaque page Notion pointe vers ce fichier unique (un premier

@@ -6,37 +6,26 @@
 
 Même POC, même posture que les étapes 1 à 7 (voir `etape-1-conception-technique.md`). Comme l'étape 7, cette étape **écrit dans un système partagé** (Strapi préprod) et, en plus, rend son contenu **visible sur le front** : `--publier` explicite requis pour toute écriture réelle, dry-run par défaut.
 
-## ⚠️ Hypothèse à vérifier en réel avant tout envoi complet
-
-**Requête de publication retenue, jamais testée au 13/11/2026** :
+## Requête de publication — vérifiée le 17/11/2026 (Strapi 5.13.0)
 
 ```
 PUT {url_preprod}/api/noisezone-alerts/{documentId}?status=published
 {"data": {}}
 ```
 
-Ce que l'on sait (Strapi 5.13.0) :
-- un `POST`/`PUT` **sans** `status=draft` publie l'entrée — observé en réel le 24/08/2026 sur une **création** (voir `etape-7-conception-technique.md`, "Piège : publication automatique") ;
-- `client_strapi._put` passe toujours `status=draft` pour cette raison ; la publication passe donc par une fonction distincte (`_put_publication`), pour qu'aucun appel existant ne puisse publier par erreur.
+**Constat du 17/11/2026, en préprod** : cette requête publie le brouillon existant **à l'identique**. Testée sur deux alertes du 067, l'une après l'autre (`--ids 375`, puis `--ids 316`) :
+- Strapi accepte le corps vide `{"data": {}}` ;
+- la version publiée porte les mêmes `alert_slug`, `title`, `content`, `source`, `reference`, `label` que le brouillon (contrôle automatique, et contre-vérification manuelle par relecture des deux versions : seuls l'`id` interne et `publishedAt` diffèrent) — aucun champ vidé ;
+- l'audit (`inserer --audit`) reste sain : 0 doublon, 0 publié sans brouillon ;
+- vérification à l'œil par l'opérateur : statut « published » dans l'admin Strapi, alerte 316 (Hœrdt, marges de recul le long de l'A35) affichée conforme sur le front de préprod. La 375 (Scheibenhard) n'a pas pu être vue sur le front : ses parcelles n'ont pas de score de bruit, et le front n'affiche alors pas le PLU (limite connue du produit, suivie par l'équipe de développement) — d'où le choix d'une zone le long d'une grande route pour le test.
 
-Ce que l'on **ne sait pas** :
-- si un `PUT` avec `status=published` publie bien le brouillon **existant** (et pas seulement les champs envoyés) ;
-- si Strapi accepte un corps `{"data": {}}` (il peut le refuser : erreur 400, sans dégât) ;
-- si une mise à jour vide peut vider des champs de la version publiée (cas le plus grave, à écarter absolument).
+Pourquoi c'était une hypothèse : on savait seulement qu'un `POST`/`PUT` **sans** `status=draft` publie l'entrée (observé le 24/08/2026 sur une **création**, voir `etape-7-conception-technique.md`, "Piège : publication automatique"). `client_strapi._put` passe toujours `status=draft` pour cette raison ; la publication passe par une fonction distincte (`_put_publication`), pour qu'aucun appel existant ne puisse publier par erreur.
 
-**Garde-fous dans le code** :
-1. **Comparaison automatique** après chaque publication : `client_strapi.lire_entree` relit le brouillon **avant** l'appel et la version publiée **après**, et compare `alert_slug`, `title`, `content`, `source`, `reference`, `label`. Une différence, ou une version publiée introuvable, **arrête le run immédiatement** (une erreur de ce type a toutes les chances d'être systématique : inutile de la répéter 397 fois).
+**Garde-fous conservés dans le code** :
+1. **Comparaison automatique** après chaque publication : `client_strapi.lire_entree` relit le brouillon **avant** l'appel et la version publiée **après**, et compare les six champs ci-dessus. Une différence, ou une version publiée introuvable, **arrête le run immédiatement** (une erreur de ce type a toutes les chances d'être systématique).
 2. **`--ids`** pour limiter la publication à quelques `id_geometrie`.
 
-**Procédure obligatoire au premier usage**, et à refaire si la version de Strapi change :
-1. `python -m etape8_publication.publier --dept 067 --output-dir output/067_horsEurometropole` (dry-run) ;
-2. `... --ids <un id> --publier` ;
-3. vérification **à l'œil** dans l'admin Strapi et sur le front de préprod ;
-4. `... --publier` pour le reste (les alertes déjà publiées sont sautées).
-
-**Repli si Strapi refuse le corps vide** : renvoyer dans `data` les champs lus dans le brouillon juste avant (`lire_entree`), sans passer par l'export. À n'implémenter que si le test le rend nécessaire, et à documenter ici.
-
-Une fois l'hypothèse confirmée (ou corrigée), remplacer cette section par le constat daté.
+**À refaire si la version de Strapi change** (voir `cms/package.json`) : dry-run, puis `--ids <un id> --publier` sur une alerte visible sur le front (zone avec score de bruit), vérification à l'œil, puis le reste.
 
 ## Pourquoi réutiliser `etape7_stockage/client_strapi.py`
 
