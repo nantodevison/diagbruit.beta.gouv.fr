@@ -10,12 +10,9 @@ Gardez-le court : quelques lignes par section suffisent.
 - [x] Étape 7, 067 hors Eurométropole : envoyé le 2026-11-10 (Strapi préprod en brouillon,
       Notion, Box 428951751647). Après nettoyage du 2026-11-13 : 398 alertes cohérentes dans les
       trois bases (audit préprod : 0 doublon, 0 absent).
-- [ ] Un seul fichier géométrie par run (branche poc-plu-geojson-regroupe, 2026-11-16) :
-      Dagster ne supportait pas 398 fichiers. Envoyé le 2026-11-16 après suppression manuelle des
-      anciens fichiers Box et des pages Notion : Box = 1 fichier (398 zones), Notion = 398 pages
-      recréées (ne pas restaurer les anciennes depuis la corbeille), Strapi préprod = 398 mises à
-      jour, audit 0 doublon/0 absent. Reste : 1) prévenir Senhao pour relancer Dagster ;
-      2) fusionner la branche dans poc-urbanisme-plu.
+- [x] Un seul fichier géométrie par run : envoyé le 2026-11-16 (Box = 1 fichier de 398 zones,
+      Notion = 398 pages recréées — ne pas restaurer les anciennes depuis la corbeille, Strapi
+      préprod = 398 mises à jour). Dagster passe (Senhao, 2026-11-17) ; branche fusionnée.
 - [ ] Question à l'équipe de dev : regrouper aussi les 28 fichiers de l'Eurométropole (dossier
       Box 398163261000) en un seul fichier ?
 - [ ] Étape 8 (publication préprod, pour relecture par l'ATIP) : doc et code écrits le
