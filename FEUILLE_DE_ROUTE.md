@@ -1,140 +1,64 @@
 # Feuille de route — Veille documentaire bruit-santé
 
 <!--
-Ce fichier liste ce qui reste à faire. Il est lu par la compétence
-"etat-des-lieux" en début de séance et mis à jour en fin de séance.
-Gardez-le court : quelques lignes par section suffisent.
+Tâches ouvertes : kanban Grist (projet diagBruit, EPIC 37 « Veille-Santé »),
+recopié ci-dessous par taches.py. Ce fichier garde aussi l'historique de
+ce qui est fait et les décisions. Gardez-le court.
 -->
 
-## En cours
-- [x] Créer la documentation spécifique au projet de veille documentaire
-      (`veille-bruit-sante/CLAUDE.md` + mention dans le `CLAUDE.md` racine)
-- [x] Cadrer l'artefact de synthèse (30/09) → `docs/etape-5-artefact-synthese-diagbruit.md`
-- [x] Choisir le support (30/09) : hybride, vue Notion « À trier » + page
-      HTML publique (GitHub Pages du fork) pour le contenu validé.
-- [x] Premier jet du socle (30/09) → `veille-bruit-sante/socle/etat-connaissances.yaml` :
-      7 effets, 2 pistes émergentes, glossaire, 17 références. Chiffres
-      vérifiés par script dans les sources (citation exacte conservée).
-- [x] Validation du socle (30/09 et 02/10) → version 1.0, validée par Martin
-      Schoreisz : 6 effets (cardiovasculaire, sommeil, gêne, apprentissages
-      de l'enfant, métabolique, santé mentale), un encadré « À ne pas
-      confondre » (effets auditifs), 2 pistes émergentes (cancer, démence) ;
-      grossesse retirée. 27 chiffres et valeurs guides vérifiés dans leur source.
-  - [x] Valeurs guides OMS 2018 vérifiées (résumé exécutif) ; `.venv` de la
-        veille créé avec les dépendances du projet et `pypdf`.
-  - [x] Revues OMS gêne et cognition ajoutées à la base et qualifiées
-        (0,27 $ + 0,15 $) ; `domaine_sante` renseigné à la main.
-  - [x] Chiffre « ×3 à ×5 » vérifié (17/11) dans la revue OMS gêne : vaut
-        pour l'avion seulement (route et train ≈ ×3), et c'est la cote d'être
-        fortement gêné qui est multipliée, pas le nombre de personnes. Ajouté
-        à l'effet gêne → socle **v1.1**, validé le 17/11.
-  - [x] Fiche OMS cognition (17/11) : `sens_conclusion` « Non concluant » →
-        « Effet demontre » ; titre déjà sur une seule ligne.
-- [x] **Conception technique validée** (17/11) → `veille-bruit-sante/docs/etape-5-conception-technique.md`
-      (7 décisions). Lots à réaliser, dans l'ordre :
-  - [x] **Lot 1 — nettoyage de `domaine_sante`** (terminé le 17/11) :
-    - [x] Fiches nettoyées dans Notion (17/11) : 97 fiches modifiées,
-          vérifié (0 restante) ; sauvegarde des anciennes étiquettes dans
-          `analyse_relecture/export/etudes_2026-11-17_avant_nettoyage.csv`.
-    - [x] Schéma Notion réduit de 112 à 10 options (`Demence` sera créée à
-          la première fiche qui l'utilise).
-    - [x] Nouvelle liste `OPTIONS_DOMAINE_SANTE` (11 options, identique au
-          socle, vérifié par script) et définitions du `PROMPT_SYSTEME`
-          (≈ 2 650 tokens, cache toujours actif) ; guide utilisateur à jour.
-  - [ ] Lot 2 — colonnes `verdict` (LLM, résumé du socle dans le prompt) et
-        `piste_actualite` (case manuelle), migration `--ajouter-artefact`.
-  - [ ] Lot 3 — run à 15 jours (semaines ISO paires) et retrait du
-        déclencheur `push` du workflow.
-  - [ ] Lot 4 — script de génération de la page (`etape5_artefact/`, Jinja2).
-  - [ ] Lot 5 — publication sur GitHub Pages du fork (voir « Rendre le run
-        automatique » ci-dessous).
-- [ ] **Version 2 de la page — regard transversal « Enfants »** (reporté le
-      17/11, NE PAS OUBLIER) : validé dans le cadrage le 02/10 mais exclu de
-      la v1 pour publier plus tôt. Rassemble apprentissages (bruit des avions),
-      santé mentale de l'enfant (cohorte ELFE) et chiffres AEE (lecture,
-      comportement, surpoids) ; s'appuie sur l'option `Enfant` de `domaine_sante`.
+<!-- début kanban : section régénérée par taches.py, ne pas modifier à la main -->
+## Kanban (Grist)
+_Projet « diagBruit » — EPIC 37 « Veille-Santé » — lu le 2026-11-18 17:36_
 
-## Prochaines étapes
-- [ ] **Passer le run à 15 jours**, le lundi, 6 h UTC (données prêtes avant
-      8 h à Paris) — cron hebdomadaire, le run ne fait rien une semaine sur deux.
-- [ ] **Rendre le run automatique** : aujourd'hui il se lance à la main
-      (`python main.py`), car GitHub ne déclenche la tâche planifiée du lundi
-      que depuis `main`, qui n'a ni le workflow ni le code de la veille.
-      Il faut fusionner la branche dans le `main` **du fork**
-      (`nantodevison/…`, décidé le 30/09), y configurer les 3 secrets
-      (ANTHROPIC_API_KEY, NOTION_API_KEY, NOTION_DATABASE_ID), activer les
-      tâches planifiées (désactivées par défaut sur un fork) et GitHub Pages.
-      Le déclencheur `push` (un run payant à chaque fusion) sera retiré
-      (décidé le 17/11, lot 3).
-- [x] **Case `ajout_manuel`** (29/09) : cochée automatiquement (auteur Notion
-      de la fiche ≠ intégration), ignorée pour la date de départ du run
-      (vérifié : le prochain run repart bien du 26/08). `regenerer_resumes`
-      ne classe plus hors périmètre un document retenu, et ne remplace plus
-      un résumé par du vide.
-- [ ] **Analyse de la relecture manuelle** — premier parcours de la base Notion
-      fait, publications les plus importantes taguées « favoris ».
-  - [x] Exporter la base en CSV (`analyse_relecture/exporter_base.py`) :
-        102 fiches, 55 favoris, toutes au statut « Lu », `url_source` vide
-        partout, `fichier` renseigné sur 29 favoris (24 liens, 5 fichiers Notion).
-  - [x] Comparer favoris / non-favoris (chiffres + lecture) et lister les
-        doublons présents dans la base → `analyse_relecture/analyse-2026-09-24.md`.
-  - [x] Valider les hypothèses H1–H5 et les 3 questions de l'analyse.
-  - [x] Implémenter la qualification (type_document, sens_conclusion,
-        elements_probants, reprise_de → candidat_favori, nouveaute) et le
-        résultat chiffré obligatoire.
-  - [x] Tester la règle sur les 80 fiches relues ayant un contenu source :
-        précision 81 %, rappel 60 %, 1,16 $ (analyse, section 7).
-  - [x] Décider de la règle : remplacée par une priorité à 3 niveaux (voir
-        décisions du 25/09).
-  - [x] Trancher : les communiqués, pages d'information et revues narratives
-        mis en favori peuvent devenir candidats (oui).
-  - [x] Ajouter l'attribut `priorite` (Haute / A examiner / Faible) et
-        retirer `candidat_favori` (code + colonne Notion, migrée le 25/09).
-        Mesuré : Haute = 81 % de favoris, Haute + A examiner = 93 % des
-        favoris retrouvés.
-  - [x] Ne plus rien écarter silencieusement : `contenu_insuffisant` →
-        case `a_verifier` au lieu d'exclure ; exclusions et doublons
-        journalisés avec titre et motif.
-  - [x] Créer un graphique Mermaid du workflow → `veille-bruit-sante/docs/workflow-veille.md`.
-  - [x] Vérifier avec le nouveau prompt les 8 fiches écartées au test (0,10 $) :
-        6 gardées dont le favori (5 avec `a_verifier`), 2 écartées avec motif.
-        A révélé une erreur 400 « Schema is too complex » (corrigée : champs
-        d'extraction sans valeur par défaut).
-  - [x] Remplir la qualification des 102 fiches déjà en base
-        (`analyse_relecture/qualifier_base_existante.py`, 25/09) — `favori`,
-        `statut`, `fichier` vérifiés intacts. Résultat : Haute 32, A examiner
-        38, Faible 32 ; 28 fiches `a_verifier`. 16 favoris en Faible, dont 14
-        faute de contenu lisible (11 ont un `fichier` → la régénération à
-        partir du texte intégral devrait les faire remonter).
-  - [ ] Diagnostiquer les 2 échecs d'extraction (`ValidationError`) sur des
-        pages Inserm en français.
-  - [x] Ajouter les colonnes de qualification à la base Notion
-        (`--ajouter-qualification`), fait le 24/09.
-  - [ ] Coût : la réflexion (thinking) de Sonnet 5 est active par défaut sur
-        l'extraction et représente environ la moitié du coût. Mesurer si
-        `effort: low` ou thinking désactivé garde la qualité.
-  - [ ] Nettoyer les étiquettes domaine_sante / source_bruit des 102 fiches
-        — **prérequis de l'artefact** (rattachement de chaque document à un
-        effet du socle).
-  - [ ] Canal web : donner à chaque source son propre contexte (aujourd'hui
-        la synthèse globale est partagée par toutes).
-  - [x] Régénérer `resume`, `resultat_cle` et la qualification à partir du
-        texte intégral (`analyse_relecture/regenerer_resumes.py`, 25/09) :
-        les 29 fiches avec fichier, 7,46 $ (dont 4,47 $ pour les 3 gros
-        rapports). Favoris : 32 Haute, 17 A examiner, 6 Faible (contre
-        25 / 14 / 16) avant la dernière fiche. La fiche du communiqué Inserm
-        ELFE a été supprimée (même source que l'article) : base à 101 fiches.
-  - [ ] Affiner la détection des contenus réellement nouveaux :
-    - [ ] repérer les reprises (communiqués, relais presse) d'études déjà
-          connues ou anciennes, que le dédoublonnage DOI/titre ne voit pas ;
-    - [ ] vérifier l'écart date d'ajout Notion / date de publication OpenAlex
-          (risque d'études indexées tardivement jamais retrouvées) ;
-    - [ ] comparer favoris / non-favoris pour en tirer des critères de
-          recherche et d'extraction pour le LLM (`PROMPT_SYSTEME`).
+### 🖐️ À faire
+- [ ] #250 Artefact lot 2 : colonnes verdict et piste_actualite (Haute)
+- [ ] #252 Artefact lot 4 : script de génération de la page HTML (Jinja2) (Haute)
+- [ ] #253 Artefact lot 5 : publication sur GitHub Pages du fork (Haute)
+- [ ] #254 Run de contrôle de la veille de bout en bout (Haute)
+- [ ] #251 Artefact lot 3 : run à 15 jours et retrait du déclencheur push (Moyenne)
+- [ ] #257 Coût : tester effort low ou extraction sans thinking (Moyenne)
+- [ ] #258 Canal web : un contexte propre à chaque source (Moyenne)
+- [ ] #259 Repérer les reprises d'études déjà connues (Moyenne)
+- [ ] #260 Vérifier l'écart date d'ajout Notion / date de publication OpenAlex (Moyenne)
+- [ ] #255 Artefact v2 : regard transversal Enfants (Basse)
+- [ ] #256 Diagnostiquer les 2 échecs d'extraction sur des pages Inserm (Basse)
+- [ ] #261 Comparer favoris et non-favoris pour affiner le PROMPT_SYSTEME (Basse)
+- [ ] #262 regenerer_resumes --estimer écrit ajout_manuel dans Notion (Basse)
 
-## Plus tard / idées
-- (suggestion) `regenerer_resumes --estimer` écrit la case `ajout_manuel` dans
-  Notion avant d'estimer : le documenter, ou le déplacer hors du mode estimation.
+<!-- fin kanban -->
+
+## Historique (fait)
+<!-- Les tâches ouvertes sont suivies dans Grist (kanban ci-dessus) depuis le 18/11/2026. -->
+
+### Artefact de synthèse (étape 5)
+- 30/09 — Cadrage → `docs/etape-5-artefact-synthese-diagbruit.md` ; support
+  hybride (vue Notion « À trier » + page HTML publique sur GitHub Pages du fork).
+- 30/09–02/10 — Socle « état des connaissances » rédigé puis validé (v1.0) →
+  `veille-bruit-sante/socle/etat-connaissances.yaml` : 6 effets, encadré
+  auditif, 2 pistes émergentes ; 27 chiffres vérifiés dans leur source.
+  Revues OMS gêne et cognition ajoutées à la base Notion.
+- 17/11 — Socle v1.1 : chiffre « ×3 à ×5 » de la revue OMS gêne vérifié (avion
+  seulement ; c'est la cote d'être fortement gêné qui est multipliée). Fiche
+  OMS cognition : `sens_conclusion` → « Effet demontre ».
+- 17/11 — Conception technique validée →
+  `veille-bruit-sante/docs/etape-5-conception-technique.md` (7 décisions, 5 lots).
+- 17/11 — Lot 1, nettoyage de `domaine_sante` : 97 fiches modifiées, schéma
+  Notion réduit de 112 à 10 options, `OPTIONS_DOMAINE_SANTE` et `PROMPT_SYSTEME`
+  alignés sur le socle ; sauvegarde des anciennes étiquettes dans
+  `analyse_relecture/export/etudes_2026-11-17_avant_nettoyage.csv`.
+
+### Veille et analyse de la relecture manuelle
+- 24/09 — `veille-bruit-sante/CLAUDE.md` créé. Export de la base, comparaison
+  favoris / non-favoris → `analyse_relecture/analyse-2026-09-24.md`.
+- 24–25/09 — Qualification (type_document, sens_conclusion, elements_probants,
+  reprise_de, nouveaute) puis `priorite` à 3 niveaux à la place de
+  `candidat_favori` : Haute = 81 % de favoris, Haute + A examiner = 93 % des
+  favoris retrouvés. Rien n'est plus écarté silencieusement (`a_verifier`).
+- 25/09 — Qualification des 102 fiches existantes ; régénération des résumés
+  à partir du texte intégral pour les 29 fiches avec fichier (7,46 $).
+- 25/09 — Schéma du workflow → `veille-bruit-sante/docs/workflow-veille.md`.
+- 29/09 — Case `ajout_manuel` cochée automatiquement, ignorée pour la date de
+  départ du run.
 
 ## Décisions récentes
 <!-- Une ligne par décision : date — décision — raison en quelques mots -->
@@ -199,3 +123,6 @@ Gardez-le court : quelques lignes par section suffisent.
   à chaque fusion ; le lancement manuel reste possible.
 - 2026-11-17 — Regard « Enfants » reporté à la v2 de la page — publier plus tôt
   la lecture par effet.
+- 2026-11-18 — Suivi des tâches dans Grist (projet diagBruit, EPIC 37) plutôt
+  que dans ce fichier — kanban commun aux autres projets ; ce fichier garde
+  l'historique et les décisions.

@@ -118,6 +118,18 @@ possible, et à chaque push sur `main` touchant ce dossier).
   `docs/etape-N-conception-technique.md` concerné (format « Décision N — …
   **Pourquoi :** … »).
 
+## Feuille de route
+<!-- Lu par les compétences etat-des-lieux et cloture-session -->
+source: grist                      # grist | fichier | aucune
+serveur: https://grist.numerique.gouv.fr
+document: env:GRIST_KANBAN_DOC_ID  # identifiant gardé dans le .env (dépôt public)
+table: Taches
+projet: 14                         # diagBruit
+epics_suivis: 37
+qui_par_defaut: 20                 # Martin Schoreisz
+statuts_ouverts: 🖐️ À faire, ♻️ En cours
+statuts_termines: ✅ Fait, ❌ Annulé, 🗃️ Archivé
+
 ## Points ouverts connus
 
 - Dernier run complet réussi le 27/08/2026, avant la qualification : le code
