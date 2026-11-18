@@ -8,13 +8,14 @@ ce qui est fait et les décisions. Gardez-le court.
 
 <!-- début kanban : section régénérée par taches.py, ne pas modifier à la main -->
 ## Kanban (Grist)
-_Projet « diagBruit » — EPIC 37 « Veille-Santé » — lu le 2026-11-18 17:36_
+_Projet « diagBruit » — EPIC 37 « Veille-Santé » — lu le 2026-11-18 17:56_
 
 ### 🖐️ À faire
 - [ ] #250 Artefact lot 2 : colonnes verdict et piste_actualite (Haute)
 - [ ] #252 Artefact lot 4 : script de génération de la page HTML (Jinja2) (Haute)
 - [ ] #253 Artefact lot 5 : publication sur GitHub Pages du fork (Haute)
 - [ ] #254 Run de contrôle de la veille de bout en bout (Haute)
+- [ ] #263 Corriger la recherche API (requêtes, pagination, clé OpenAlex) avant le run de contrôle (Haute)
 - [ ] #251 Artefact lot 3 : run à 15 jours et retrait du déclencheur push (Moyenne)
 - [ ] #257 Coût : tester effort low ou extraction sans thinking (Moyenne)
 - [ ] #258 Canal web : un contexte propre à chaque source (Moyenne)
@@ -126,3 +127,6 @@ _Projet « diagBruit » — EPIC 37 « Veille-Santé » — lu le 2026-11-18 17:
 - 2026-11-18 — Suivi des tâches dans Grist (projet diagBruit, EPIC 37) plutôt
   que dans ce fichier — kanban commun aux autres projets ; ce fichier garde
   l'historique et les décisions.
+- 2026-11-18 — Corriger la recherche API avant tout run (carte #263) —
+  requêtes trop larges (≈ 48 000 résultats sur 3 mois), 50 lus par API sans
+  trace : un run maintenant marquerait la période depuis le 26/08 comme traitée.
